@@ -781,6 +781,27 @@ def normalize_proxy(raw: dict[str, Any], index: int) -> dict[str, Any] | None:
     proxy["name"] = name
     proxy["server"] = server
     proxy["port"] = port
+
+    # 空 flow 会让部分客户端/覆写异常，直接去掉
+    if proxy.get("flow") is not None and str(proxy.get("flow")).strip() == "":
+        proxy.pop("flow", None)
+
+    # reality short-id 必须是字符串，避免 YAML 把 953e8078 读成科学计数法
+    reality = proxy.get("reality-opts")
+    if isinstance(reality, dict) and reality.get("short-id") is not None:
+        reality = dict(reality)
+        reality["short-id"] = str(reality["short-id"]).strip()
+        proxy["reality-opts"] = reality
+
+    # 截断被污染的 ws path
+    ws_opts = proxy.get("ws-opts")
+    if isinstance(ws_opts, dict):
+        path = str(ws_opts.get("path") or "")
+        path = path.split("|", 1)[0].split("?", 1)[0].strip() or "/"
+        ws_opts = dict(ws_opts)
+        ws_opts["path"] = path
+        proxy["ws-opts"] = ws_opts
+
     return proxy
 
 
@@ -911,6 +932,29 @@ def extract_mihomo_binary(archive: Path, directory: Path) -> Path:
     raise RuntimeError(f"unsupported Mihomo archive: {archive}")
 
 
+class QuotedDumper(yaml.SafeDumper):
+    pass
+
+
+def _represent_str(dumper: yaml.Dumper, data: str):
+    # 含非 ASCII（旗帜等）用单引号，避免 \U 转义；其余双引号防止 953e8078 等被当成数字
+    style = "'" if any(ord(ch) > 127 for ch in data) else '"'
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+QuotedDumper.add_representer(str, _represent_str)
+
+
+def dump_yaml(data: Any) -> str:
+    return yaml.dump(
+        data,
+        Dumper=QuotedDumper,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+    )
+
+
 def write_benchmark_config(path: Path, proxies: list[dict[str, Any]], controller_port: int) -> None:
     names = [str(proxy["name"]) for proxy in proxies]
     config = {
@@ -929,7 +973,7 @@ def write_benchmark_config(path: Path, proxies: list[dict[str, Any]], controller
         ],
         "rules": ["MATCH,BENCHMARK"],
     }
-    path.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    path.write_text(dump_yaml(config), encoding="utf-8")
 
 
 def wait_for_controller(controller_url: str, process: subprocess.Popen[str]) -> None:
@@ -1279,10 +1323,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
 
 def write_config(config: dict[str, Any]) -> None:
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(
-        yaml.safe_dump(config, allow_unicode=True, sort_keys=False),
-        encoding="utf-8",
-    )
+    OUTPUT_PATH.write_text(dump_yaml(config), encoding="utf-8")
 
 
 def validate_config(config: dict[str, Any]) -> None:
