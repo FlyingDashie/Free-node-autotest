@@ -6,6 +6,10 @@ on:
     - cron: '12,42 * * * *'
   workflow_dispatch:   # 允许手动触发
 
+concurrency:
+  group: generate-clash
+  cancel-in-progress: false
+
 jobs:
   generate:
     runs-on: ubuntu-latest
@@ -64,13 +68,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          git add clash.yaml history/
-          
-          # 只有真正有变更才提交
+
+          git add -A clash.yaml history/
+
           if git diff --staged --quiet; then
             echo "没有文件变更，跳过提交"
           else
             git commit -m "Auto update clash.yaml + history ${RUN_TIME}"
+            git pull --rebase origin main
             git push
           fi
