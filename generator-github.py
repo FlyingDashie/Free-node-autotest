@@ -492,7 +492,20 @@ def normalize_proxy(raw: dict[str, Any], index: int) -> dict[str, Any] | None:
             # 非法长字符串或包含密钥特征，强制改为 none
             proxy["encryption"] = "none"
 
+    if proxy_type == "ss":
+        plugin_opts = proxy.get("plugin-opts")
+        if isinstance(plugin_opts, dict):
+            mode = str(plugin_opts.get("mode", "")).strip()
+            if not mode:
+                proxy.pop("plugin", None)
+                proxy.pop("plugin-opts", None)
+        obfs = str(proxy.get("obfs", "")).strip()
+        if "obfs" in proxy and not obfs:
+            proxy.pop("obfs", None)
+            proxy.pop("obfs-host", None)
+
     name = str(proxy.get("name", "")).strip() or f"node-{index}"
+    name = name.replace("🇨🇳", "🇹🇼").replace("中国", "")
     server = str(proxy.get("server", "")).strip()
     if not server:
         return None
@@ -672,6 +685,89 @@ def wait_for_controller(controller_url: str, process: subprocess.Popen[str]) -> 
     raise RuntimeError("Mihomo controller did not become ready")
 
 
+def _stop_process(process: subprocess.Popen[str] | None) -> None:
+    if process is None:
+        return
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+
+def _start_mihomo_for_batch(
+    engine: Path,
+    temp_dir: Path,
+    config_path: Path,
+    controller_url: str,
+    controller_port: int,
+    proxies: list[dict[str, Any]],
+) -> tuple[subprocess.Popen[str] | None, str]:
+    write_benchmark_config(config_path, proxies, controller_port)
+    process = subprocess.Popen(
+        [str(engine), "-d", str(temp_dir), "-f", str(config_path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        wait_for_controller(controller_url, process)
+        return process, ""
+    except Exception as exc:
+        try:
+            stdout, stderr = process.communicate(timeout=2)
+        except Exception:
+            stdout, stderr = "", ""
+        _stop_process(process)
+        message = f"{exc}\n{stderr}\n{stdout}"
+        print(f"[WARN] batch start failed size={len(proxies)}")
+        if stderr:
+            print(f"[WARN] Mihomo stderr: {stderr[:500]}")
+        return None, message
+
+
+def _benchmark_batch(
+    engine: Path,
+    temp_dir: Path,
+    config_path: Path,
+    controller_url: str,
+    controller_port: int,
+    proxies: list[dict[str, Any]],
+) -> list[ProxyMetric]:
+    if not proxies:
+        return []
+
+    process, error = _start_mihomo_for_batch(
+        engine, temp_dir, config_path, controller_url, controller_port, proxies
+    )
+    if process is not None:
+        try:
+            return run_delay_tests(controller_url, proxies)
+        finally:
+            _stop_process(process)
+
+    if len(proxies) == 1:
+        bad = proxies[0]
+        print(
+            f"[DROP] isolate bad proxy name={bad.get('name')} "
+            f"server={bad.get('server')}:{bad.get('port')}"
+        )
+        if error:
+            print(f"[DROP] reason: {error[:300]}")
+        return []
+
+    mid = max(1, len(proxies) // 2)
+    left = proxies[:mid]
+    right = proxies[mid:]
+    print(f"[WARN] split batch {len(proxies)} -> {len(left)} + {len(right)}")
+    return _benchmark_batch(
+        engine, temp_dir, config_path, controller_url, controller_port, left
+    ) + _benchmark_batch(
+        engine, temp_dir, config_path, controller_url, controller_port, right
+    )
+
+
 def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
     if not proxies:
         return []
@@ -682,34 +778,11 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         config_path = temp_dir / "benchmark.yaml"
         controller_port = find_free_port()
         controller_url = f"http://127.0.0.1:{controller_port}"
-        write_benchmark_config(config_path, proxies, controller_port)
-
-        process = subprocess.Popen(
-            [str(engine), "-d", str(temp_dir), "-f", str(config_path)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+        metrics = _benchmark_batch(
+            engine, temp_dir, config_path, controller_url, controller_port, list(proxies)
         )
-        try:
-            wait_for_controller(controller_url, process)
-            metrics = run_delay_tests(controller_url, proxies)
-        except Exception as exc:
-            try:
-                stdout, stderr = process.communicate(timeout=2)
-            except Exception:
-                stdout, stderr = "", ""
-            print(f"[ERROR] Mihomo startup failed: {exc}")
-            if stderr:
-                print(f"[ERROR] Mihomo stderr: {stderr[:2000]}")
-            if stdout:
-                print(f"[ERROR] Mihomo stdout: {stdout[:1000]}")
-            raise
-        finally:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
+        if not metrics:
+            raise RuntimeError("Mihomo benchmark produced no live proxies")
         return metrics
 
 
