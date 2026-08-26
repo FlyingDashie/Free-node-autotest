@@ -58,9 +58,15 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2Rayshare",
-        "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
+        "primary": "discover:v2rayshare",
         "fallbacks": [],
         "prefix": "[V2Rayshare] ",
+    },
+    {
+        "name": "V2rayshare_subcription",
+        "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
+        "fallbacks": [],
+        "prefix": "[V2rayshare_subcription] ",
     },
     {
         "name": "免费节点1",
@@ -89,13 +95,17 @@ SOURCE_GROUPS = [
     {
         "name": "免费节点5",
         "primary": "https://cdn.jsdelivr.net/gh/vxiaov/free_proxies@main/clash/clash.provider.yaml",
-        "fallbacks": [],
+        "fallbacks": [
+            "https://raw.githubusercontent.com/vxiaov/free_proxies/main/clash/clash.provider.yaml",
+        ],
         "prefix": "[免费节点5] ",
     },
     {
         "name": "免费节点6",
         "primary": "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
-        "fallbacks": [],
+        "fallbacks": [
+            "https://anaer.github.io/Sub/clash.yaml",
+        ],
         "prefix": "[免费节点6] ",
     },
     {
@@ -111,10 +121,22 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点8] ",
     },
     {
-        "name": "免费节点9",
+        "name": "免费节点9-1",
+        "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription1.yaml",
+        "fallbacks": [],
+        "prefix": "[免费节点9-1] ",
+    },
+    {
+        "name": "免费节点9-2",
         "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription2.yaml",
         "fallbacks": [],
-        "prefix": "[免费节点9] ",
+        "prefix": "[免费节点9-2] ",
+    },
+    {
+        "name": "免费节点9-3",
+        "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription3.yaml",
+        "fallbacks": [],
+        "prefix": "[免费节点9-3] ",
     },
         {
         "name": "openRunner clash-freenode",
@@ -320,12 +342,17 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
 
 
 def expand_source_urls(source: dict[str, Any]) -> list[str]:
-    urls = [str(source["primary"])]
-    for item in source.get("fallbacks", []):
+    raw_items = [str(source["primary"])]
+    raw_items.extend(str(item) for item in source.get("fallbacks", []))
+
+    urls: list[str] = []
+    for item in raw_items:
         if item == "discover:free-clash-v2ray":
             urls.extend(discover_free_clash_v2ray_urls())
+        elif item == "discover:v2rayshare":
+            urls.extend(discover_v2rayshare_urls())
         else:
-            urls.append(str(item))
+            urls.append(item)
     return unique_ordered(urls)
 
 
@@ -338,6 +365,75 @@ def discover_free_clash_v2ray_urls() -> list[str]:
         return []
     pattern = r"https://free-clash-v2ray\.github\.io/uploads/\d{4}/\d{2}/[0-9]-\d{8}\.yaml"
     return unique_ordered(re.findall(pattern, text))[:8]
+
+
+def discover_v2rayshare_urls() -> list[str]:
+    """从 v2rayshare.com RSS 发现最新 Mihomo 订阅链接。"""
+    try:
+        import feedparser
+        from bs4 import BeautifulSoup
+    except ImportError as exc:
+        print(f"[WARN] v2rayshare discovery missing dependency: {exc}")
+        return []
+
+    parsed = feedparser.parse("https://v2rayshare.com/feed")
+    if not parsed.entries:
+        print("[WARN] v2rayshare discovery: empty feed")
+        return []
+
+    http = urllib3.PoolManager()
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+
+    def fetch_html(url: str, retries: int = 3) -> str | None:
+        for attempt in range(retries):
+            try:
+                response = http.request("get", url, headers=headers, timeout=10)
+                if response.status == 200:
+                    return response.data.decode("utf-8")
+            except Exception as exc:
+                if attempt < retries - 1:
+                    print(f"[WARN] v2rayshare retry {attempt + 1}/{retries}: {exc}")
+        return None
+
+    for entry in parsed.entries[:10]:
+        top_link = getattr(entry, "link", "")
+        if not top_link:
+            continue
+        print(f"[INFO] v2rayshare try page: {top_link}")
+        html = fetch_html(top_link)
+        if not html:
+            continue
+
+        soup = BeautifulSoup(html, "html.parser")
+        tag = soup.find("h2", string="订阅链接")
+        if not tag:
+            continue
+
+        strong_tag = tag.find_next("strong", string="Mihomo订阅链接：")
+        if not strong_tag:
+            continue
+
+        link_p = strong_tag.find_next("p")
+        link = "".join(link_p.text.split()) if link_p else ""
+        if not link:
+            continue
+
+        sub_content = fetch_html(link)
+        if not sub_content:
+            print("[WARN] v2rayshare mihomo link 404, try older entry")
+            continue
+
+        print(f"[OK] v2rayshare discovered: {link}")
+        return [link]
+
+    print("[WARN] v2rayshare discovery failed: no mihomo link")
+    return []
 
 
 def unique_ordered(items: list[str]) -> list[str]:
