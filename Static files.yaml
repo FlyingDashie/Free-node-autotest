@@ -1,0 +1,165 @@
+# >>=====================================<<
+# ||                                     ||
+# ||      ██████╗  ██████╗  ██████╗      ||
+# ||     ██╔════╝ ██╔════╝ ██╔════╝      ||
+# ||     ███████╗ ███████╗ ███████╗      ||
+# ||     ██╔═══██╗██╔═══██╗██╔═══██╗     ||
+# ||     ╚██████╔╝╚██████╔╝╚██████╔╝     ||
+# ||      ╚═════╝  ╚═════╝  ╚═════╝      ||
+# ||                                     ||
+# >>=====================================<<
+# 名称: OneTouch 一键连
+# 地址: https://github.com/666OS/YYDS
+# 版本: v26.1.1
+# 作者: YYDS666
+# 更新: 2026 年 1 月 30 日
+# 频道: https://t.me/Pinched666
+# 描述: 一键连纯净版
+
+# ==================== 锚点配置 ====================
+# 代理提供者模板 - 订阅源基础配置
+BaseProvider: &BaseProvider {type: http, interval: 86400, proxy: DIRECT, health-check: {enable: true, url: 'https://www.google.com/generate_204', interval: 300}, filter: '^(?!.*(群|邀请|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|墙内|地址|频道|不能|说明|使用|提示|特别|访问|支持|教程|关注|更新|作者|加入|USE|USED|TOTAL|EXPIRE|EMAIL|Panel|Channel|Author))'}
+
+# 策略组类型模板 - 定义不同的策略组基础配置
+BaseUT: &BaseUT {type: url-test, interval: 200, lazy: true, url: 'https://www.google.com/generate_204', hidden: true}
+BaseFB: &BaseFB {type: fallback, interval: 200, lazy: true, url: 'https://www.google.com/generate_204', hidden: true}
+
+# 节点筛选正则表达式 - 基于地理位置和关键词过滤
+FilterHK: &FilterHK '^(?=.*(?i)(港|🇭🇰|HK|Hong|HKG))(?!.*(排除1|排除2|5x)).*$'
+FilterSG: &FilterSG '^(?=.*(?i)(坡|🇸🇬|SG|Sing|SIN|XSP))(?!.*(排除1|排除2|5x)).*$'
+FilterJP: &FilterJP '^(?=.*(?i)(日|🇯🇵|JP|Japan|NRT|HND|KIX|CTS|FUK))(?!.*(排除1|排除2|5x)).*$'
+FilterKR: &FilterKR '^(?=.*(?i)(韩|🇰🇷|韩|首尔|南朝鲜|KR|KOR|Korea|South))(?!.*(排除1|排除2|5x)).*$'
+FilterUS: &FilterUS '^(?=.*(?i)(美|🇺🇸|US|USA|SJC|JFK|LAX|ORD|ATL|DFW|SFO|MIA|SEA|IAD))(?!.*(排除1|排除2|5x)).*$'
+FilterTW: &FilterTW '^(?=.*(?i)(台|🇼🇸|🇹🇼|TW|tai|TPE|TSA|KHH))(?!.*(排除1|排除2|5x)).*$'
+FilterEU: &FilterEU '^(?=.*(?i)(奥|比|保|克罗地亚|塞|捷|丹|爱沙|芬|法|德|希|匈|爱尔|意|拉|立|卢|马其它|荷|波|葡|罗|斯洛伐|斯洛文|西|瑞|英|🇧🇪|🇨🇿|🇩🇰|🇫🇮|🇫🇷|🇩🇪|🇮🇪|🇮🇹|🇱🇹|🇱🇺|🇳🇱|🇵🇱|🇸🇪|🇬🇧|CDG|FRA|AMS|MAD|BCN|FCO|MUC|BRU))(?!.*(排除1|排除2|5x)).*$'
+FilterOT: &FilterOT '^(?!.*(DIRECT|直接连接|美|港|坡|台|新|日|韩|奥|比|保|克罗地亚|塞|捷|丹|爱沙|芬|法|德|希|匈|爱尔|意|拉|立|卢|马其它|荷|波|葡|罗|斯洛伐|斯洛文|西|瑞|英|🇭🇰|🇼🇸|🇹🇼|🇸🇬|🇯🇵|🇰🇷|🇺🇸|🇬🇧|🇦🇹|🇧🇪|🇨🇿|🇩🇰|🇫🇮|🇫🇷|🇩🇪|🇮🇪|🇮🇹|🇱🇹|🇱🇺|🇳🇱|🇵🇱|🇸🇪|HK|TW|SG|JP|KR|US|GB|CDG|FRA|AMS|MAD|BCN|FCO|MUC|BRU|HKG|TPE|TSA|KHH|SIN|XSP|NRT|HND|KIX|CTS|FUK|JFK|LAX|ORD|ATL|DFW|SFO|MIA|SEA|IAD|LHR|LGW))'
+FilterAL: &FilterAL '^(?!.*(DIRECT|直接连接|群|邀请|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|墙内|地址|频道|不能|说明|使用|提示|特别|访问|支持|教程|关注|更新|作者|加入|USE|USED|TOTAL|EXPIRE|EMAIL|Panel|Channel|Author))'
+
+# 策略组代理列表模板 - 预定义的代理节点优先级排序
+SelectAL: &SelectAL   {type: select, proxies: [故障转移, 香港自动, 台湾自动, 日本自动, 狮城自动, 韩国自动, 美国自动, 欧洲自动, 手动选择, 直接连接]}
+SelectOne: &SelectOne {type: select, proxies: [一键连, 香港自动, 台湾自动, 日本自动, 狮城自动, 韩国自动, 美国自动, 欧洲自动, 手动选择, 直接连接]}
+SelectUS: &SelectUS   {type: select, proxies: [美国自动, 一键连, 香港自动, 台湾自动, 日本自动, 狮城自动, 韩国自动, 欧洲自动, 手动选择, 直接连接]}
+SelectDC: &SelectDC   {type: select, proxies: [直接连接, 一键连, 香港自动, 台湾自动, 日本自动, 狮城自动, 韩国自动, 美国自动, 欧洲自动, 手动选择]}
+
+# ==================== 代理提供者 ====================
+proxy-providers:
+  A🔵: {<<: *BaseProvider, url: 'https://raw.githubusercontent.com/FlyingDashie/Free-node-autotest/refs/heads/main/clash.yaml', override: {additional-prefix: 'A🔵'}}
+  大FQ运动: {<<: *BaseProvider, url: 'https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml', override: {additional-prefix: '[大FQ运动] '}}
+  ChromeGO: {<<: *BaseProvider, url: 'https://chg26.makou.cc.cd/', override: {additional-prefix: '[ChromeGO] '}}
+  V2Rayshare: {<<: *BaseProvider, url: 'https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml', override: {additional-prefix: '[V2Rayshare] '}}
+  免费节点1: {<<: *BaseProvider, url: 'https://v4.gh-proxy.org/https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml', override: {additional-prefix: '[免费节点1] '}}
+  免费节点2: {<<: *BaseProvider, url: 'https://v4.gh-proxy.org/https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml', override: {additional-prefix: '[免费节点2] '}}
+  免费节点3: {<<: *BaseProvider, url: 'https://sunmiao4458.github.io/free-proxy-airport/clash.yaml', override: {additional-prefix: '[免费节点3] '}}
+  免费节点4: {<<: *BaseProvider, url: 'https://raw.githubusercontent.com/mfuu/v2ray/master/clash.yaml', override: {additional-prefix: '[免费节点4] '}}
+  免费节点5: {<<: *BaseProvider, url: 'https://cdn.jsdelivr.net/gh/vxiaov/free_proxies@main/clash/clash.provider.yaml', override: {additional-prefix: '[免费节点5] '}}
+  免费节点6: {<<: *BaseProvider, url: 'https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml', override: {additional-prefix: '[免费节点6] '}}
+  免费节点7: {<<: *BaseProvider, url: 'https://raw.githubusercontent.com/snakem982/proxy习近平l/main/source/clash-meta-2.yaml', override: {additional-prefix: '[免费节点7] '}}
+  免费节点9: {<<: *BaseProvider, url: 'https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription2.yaml', override: {additional-prefix: '[免费节点9] '}}
+# ==================== 核心配置 ====================
+# 基础配置
+mode: rule
+port: 7890
+socks-port: 7891
+redir-port: 7892
+mixed-port: 7893
+tproxy-port: 7895
+ipv6: true
+allow-lan: true
+unified-delay: true
+tcp-concurrent: true
+log-level: warning
+bind-address: '*'
+find-process-mode: 'always'
+keep-alive-interval: 15
+keep-alive-idle: 600
+
+# 认证配置
+authentication:
+  - mihomo:yyds666
+skip-auth-prefixes:
+  - 192.168.1.0/24
+  - 192.168.31.0/24
+  - 192.168.100.0/24
+  - 127.0.0.1/8
+
+# 实验性功能
+experimental:
+  quic-go-disable-gso: true  
+     
+# 管理面板配置
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
+external-ui-name: zashboard
+external-ui: ui
+external-controller: 127.0.0.1:9090
+secret: yyds666
+
+# 配置存储
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+# 流量嗅探
+sniffer:
+  enable: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+  skip-domain:
+    - "Mijia Cloud"
+    - "+.push.apple.com"
+
+# TUN模式配置
+tun:
+  enable: false
+  stack: mixed
+  dns-hijack:
+    - "any:53"
+    - "tcp://any:53"
+  auto-route: true
+  auto-redirect: true
+  auto-detect-interface: true
+    
+# DNS配置
+dns:
+  enable: true
+  ipv6: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  default-nameserver:
+    - 119.29.29.29
+    - 180.184.1.1
+    - 223.5.5.5
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  fake-ip-filter:
+    - rule-set:Direct
+    - rule-set:Private
+    - rule-set:China
+    - +.miwifi.com
+    - +.docker.io
+    - +.market.xiaomi.com
+    - +.push.apple.com
+
+# ==================== 代理策略组 ====================
+proxy-groups:
+  - {name: 一键连,    <<: *SelectAL, icon: https://github.com/666OS/YYDS/raw/main/mihomo/image/mihomo.png}
+  - {name: 故障转移,  <<: *BaseFB, proxies: [香港自动, 台湾自动, 狮城自动, 日本自动, 韩国自动, 美国自动, 手动选择], icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/ULB.png}
+  - {name: 人工智能,  <<: *SelectUS, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/AI.png}
+  - {name: 社交平台,  <<: *SelectOne, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/PBS.png}  
+  - {name: 国际媒体,  <<: *SelectOne, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/DomesticMedia.png}
+  - {name: 墙内流量,  <<: *SelectDC, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/China.png}
+  - {name: 手动选择,  type: select, include-all: true, filter: *FilterAL, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Clubhouse.png}
+  - {name: 直接连接,  type: select, proxies: [DIRECT], hidden: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Direct.png}
+  - {name: 香港自动,  <<: *BaseUT, filter: *FilterHK, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Hong_Kong.png}
+  - {name: 台湾自动,  <<: *BaseUT, filter: *FilterTW, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Taiwan.png}
+  - {name: 日本自动,  <<: *BaseUT, filter: *FilterJP, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Japan.png}
+  - {name: 狮城自动,  <<: *BaseUT, filter: *FilterSG, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Singapore.png}
+  - {name: 韩国自动,  <<: *BaseUT, filter: *FilterKR, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/Korea.png}
+  - {name: 美国自动,  <<: *BaseUT, filter: *FilterUS, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/United_States.png}
+  - {name: 欧洲自动,  <<: *BaseUT, filter: *FilterEU, include-all: true, icon: https://github.com/Koolson/Qure/raw/master/IconSet/Color/European_Union.png}

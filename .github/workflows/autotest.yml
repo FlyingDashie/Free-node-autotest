@@ -1,0 +1,76 @@
+name: Generate Clash Config
+
+on:
+  schedule:
+    # 每小时的 15 分和 45 分运行（UTC）
+    - cron: '15,45 * * * *'
+  workflow_dispatch:   # 允许手动触发
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 需要写回仓库权限
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 确保能推送
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pyyaml urllib3
+
+      - name: Run generator and capture log
+        id: run
+        run: |
+          mkdir -p output history
+          # 记录运行时间（UTC）
+          RUN_TIME=$(date -u +%Y%m%d-%H%M)
+          echo "RUN_TIME=${RUN_TIME}" >> $GITHUB_ENV
+          
+          # 运行脚本并同时保存日志
+          python generator-github.py 2>&1 | tee "history/run-${RUN_TIME}.log"
+          
+          # 检查是否成功生成文件
+          if [ ! -f output/clash.yaml ]; then
+            echo "生成失败，output/clash.yaml 不存在"
+            exit 1
+          fi
+
+      - name: Prepare files
+        run: |
+          # 1. 覆盖仓库根目录的最新文件
+          cp output/clash.yaml ./clash.yaml
+          
+          # 2. 备份本次生成的文件到 history 目录（按时间命名）
+          cp output/clash.yaml "history/clash-${RUN_TIME}.yaml"
+          
+          # 3. 清理 2 天前的历史文件（日志 + yaml）
+          find history -type f -mtime +2 -delete || true
+          
+          echo "当前 history 目录内容："
+          ls -lh history/ || true
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add clash.yaml history/
+          
+          # 只有真正有变更才提交
+          if git diff --staged --quiet; then
+            echo "没有文件变更，跳过提交"
+          else
+            git commit -m "Auto update clash.yaml + history ${RUN_TIME}"
+            git push
+          fi

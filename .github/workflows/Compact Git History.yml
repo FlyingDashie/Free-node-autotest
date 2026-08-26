@@ -1,0 +1,29 @@
+name: Compact Git History
+
+on:
+  schedule:
+    # 每天 UTC 05:05 拍扁一次
+    - cron: '5 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Flatten to a single commit
+        run: |
+          git checkout --orphan temp-clean
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Compact repository history $(date -u +%Y-%m-%d)"
+          git branch -M main
+          git push --force origin main
