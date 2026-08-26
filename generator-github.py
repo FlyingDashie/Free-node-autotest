@@ -156,24 +156,6 @@ SOURCE_GROUPS = [
         "fallbacks": [],
         "prefix": "[免费节点9-3] ",
     },
-    {
-        "name": "snakem982 proxypool",
-        "primary": "https://raw.githubusercontent.com/snakem982/proxypool/main/clash.yaml",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta-2.yaml",
-            "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta.yaml",
-        ],
-        "prefix": "[snakem982] ",
-    },
-    {
-        "name": "Flikify Free-Node",
-        "primary": "https://raw.githubusercontent.com/Flikify/Free-Node/main/clash.yaml",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/a2470982985/getNode/main/clash.yaml",
-            "https://cdn.jsdelivr.net/gh/a2470982985/getNode@main/clash.yaml",
-        ],
-        "prefix": "[Flikify] ",
-    },
 ]
 
 SUPPORTED_PROXY_TYPES = {
