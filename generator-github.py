@@ -97,6 +97,14 @@ SOURCE_GROUPS = [
         ],
         "prefix": "[Pawdroid] ",
     },
+{
+        "name": "Pawdroid README",
+        "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/README.md",
+        "fallbacks": [
+            "https://cdn.jsdelivr.net/gh/Pawdroid/Free-servers@main/README.md",
+        ],
+        "prefix": "[Pawdroid-README] ",
+    },
     {
         "name": "V2Rayshare-订阅",
         "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
