@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlparse, parse_qs
 
 import requests
 import urllib3
@@ -49,6 +49,15 @@ SOURCE_GROUPS = [
         "primary": "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
         "fallbacks": [],
         "prefix": "[大FQ运动] ",
+    },
+    {
+        "name": "大FQ运动-补充",
+        "primary": "https://end-gfw.com/ss-key",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together-ss",
+            "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
+        ],
+        "prefix": "[大FQ运动-补充] ",
     },
     {
         "name": "ChromeGO",
@@ -81,10 +90,18 @@ SOURCE_GROUPS = [
         "prefix": "[Free-clash-v2ray] ",
     },
     {
-        "name": "V2rayshare_subcription",
+        "name": "Pawdroid Free-servers",
+        "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
+        "fallbacks": [
+            "https://mirror.v2gh.com/https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
+        ],
+        "prefix": "[Pawdroid] ",
+    },
+    {
+        "name": "V2Rayshare-订阅",
         "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
         "fallbacks": [],
-        "prefix": "[V2rayshare_subcription] ",
+        "prefix": "[V2Rayshare-订阅] ",
     },
     {
         "name": "免费节点1",
@@ -195,6 +212,7 @@ def fetch_text(url: str, retries: int = MAX_RETRIES) -> str:
     headers = {
         "User-Agent": f"free-proxy-airport/{VERSION} (+https://github.com/)",
         "Accept": "text/plain, text/yaml, application/yaml, */*",
+        "Referer": "https://end-gfw.com/",
     }
     last_error: Exception | None = None
     for attempt in range(1, retries + 1):
@@ -277,8 +295,39 @@ def extract_proxy_block(text: str) -> list[Any]:
     return proxies
 
 
+_SHARE_URI_RE = re.compile(
+    r"(?:ss|ssr|vmess|vless|trojan|hysteria2?|hy2)://",
+    re.IGNORECASE,
+)
+
+
+def extract_share_uris(text: str) -> list[str]:
+    stripped = re.sub(r"<[^>]+>", " ", text)
+    starts = list(_SHARE_URI_RE.finditer(stripped))
+    if not starts:
+        return []
+    uris: list[str] = []
+    for index, match in enumerate(starts):
+        end = starts[index + 1].start() if index + 1 < len(starts) else len(stripped)
+        chunk = re.sub(r"\s+", "", stripped[match.start():end])
+        chunk = re.split(r"[<>\"']", chunk)[0]
+        if "://" in chunk:
+            uris.append(chunk)
+    return uris
+
+
 def extract_proxies(text: str) -> list[dict[str, Any]]:
-    document = load_yaml_document(text)
+    decoded = maybe_base64_decode(text)
+    share_uris = extract_share_uris(decoded)
+    if share_uris and "proxies:" not in decoded:
+        clean = []
+        for uri in share_uris:
+            parsed = parse_share_uri(uri)
+            if parsed:
+                clean.append(parsed)
+        return clean
+
+    document = load_yaml_document(decoded)
     if isinstance(document, dict):
         proxies = document.get("proxies", [])
     elif isinstance(document, list):
@@ -287,13 +336,165 @@ def extract_proxies(text: str) -> list[dict[str, Any]]:
         proxies = []
 
     if not proxies:
-        proxies = extract_proxy_block(text)
+        proxies = extract_proxy_block(decoded)
 
     clean: list[dict[str, Any]] = []
     for proxy in proxies:
         if isinstance(proxy, dict):
             clean.append(dict(proxy))
+
+    for uri in extract_share_uris(decoded):
+        parsed = parse_share_uri(uri)
+        if parsed:
+            clean.append(parsed)
     return clean
+
+def parse_share_uri(uri: str) -> dict[str, Any] | None:
+    raw = uri.strip().rstrip(",;")
+    scheme = raw.split("://", 1)[0].lower()
+    try:
+        if scheme == "vmess":
+            return _parse_vmess_uri(raw)
+        if scheme == "ss":
+            return _parse_ss_uri(raw)
+        if scheme in {"vless", "trojan", "hysteria", "hysteria2", "hy2"}:
+            return _parse_standard_uri(raw, scheme)
+    except Exception:
+        return None
+    return None
+
+
+def _fragment_name(uri: str, fallback: str) -> str:
+    if "#" in uri:
+        return unquote(uri.split("#", 1)[1]).strip() or fallback
+    return fallback
+
+
+def _parse_vmess_uri(uri: str) -> dict[str, Any] | None:
+    payload = uri.split("://", 1)[1].split("#", 1)[0]
+    pad = "=" * ((4 - len(payload) % 4) % 4)
+    data = json.loads(base64.b64decode(payload + pad).decode("utf-8", errors="replace"))
+    if not isinstance(data, dict):
+        return None
+    name = str(data.get("ps") or _fragment_name(uri, "vmess")).strip()
+    proxy: dict[str, Any] = {
+        "name": name,
+        "type": "vmess",
+        "server": str(data.get("add", "")).strip(),
+        "port": int(data.get("port", 0)),
+        "uuid": str(data.get("id", "")).strip(),
+        "alterId": int(data.get("aid") or 0),
+        "cipher": str(data.get("scy") or "auto"),
+        "network": str(data.get("net") or "tcp"),
+        "tls": str(data.get("tls") or "").lower() in {"tls", "true", "1"},
+        "udp": True,
+    }
+    host = str(data.get("host") or "").strip()
+    path = str(data.get("path") or "/").strip() or "/"
+    sni = str(data.get("sni") or host).strip()
+    if proxy["tls"] and sni:
+        proxy["servername"] = sni
+    if data.get("fp"):
+        proxy["client-fingerprint"] = str(data.get("fp"))
+    if proxy["network"] == "ws":
+        proxy["ws-opts"] = {"path": path, "headers": {"Host": host or proxy["server"]}}
+    elif proxy["network"] == "grpc":
+        proxy["grpc-opts"] = {"grpc-service-name": path.lstrip("/")}
+    return proxy
+
+
+def _parse_ss_uri(uri: str) -> dict[str, Any] | None:
+    rest = uri.split("://", 1)[1]
+    name = _fragment_name(uri, "ss")
+    main = rest.split("#", 1)[0]
+    plugin = ""
+    if "/?" in main:
+        main, plugin = main.split("/?", 1)
+    elif "?" in main:
+        main, plugin = main.split("?", 1)
+    if "@" not in main:
+        pad = "=" * ((4 - len(main) % 4) % 4)
+        main = base64.b64decode(main + pad).decode("utf-8", errors="replace")
+    userinfo, hostport = main.rsplit("@", 1)
+    if ":" not in userinfo:
+        pad = "=" * ((4 - len(userinfo) % 4) % 4)
+        userinfo = base64.b64decode(userinfo + pad).decode("utf-8", errors="replace")
+    method, password = userinfo.split(":", 1)
+    host, port = hostport.rsplit(":", 1)
+    proxy: dict[str, Any] = {
+        "name": name,
+        "type": "ss",
+        "server": unquote(host),
+        "port": int(port),
+        "cipher": unquote(method),
+        "password": unquote(password),
+        "udp": True,
+    }
+    if plugin:
+        qs = parse_qs(plugin)
+        if qs.get("plugin"):
+            proxy["plugin"] = qs["plugin"][0]
+    return proxy
+
+
+def _parse_standard_uri(uri: str, scheme: str) -> dict[str, Any] | None:
+    name = _fragment_name(uri, scheme)
+    main = uri.split("#", 1)[0]
+    parsed = urlparse(main)
+    if not parsed.hostname or not parsed.port:
+        return None
+    user = unquote(parsed.username or "")
+    qs = {k.lower(): v[0] for k, v in parse_qs(parsed.query).items() if v}
+    net = (qs.get("type") or qs.get("network") or "tcp").lower()
+    security = (qs.get("security") or "").lower()
+    proxy_type = "hysteria2" if scheme in {"hy2", "hysteria2"} else scheme
+    proxy: dict[str, Any] = {
+        "name": name,
+        "type": proxy_type,
+        "server": parsed.hostname,
+        "port": int(parsed.port),
+        "udp": True,
+    }
+    if proxy_type == "vless":
+        proxy["uuid"] = user
+        proxy["encryption"] = qs.get("encryption") or "none"
+        if qs.get("flow"):
+            proxy["flow"] = qs["flow"]
+    elif proxy_type == "trojan":
+        proxy["password"] = user
+    else:
+        proxy["password"] = user
+
+    tls = security in {"tls", "reality"} or qs.get("sni") or proxy_type in {"trojan", "hysteria2"}
+    if tls:
+        proxy["tls"] = True
+    sni = qs.get("sni") or qs.get("servername") or qs.get("host") or ""
+    if sni:
+        proxy["servername"] = sni
+        if proxy_type == "trojan":
+            proxy["sni"] = sni
+    if qs.get("fp"):
+        proxy["client-fingerprint"] = qs["fp"]
+    if qs.get("insecure") in {"1", "true"} or qs.get("allowinsecure") in {"1", "true"}:
+        proxy["skip-cert-verify"] = True
+    if security == "reality":
+        proxy["tls"] = True
+        reality: dict[str, Any] = {}
+        if qs.get("pbk"):
+            reality["public-key"] = qs["pbk"]
+        if qs.get("sid"):
+            reality["short-id"] = qs["sid"]
+        if reality:
+            proxy["reality-opts"] = reality
+
+    proxy["network"] = net
+    path = qs.get("path") or "/"
+    host = qs.get("host") or sni or parsed.hostname
+    if net == "ws":
+        proxy["ws-opts"] = {"path": path, "headers": {"Host": host}}
+    elif net == "grpc":
+        proxy["grpc-opts"] = {"grpc-service-name": (qs.get("servicename") or path).lstrip("/")}
+    return proxy
 
 
 def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
