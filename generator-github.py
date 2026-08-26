@@ -63,6 +63,24 @@ SOURCE_GROUPS = [
         "prefix": "[V2Rayshare] ",
     },
     {
+        "name": "OpenRunner clash-freenode",
+        "primary": "discover:openrunner",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/sub.yaml",
+            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
+            "https://raw.githubusercontent.com/openrunner/clash-freenode/main/clash.yaml",
+        ],
+        "prefix": "[OpenRunner] ",
+    },
+    {
+        "name": "Free-clash-v2ray",
+        "primary": "discover:free-clash-v2ray",
+        "fallbacks": [
+            "https://free-clash-v2ray.github.io/uploads/latest.yaml",
+        ],
+        "prefix": "[Free-clash-v2ray] ",
+    },
+    {
         "name": "V2rayshare_subcription",
         "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
         "fallbacks": [],
@@ -138,15 +156,6 @@ SOURCE_GROUPS = [
         "fallbacks": [],
         "prefix": "[免费节点9-3] ",
     },
-        {
-        "name": "openRunner clash-freenode",
-        "primary": "https://raw.githubusercontent.com/openRunner/clash-freenode/main/sub.yaml",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
-            "https://raw.githubusercontent.com/openrunner/clash-freenode/main/clash.yaml",
-        ],
-        "prefix": "[openRunner] ",
-    },
     {
         "name": "snakem982 proxypool",
         "primary": "https://raw.githubusercontent.com/snakem982/proxypool/main/clash.yaml",
@@ -164,14 +173,6 @@ SOURCE_GROUPS = [
             "https://cdn.jsdelivr.net/gh/a2470982985/getNode@main/clash.yaml",
         ],
         "prefix": "[Flikify] ",
-    },
-    {
-        "name": "free-clash-v2ray GitHub Pages",
-        "primary": "https://free-clash-v2ray.github.io/uploads/latest.yaml",
-        "fallbacks": [
-            "discover:free-clash-v2ray",
-        ],
-        "prefix": "[free-clash-v2ray] ",
     },
 ]
 
@@ -351,6 +352,8 @@ def expand_source_urls(source: dict[str, Any]) -> list[str]:
             urls.extend(discover_free_clash_v2ray_urls())
         elif item == "discover:v2rayshare":
             urls.extend(discover_v2rayshare_urls())
+        elif item == "discover:openrunner":
+            urls.extend(discover_openrunner_urls())
         else:
             urls.append(item)
     return unique_ordered(urls)
@@ -433,6 +436,81 @@ def discover_v2rayshare_urls() -> list[str]:
         return [link]
 
     print("[WARN] v2rayshare discovery failed: no mihomo link")
+    return []
+
+
+def discover_openrunner_urls() -> list[str]:
+    try:
+        import feedparser
+        from bs4 import BeautifulSoup
+    except ImportError as exc:
+        print(f"[WARN] openrunner discovery missing dependency: {exc}")
+        return []
+
+    parsed = feedparser.parse("https://free.datiya.com/index.xml")
+    if not parsed.entries:
+        print("[WARN] openrunner discovery: empty feed")
+        return []
+
+    http = urllib3.PoolManager()
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+
+    def fetch_html(url: str, retries: int = 3) -> str | None:
+        for attempt in range(retries):
+            try:
+                response = http.request("get", url, headers=headers, timeout=10)
+                if response.status == 200:
+                    return response.data.decode("utf-8")
+            except Exception as exc:
+                if attempt < retries - 1:
+                    print(f"[WARN] openrunner retry {attempt + 1}/{retries}: {exc}")
+        return None
+
+    for entry in parsed.entries[:10]:
+        top_link = getattr(entry, "link", "")
+        if not top_link:
+            continue
+        print(f"[INFO] openrunner try page: {top_link}")
+        html = fetch_html(top_link)
+        if not html:
+            continue
+
+        soup = BeautifulSoup(html, "html.parser")
+        found: list[str] = []
+        for href in soup.find_all("a"):
+            link = str(href.get("href") or "").strip()
+            if re.search(r"/uploads/\d{8}-clash\.yaml$", link):
+                if link.startswith("/"):
+                    link = "https://free.datiya.com" + link
+                found.append(link)
+        for text in soup.stripped_strings:
+            text = "".join(str(text).split())
+            if re.fullmatch(r"https://free\.datiya\.com/uploads/\d{8}-clash\.yaml", text):
+                found.append(text)
+
+        for link in unique_ordered(found):
+            body = fetch_html(link)
+            if not body:
+                print(f"[WARN] openrunner clash link 404: {link}")
+                continue
+            print(f"[OK] openrunner discovered: {link}")
+            return [link]
+
+        date_match = re.search(r"/post/(\d{8})/?", top_link)
+        if date_match:
+            guess = f"https://free.datiya.com/uploads/{date_match.group(1)}-clash.yaml"
+            body = fetch_html(guess)
+            if body:
+                print(f"[OK] openrunner discovered: {guess}")
+                return [guess]
+
+    print("[WARN] openrunner discovery failed: no clash yaml")
     return []
 
 
