@@ -581,8 +581,6 @@ def expand_source_urls(source: dict[str, Any]) -> list[str]:
             urls.extend(discover_v2rayshare_urls())
         elif item == "discover:openrunner":
             urls.extend(discover_openrunner_urls())
-        elif item == "discover:freev2":
-            urls.extend(discover_freev2_urls())
         elif item == "discover:mibei77":
             urls.extend(discover_mibei77_urls())
         elif item == "discover:yoyapai":
@@ -912,9 +910,6 @@ def discover_clashfree_readme_urls() -> list[str]:
 
     print("[WARN] clashfree discovery failed: no download url")
     return []
-
-
-def discover_freev2_urls() -> list[str]:
     pages = [
         "https://b.freev2.net/",
         "https://freev2.net/",
