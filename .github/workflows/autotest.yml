@@ -43,10 +43,12 @@ jobs:
           mkdir -p output history
           # 记录运行时间（UTC）
           RUN_TIME=$(date -u +%Y%m%d-%H%M)
+          INV=$((999999999999 - 10#$(date -u +%Y%m%d%H%M)))
           echo "RUN_TIME=${RUN_TIME}" >> $GITHUB_ENV
+          echo "INV=${INV}" >> $GITHUB_ENV
           
           # 运行脚本并同时保存日志
-          python generator-github.py 2>&1 | tee "history/run-${RUN_TIME}.log"
+          python generator-github.py 2>&1 | tee "history/${INV}-${RUN_TIME}-run.log"
           
           # 检查是否成功生成文件
           if [ ! -f output/clash.yaml ]; then
