@@ -1,9 +1,12 @@
 name: Generate Clash Config
 
 on:
-  schedule:
-    - cron: '11,41 * * * *'
-  workflow_dispatch: # 允许手动触发
+  # 允许由外部定时平台（如 cron-job.org）触发
+  repository_dispatch:
+    types: [trigger-clash-generation]
+  
+  # 保留手动触发，方便调试
+  workflow_dispatch:
 
 # touch: re-register schedule
 concurrency:
