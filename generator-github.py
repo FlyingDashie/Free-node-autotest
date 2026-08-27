@@ -100,18 +100,18 @@ SOURCE_GROUPS = [
         "prefix": "[Clashfree-README] ",
     },
     {
-        "name": "FreeV2-官网",
-        "primary": "discover:freev2",
-        "fallbacks": [],
-        "prefix": "[FreeV2-官网] ",
-    },
-    {
         "name": "Free-clash-v2ray-README",
         "primary": "discover:free-clash-v2ray",
         "fallbacks": [
             "https://free-clash-v2ray.github.io/uploads/latest.yaml",
         ],
         "prefix": "[Free-clash-v2ray] ",
+    },
+    {
+        "name": "FreeV2-Base64",
+        "primary": "https://xmxosfepggzm.503403.xyz",
+        "fallbacks": [],
+        "prefix": "[FreeV2-Base64] ",
     },
     {
         "name": "Pawdroid-Base64",
