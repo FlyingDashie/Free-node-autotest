@@ -640,9 +640,20 @@ def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
                 continue
         return None
 
-    heading_names = spec.get("headings") or []
-    label_names = spec.get("labels") or []
-    link_re = re.compile(spec["link_re"], re.IGNORECASE)
+    heading_names = spec.get("headings") or [r"订阅链接", r"订阅地址", r"订阅"]
+    label_names = spec.get("labels") or [
+        r"mihomo.{0,24}(?:订阅|配置|链接)",
+        r"clash[\s\-]*meta.{0,24}(?:订阅|配置|链接)",
+        r"clash.{0,24}(?:订阅|配置|链接)",
+        r"v2ray.{0,24}(?:订阅|配置|链接)",
+    ]
+    label_priority = [
+        (100, label_names[0]),
+        (80, label_names[1]),
+        (50, label_names[2]),
+        (10, label_names[3]),
+    ]
+    link_re = re.compile(spec.get("link_re") or r"https?://[^\s\"'<>]+?\.(?:yaml|yml)", re.I)
 
     def normalize(link: str, page_url: str) -> str:
         link = "".join(str(link).split())
@@ -651,39 +662,64 @@ def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
             return urljoin(page_url, link)
         return link
 
-    def labeled_links(soup: Any, page_url: str) -> list[str]:
-        found: list[str] = []
+    def score_link(url: str, context: str = "") -> int:
+        blob = f"{url} {context}".lower()
+        filename = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1].lower()
+        score = 1
+        if "mihomo" in blob or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
+            score += 100
+        elif re.search(r"clash\s*meta|clash-meta|meta订阅", blob):
+            score += 80
+        elif "clash" in blob or re.fullmatch(r"20\d{6}\.ya?ml", filename):
+            score += 50
+        if re.search(r"v2ray|ssr|\.txt(?:\?|$)", blob):
+            score -= 80
+        return score
+
+    def collect_yaml(soup: Any, page_url: str, html: str = "") -> list[str]:
+        ranked: list[tuple[int, str]] = []
+        for bonus, name in label_priority:
+            pat = re.compile(
+                name + r"[\s:：]{0,40}(https?://[^\s\"'<>]+)",
+                re.IGNORECASE,
+            )
+            plain = re.sub(r"<[^>]+>", " ", html or "")
+            for match in pat.finditer(plain):
+                raw = normalize(match.group(1), page_url)
+                found = link_re.search(raw)
+                if found:
+                    url = found.group(0) if found.group(0).startswith("http") else raw
+                    ranked.append((bonus + score_link(url, name), url))
         heading = None
         for name in heading_names:
             heading = soup.find(["h1", "h2", "h3", "h4"], string=re.compile(name))
             if heading:
                 break
-        scope = heading if heading else soup
+        scope = heading.parent if heading and heading.parent else soup
         for name in label_names:
-            node = scope.find(["strong", "b", "span", "p"], string=re.compile(name))
+            node = scope.find(["strong", "b", "span", "p", "h3", "h4"], string=re.compile(name))
             if not node:
                 continue
             for nxt in node.find_all_next(["p", "code", "pre", "a"], limit=8):
                 text = nxt.get("href") if nxt.name == "a" else nxt.get_text(" ", strip=True)
                 text = normalize(text or "", page_url)
-                if link_re.search(text):
-                    m = link_re.search(text)
-                    found.append(m.group(0) if m.group(0).startswith("http") else text)
-                    break
-        return unique_ordered(found)
-
-    def scanned_links(soup: Any, page_url: str) -> list[str]:
-        found: list[str] = []
+                match = link_re.search(text)
+                if match:
+                    url = match.group(0) if match.group(0).startswith("http") else text
+                    ranked.append((score_link(url, name), url))
         for href in soup.find_all("a"):
             link = normalize(href.get("href") or "", page_url)
-            if link_re.search(link):
-                found.append(link)
-        for text in soup.stripped_strings:
-            text = "".join(str(text).split())
-            match = link_re.search(text)
+            match = link_re.search(link)
             if match:
-                found.append(match.group(0))
-        return unique_ordered(found)
+                url = match.group(0) if match.group(0).startswith("http") else link
+                ranked.append((score_link(url, href.get_text(" ", strip=True)), url))
+        for text in soup.stripped_strings:
+            compact = "".join(str(text).split())
+            match = link_re.search(compact)
+            if match:
+                ranked.append((score_link(match.group(0), compact), match.group(0)))
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return unique_ordered([url for _, url in ranked])
 
     def guessed_links(page_url: str) -> list[str]:
         date_match = re.search(r"(20\d{6})", page_url)
@@ -710,9 +746,7 @@ def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
         if not html:
             continue
         soup = BeautifulSoup(html, "html.parser")
-        candidates = labeled_links(soup, top_link)
-        if not candidates:
-            candidates = scanned_links(soup, top_link)
+        candidates = collect_yaml(soup, top_link, html)
         if not candidates:
             candidates = guessed_links(top_link)
         for link in candidates:
@@ -729,9 +763,7 @@ def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
 def discover_v2rayshare_urls() -> list[str]:
     return _discover_rss_urls("v2rayshare", {
         "feed": "https://v2rayshare.com/feed",
-        "headings": [r"订阅链接", r"订阅地址"],
-        "labels": [r"Mihomo订阅链接", r"Clash订阅", r"Clash配置"],
-        "link_re": r"https?://[^\s\"'<>]+?\.(?:yaml|yml)",
+        "link_re": r"https?://[^\s\"'<>]*v2rayshare[^\s\"'<>]*\.(?:yaml|yml)",
         "guess": [
             "https://static.v2rayshare.net/{year}/{month}/m{date}.yaml",
         ],
@@ -741,9 +773,7 @@ def discover_v2rayshare_urls() -> list[str]:
 def discover_openrunner_urls() -> list[str]:
     return _discover_rss_urls("openrunner", {
         "feed": "https://free.datiya.com/index.xml",
-        "headings": [r"订阅地址", r"订阅链接"],
-        "labels": [r"Clash配置", r"Clash订阅", r"Mihomo订阅链接"],
-        "link_re": r"https?://free\.datiya\.com/uploads/\d{8}-clash\.yaml|/uploads/\d{8}-clash\.yaml",
+        "link_re": r"https?://[^\s\"'<>]*datiya\.com[^\s\"'<>]*\.(?:yaml|yml)|/uploads/[^\s\"'<>]+\.(?:yaml|yml)",
         "guess": [
             "https://free.datiya.com/uploads/{date}-clash.yaml",
         ],
@@ -753,19 +783,14 @@ def discover_openrunner_urls() -> list[str]:
 def discover_mibei77_urls() -> list[str]:
     return _discover_rss_urls("mibei77", {
         "feed": "https://www.mibei77.com/feed",
-        "headings": [r"订阅链接", r"订阅地址", r"Clash"],
-        "labels": [r"Clash Meta订阅链接", r"Clash订阅", r"Clash配置"],
-        "link_re": r"https?://mm\.mibei77\.com/\d{6}/[^\s\"'<>]+?\.ya?ml",
-        "guess": [],
+        "link_re": r"https?://[^\s\"'<>]*mibei77\.com[^\s\"'<>]*\.(?:yaml|yml)",
     })
 
 
 def discover_yoyapai_urls() -> list[str]:
     found = _discover_rss_urls("yoyapai", {
         "feed": "https://yoyapai.com/feed",
-        "headings": [r"订阅", r"节点配置", r"Clash"],
-        "labels": [r"Clash", r"Clash订阅", r"Clash配置"],
-        "link_re": r"https?://freenode\.yoyapai\.com/\d{4}/\d{2}/\d{2}-[^\s\"'<>]+?\.ya?ml",
+        "link_re": r"https?://[^\s\"'<>]*yoyapai\.com[^\s\"'<>]*\.(?:yaml|yml)",
         "guess": [
             "https://freenode.yoyapai.com/{year}/{month}/{day}-yoyapai.com-clash-vpn-mian-fei-jiedian.yaml",
         ],
@@ -829,7 +854,7 @@ def discover_yoyapai_urls() -> list[str]:
         except Exception:
             return None
         return None
-    link_re = re.compile(r"https?://freenode\.yoyapai\.com/\d{4}/\d{2}/\d{2}-[^\s\"'<>]+?\.ya?ml", re.I)
+    link_re = re.compile(r"https?://[^\s\"'<>]*yoyapai\.com[^\s\"'<>]*\.(?:yaml|yml)", re.I)
     for post in posts:
         print(f"[INFO] yoyapai try page: {post}")
         body = fetch_html(post)
