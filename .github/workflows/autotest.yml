@@ -62,7 +62,7 @@ jobs:
           cp output/clash.yaml ./clash.yaml
           
           # 2. 备份本次生成的文件到 history 目录（按时间命名）
-          cp output/clash.yaml "history/clash-${RUN_TIME}.yaml"
+          cp output/clash.yaml "history/${INV}-${RUN_TIME}-clash.yaml"
           
           # 3. 清理 2 天前的历史文件（日志 + yaml）
           find history -type f -mtime +2 -delete || true
