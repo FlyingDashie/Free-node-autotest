@@ -5,6 +5,11 @@ on:
     - cron: '11,41 * * * *'
   workflow_dispatch: # 允许手动触发
 
+# touch: re-register schedule
+concurrency:
+  group: 'autotest-clash'
+  cancel-in-progress: true
+
 jobs:
   generate:
     runs-on: ubuntu-latest
