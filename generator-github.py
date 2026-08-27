@@ -1350,7 +1350,6 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
                 metrics.append(metric)
             if completed % 25 == 0 or completed == len(futures):
                 print(f"[INFO] tested {completed}/{len(futures)} kept={len(metrics)}")
-    metrics.sort(key=lambda item: item.health_score, reverse=True)
     return metrics
 
 
@@ -1619,7 +1618,8 @@ def main() -> None:
         metrics = [build_direct_fallback_metric()]
         print("[WARN] no live or previous nodes; using DIRECT-FALLBACK degraded config")
 
-    metrics.sort(key=lambda item: item.health_score, reverse=True)
+    order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
+    metrics.sort(key=lambda item: order.get(str(item.proxy["name"]), 10**9))
     config = build_config(metrics)
     validate_config(config)
     write_config(config)
