@@ -51,13 +51,13 @@ SOURCE_GROUPS = [
         "prefix": "[大FQ运动] ",
     },
     {
-        "name": "大FQ运动-补充",
+        "name": "大FQ运动-官网",
         "primary": "https://end-gfw.com/ss-key",
         "fallbacks": [
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together-ss",
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
         ],
-        "prefix": "[大FQ运动-补充] ",
+        "prefix": "[大FQ运动-官网] ",
     },
     {
         "name": "ChromeGO",
@@ -66,23 +66,47 @@ SOURCE_GROUPS = [
         "prefix": "[ChromeGO] ",
     },
     {
-        "name": "V2Rayshare",
+        "name": "V2Rayshare-RSS",
         "primary": "discover:v2rayshare",
         "fallbacks": [],
-        "prefix": "[V2Rayshare] ",
+        "prefix": "[V2Rayshare-RSS] ",
     },
     {
-        "name": "OpenRunner clash-freenode",
+        "name": "OpenRunner-RSS",
         "primary": "discover:openrunner",
         "fallbacks": [
             "https://raw.githubusercontent.com/openRunner/clash-freenode/main/sub.yaml",
             "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
             "https://raw.githubusercontent.com/openrunner/clash-freenode/main/clash.yaml",
         ],
-        "prefix": "[OpenRunner] ",
+        "prefix": "[OpenRunner-RSS] ",
     },
     {
-        "name": "Free-clash-v2ray",
+        "name": "Mibei77-RSS",
+        "primary": "discover:mibei77",
+        "fallbacks": [],
+        "prefix": "[Mibei77-RSS] ",
+    },
+    {
+        "name": "Yoyapai-RSS",
+        "primary": "discover:yoyapai",
+        "fallbacks": [],
+        "prefix": "[Yoyapai-RSS] ",
+    },
+    {
+        "name": "Clashfree-README",
+        "primary": "discover:clashfree-readme",
+        "fallbacks": [],
+        "prefix": "[Clashfree-README] ",
+    },
+    {
+        "name": "FreeV2-官网",
+        "primary": "discover:freev2",
+        "fallbacks": [],
+        "prefix": "[FreeV2-官网] ",
+    },
+    {
+        "name": "Free-clash-v2ray-README",
         "primary": "discover:free-clash-v2ray",
         "fallbacks": [
             "https://free-clash-v2ray.github.io/uploads/latest.yaml",
@@ -90,20 +114,12 @@ SOURCE_GROUPS = [
         "prefix": "[Free-clash-v2ray] ",
     },
     {
-        "name": "Pawdroid Free-servers",
+        "name": "Pawdroid-Base64",
         "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
         "fallbacks": [
             "https://mirror.v2gh.com/https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
         ],
-        "prefix": "[Pawdroid] ",
-    },
-{
-        "name": "Pawdroid README",
-        "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/README.md",
-        "fallbacks": [
-            "https://cdn.jsdelivr.net/gh/Pawdroid/Free-servers@main/README.md",
-        ],
-        "prefix": "[Pawdroid-README] ",
+        "prefix": "[Pawdroid-Base64] ",
     },
     {
         "name": "V2Rayshare-订阅",
@@ -116,6 +132,14 @@ SOURCE_GROUPS = [
         "primary": "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml",
         "fallbacks": [],
         "prefix": "[免费节点1] ",
+    },
+    {
+        "name": "免费节点1-README自建",
+        "primary": "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/free18/v2ray/main/README.md",
+        ],
+        "prefix": "[免费节点1-README自建] ",
     },
     {
         "name": "免费节点2",
@@ -222,17 +246,26 @@ def fetch_text(url: str, retries: int = MAX_RETRIES) -> str:
         "Accept": "text/plain, text/yaml, application/yaml, */*",
         "Referer": "https://end-gfw.com/",
     }
+    session = requests.Session()
+    session.trust_env = False
+    session.verify = False
+    proxy_tries = [PROXIES, {}] if PROXIES else [{}]
     last_error: Exception | None = None
-    for attempt in range(1, retries + 1):
-        try:
-            # 增加 verify=False 解决 Windows SSL EOF 问题
-            response = requests.get(url, headers=headers, timeout=SOURCE_TIMEOUT, verify=False, proxies=PROXIES)
-            response.raise_for_status()
-            return response.content.decode("utf-8", errors="replace")
-        except Exception as exc:
-            last_error = exc
-            if attempt < retries:
-                time.sleep(2 * attempt)
+    for proxies in proxy_tries:
+        for attempt in range(1, retries + 1):
+            try:
+                response = session.get(
+                    url,
+                    headers=headers,
+                    timeout=SOURCE_TIMEOUT,
+                    proxies=proxies,
+                )
+                response.raise_for_status()
+                return response.content.decode("utf-8", errors="replace")
+            except Exception as exc:
+                last_error = exc
+                if attempt < retries:
+                    time.sleep(2 * attempt)
     raise RuntimeError(f"failed to fetch {url}: {last_error}")
 
 
@@ -524,6 +557,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                     break
             except Exception as exc:
                 print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
+        if not source_found:
+            print(f"[WARN] source={source['name']} no proxies")
+        print("============================================================")
         collected.extend(source_found)
 
     sanitized = sanitize_and_deduplicate(collected)
@@ -545,6 +581,14 @@ def expand_source_urls(source: dict[str, Any]) -> list[str]:
             urls.extend(discover_v2rayshare_urls())
         elif item == "discover:openrunner":
             urls.extend(discover_openrunner_urls())
+        elif item == "discover:freev2":
+            urls.extend(discover_freev2_urls())
+        elif item == "discover:mibei77":
+            urls.extend(discover_mibei77_urls())
+        elif item == "discover:yoyapai":
+            urls.extend(discover_yoyapai_urls())
+        elif item == "discover:clashfree-readme":
+            urls.extend(discover_clashfree_readme_urls())
         else:
             urls.append(item)
     return unique_ordered(urls)
@@ -561,18 +605,22 @@ def discover_free_clash_v2ray_urls() -> list[str]:
     return unique_ordered(re.findall(pattern, text))[:8]
 
 
-def discover_v2rayshare_urls() -> list[str]:
-    """从 v2rayshare.com RSS 发现最新 Mihomo 订阅链接。"""
+def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
     try:
         import feedparser
         from bs4 import BeautifulSoup
     except ImportError as exc:
-        print(f"[WARN] v2rayshare discovery missing dependency: {exc}")
+        print(f"[WARN] {site} discovery missing dependency: {exc}")
         return []
 
-    parsed = feedparser.parse("https://v2rayshare.com/feed")
+    try:
+        feed_body = fetch_text(spec["feed"])
+        parsed = feedparser.parse(feed_body)
+    except Exception as exc:
+        print(f"[WARN] {site} feed failed: {exc}")
+        return []
     if not parsed.entries:
-        print("[WARN] v2rayshare discovery: empty feed")
+        print(f"[WARN] {site} discovery: empty feed")
         return []
 
     http = urllib3.PoolManager()
@@ -585,123 +633,395 @@ def discover_v2rayshare_urls() -> list[str]:
     }
 
     def fetch_html(url: str, retries: int = 3) -> str | None:
-        for attempt in range(retries):
+        for _ in range(retries):
             try:
                 response = http.request("get", url, headers=headers, timeout=10)
                 if response.status == 200:
-                    return response.data.decode("utf-8")
-            except Exception as exc:
-                if attempt < retries - 1:
-                    print(f"[WARN] v2rayshare retry {attempt + 1}/{retries}: {exc}")
+                    return response.data.decode("utf-8", errors="replace")
+            except Exception:
+                continue
         return None
 
-    for entry in parsed.entries[:10]:
-        top_link = getattr(entry, "link", "")
-        if not top_link:
-            continue
-        print(f"[INFO] v2rayshare try page: {top_link}")
-        html = fetch_html(top_link)
-        if not html:
-            continue
+    heading_names = spec.get("headings") or []
+    label_names = spec.get("labels") or []
+    link_re = re.compile(spec["link_re"], re.IGNORECASE)
 
-        soup = BeautifulSoup(html, "html.parser")
-        tag = soup.find("h2", string="订阅链接")
-        if not tag:
-            continue
+    def normalize(link: str, page_url: str) -> str:
+        link = "".join(str(link).split())
+        if link.startswith("/"):
+            from urllib.parse import urljoin
+            return urljoin(page_url, link)
+        return link
 
-        strong_tag = tag.find_next("strong", string="Mihomo订阅链接：")
-        if not strong_tag:
-            continue
+    def labeled_links(soup: Any, page_url: str) -> list[str]:
+        found: list[str] = []
+        heading = None
+        for name in heading_names:
+            heading = soup.find(["h1", "h2", "h3", "h4"], string=re.compile(name))
+            if heading:
+                break
+        scope = heading if heading else soup
+        for name in label_names:
+            node = scope.find(["strong", "b", "span", "p"], string=re.compile(name))
+            if not node:
+                continue
+            for nxt in node.find_all_next(["p", "code", "pre", "a"], limit=8):
+                text = nxt.get("href") if nxt.name == "a" else nxt.get_text(" ", strip=True)
+                text = normalize(text or "", page_url)
+                if link_re.search(text):
+                    m = link_re.search(text)
+                    found.append(m.group(0) if m.group(0).startswith("http") else text)
+                    break
+        return unique_ordered(found)
 
-        link_p = strong_tag.find_next("p")
-        link = "".join(link_p.text.split()) if link_p else ""
-        if not link:
-            continue
-
-        sub_content = fetch_html(link)
-        if not sub_content:
-            print("[WARN] v2rayshare mihomo link 404, try older entry")
-            continue
-
-        print(f"[OK] v2rayshare discovered: {link}")
-        return [link]
-
-    print("[WARN] v2rayshare discovery failed: no mihomo link")
-    return []
-
-
-def discover_openrunner_urls() -> list[str]:
-    try:
-        import feedparser
-        from bs4 import BeautifulSoup
-    except ImportError as exc:
-        print(f"[WARN] openrunner discovery missing dependency: {exc}")
-        return []
-
-    parsed = feedparser.parse("https://free.datiya.com/index.xml")
-    if not parsed.entries:
-        print("[WARN] openrunner discovery: empty feed")
-        return []
-
-    http = urllib3.PoolManager()
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
-
-    def fetch_html(url: str, retries: int = 3) -> str | None:
-        for attempt in range(retries):
-            try:
-                response = http.request("get", url, headers=headers, timeout=10)
-                if response.status == 200:
-                    return response.data.decode("utf-8")
-            except Exception as exc:
-                if attempt < retries - 1:
-                    print(f"[WARN] openrunner retry {attempt + 1}/{retries}: {exc}")
-        return None
-
-    for entry in parsed.entries[:10]:
-        top_link = getattr(entry, "link", "")
-        if not top_link:
-            continue
-        print(f"[INFO] openrunner try page: {top_link}")
-        html = fetch_html(top_link)
-        if not html:
-            continue
-
-        soup = BeautifulSoup(html, "html.parser")
+    def scanned_links(soup: Any, page_url: str) -> list[str]:
         found: list[str] = []
         for href in soup.find_all("a"):
-            link = str(href.get("href") or "").strip()
-            if re.search(r"/uploads/\d{8}-clash\.yaml$", link):
-                if link.startswith("/"):
-                    link = "https://free.datiya.com" + link
+            link = normalize(href.get("href") or "", page_url)
+            if link_re.search(link):
                 found.append(link)
         for text in soup.stripped_strings:
             text = "".join(str(text).split())
-            if re.fullmatch(r"https://free\.datiya\.com/uploads/\d{8}-clash\.yaml", text):
-                found.append(text)
+            match = link_re.search(text)
+            if match:
+                found.append(match.group(0))
+        return unique_ordered(found)
 
-        for link in unique_ordered(found):
+    def guessed_links(page_url: str) -> list[str]:
+        date_match = re.search(r"(20\d{6})", page_url)
+        if not date_match:
+            return []
+        day = date_match.group(1)
+        year, month, day2 = day[:4], day[4:6], day[6:8]
+        found: list[str] = []
+        for tmpl in spec.get("guess") or []:
+            found.append(
+                tmpl.replace("{date}", day)
+                .replace("{year}", year)
+                .replace("{month}", month)
+                .replace("{day}", day2)
+            )
+        return unique_ordered(found)
+
+    for entry in parsed.entries[:10]:
+        top_link = getattr(entry, "link", "")
+        if not top_link:
+            continue
+        print(f"[INFO] {site} try page: {top_link}")
+        html = fetch_html(top_link)
+        if not html:
+            continue
+        soup = BeautifulSoup(html, "html.parser")
+        candidates = labeled_links(soup, top_link)
+        if not candidates:
+            candidates = scanned_links(soup, top_link)
+        if not candidates:
+            candidates = guessed_links(top_link)
+        for link in candidates:
             body = fetch_html(link)
             if not body:
-                print(f"[WARN] openrunner clash link 404: {link}")
                 continue
-            print(f"[OK] openrunner discovered: {link}")
+            print(f"[OK] {site} discovered: {link}")
             return [link]
 
-        date_match = re.search(r"/post/(\d{8})/?", top_link)
-        if date_match:
-            guess = f"https://free.datiya.com/uploads/{date_match.group(1)}-clash.yaml"
-            body = fetch_html(guess)
-            if body:
-                print(f"[OK] openrunner discovered: {guess}")
-                return [guess]
+    print(f"[WARN] {site} discovery failed: no subscription url")
+    return []
 
-    print("[WARN] openrunner discovery failed: no clash yaml")
+
+def discover_v2rayshare_urls() -> list[str]:
+    return _discover_rss_urls("v2rayshare", {
+        "feed": "https://v2rayshare.com/feed",
+        "headings": [r"订阅链接", r"订阅地址"],
+        "labels": [r"Mihomo订阅链接", r"Clash订阅", r"Clash配置"],
+        "link_re": r"https?://[^\s\"'<>]+?\.(?:yaml|yml)",
+        "guess": [
+            "https://static.v2rayshare.net/{year}/{month}/m{date}.yaml",
+        ],
+    })
+
+
+def discover_openrunner_urls() -> list[str]:
+    return _discover_rss_urls("openrunner", {
+        "feed": "https://free.datiya.com/index.xml",
+        "headings": [r"订阅地址", r"订阅链接"],
+        "labels": [r"Clash配置", r"Clash订阅", r"Mihomo订阅链接"],
+        "link_re": r"https?://free\.datiya\.com/uploads/\d{8}-clash\.yaml|/uploads/\d{8}-clash\.yaml",
+        "guess": [
+            "https://free.datiya.com/uploads/{date}-clash.yaml",
+        ],
+    })
+
+
+def discover_mibei77_urls() -> list[str]:
+    return _discover_rss_urls("mibei77", {
+        "feed": "https://www.mibei77.com/feed",
+        "headings": [r"订阅链接", r"订阅地址", r"Clash"],
+        "labels": [r"Clash Meta订阅链接", r"Clash订阅", r"Clash配置"],
+        "link_re": r"https?://mm\.mibei77\.com/\d{6}/[^\s\"'<>]+?\.ya?ml",
+        "guess": [],
+    })
+
+
+def discover_yoyapai_urls() -> list[str]:
+    found = _discover_rss_urls("yoyapai", {
+        "feed": "https://yoyapai.com/feed",
+        "headings": [r"订阅", r"节点配置", r"Clash"],
+        "labels": [r"Clash", r"Clash订阅", r"Clash配置"],
+        "link_re": r"https?://freenode\.yoyapai\.com/\d{4}/\d{2}/\d{2}-[^\s\"'<>]+?\.ya?ml",
+        "guess": [
+            "https://freenode.yoyapai.com/{year}/{month}/{day}-yoyapai.com-clash-vpn-mian-fei-jiedian.yaml",
+        ],
+    })
+    if found:
+        return found
+
+    print("[INFO] yoyapai fallback category page")
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+    try:
+        import feedparser  # noqa: F401
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return []
+    try:
+        html = requests.get(
+            "https://yoyapai.com/category/mianfeijiedian",
+            headers=headers,
+            timeout=SOURCE_TIMEOUT,
+            verify=False,
+            proxies=PROXIES,
+        )
+        html.raise_for_status()
+        soup = BeautifulSoup(html.content.decode("utf-8", "replace"), "html.parser")
+    except Exception as exc:
+        print(f"[WARN] yoyapai category failed: {exc}")
+        return []
+
+    posts: list[str] = []
+    for href in soup.find_all("a"):
+        link = str(href.get("href") or "").strip()
+        if re.fullmatch(r"https://yoyapai\.com/\d+", link.rstrip("/")):
+            posts.append(link.rstrip("/"))
+    posts = unique_ordered(posts)[:8]
+    fake_feed = "https://yoyapai.com/category/mianfeijiedian"
+    class _E:
+        def __init__(self, link: str) -> None:
+            self.link = link
+    parsed_entries = [_E(p) for p in posts]
+    if not parsed_entries:
+        print("[WARN] yoyapai discovery failed: no subscription url")
+        return []
+
+    # 把分类页里的文章当 RSS entries 再跑同一套抽取
+    import feedparser as _fp
+    parsed = _fp.FeedParserDict()
+    parsed.entries = parsed_entries
+    # 直接复用扫描：逐篇打开找 yaml
+    http = urllib3.PoolManager()
+    def fetch_html(url: str) -> str | None:
+        try:
+            response = http.request("get", url, headers=headers, timeout=10)
+            if response.status == 200:
+                return response.data.decode("utf-8", errors="replace")
+        except Exception:
+            return None
+        return None
+    link_re = re.compile(r"https?://freenode\.yoyapai\.com/\d{4}/\d{2}/\d{2}-[^\s\"'<>]+?\.ya?ml", re.I)
+    for post in posts:
+        print(f"[INFO] yoyapai try page: {post}")
+        body = fetch_html(post)
+        if not body:
+            continue
+        for match in link_re.findall(body):
+            sub = fetch_html(match)
+            if sub:
+                print(f"[OK] yoyapai discovered: {match}")
+                return [match]
+        date_match = re.search(r"(20\d{2})年\s*(\d{1,2})月\s*(\d{1,2})日", body)
+        if date_match:
+            year = date_match.group(1)
+            month = date_match.group(2).zfill(2)
+            day2 = date_match.group(3).zfill(2)
+            guess = f"https://freenode.yoyapai.com/{year}/{month}/{day2}-yoyapai.com-clash-vpn-mian-fei-jiedian.yaml"
+            sub = fetch_html(guess)
+            if sub:
+                print(f"[OK] yoyapai discovered: {guess}")
+                return [guess]
+    print("[WARN] yoyapai discovery failed: no subscription url")
+    return []
+
+
+def discover_clashfree_readme_urls() -> list[str]:
+    readme = "https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md"
+    print(f"[INFO] clashfree try readme: {readme}")
+    try:
+        text = fetch_text(readme)
+    except Exception as exc:
+        print(f"[WARN] clashfree readme failed: {exc}")
+        return []
+
+    found: list[str] = []
+    for match in re.finditer(
+        r'(?:点击下载|download)[^\]\)<>]{0,80}?(?:href=|\]\()["\']?(https?://[^"\'\s<>]+)',
+        text,
+        re.IGNORECASE,
+    ):
+        found.append(match.group(1))
+    for match in re.finditer(
+        r'(?:href=|\]\()["\']?(https?://[^"\'\s<>]+)["\']?[^<\n]{0,80}点击下载',
+        text,
+        re.IGNORECASE,
+    ):
+        found.append(match.group(1))
+    for match in re.finditer(
+        r"https?://github\.com/free-nodes/clashfree/blob/main/clash\d{8}\.ya?ml",
+        text,
+        re.IGNORECASE,
+    ):
+        found.append(match.group(0))
+
+    urls: list[str] = []
+    for link in unique_ordered(found):
+        link = link.strip()
+        blob = re.search(
+            r"github\.com/free-nodes/clashfree/blob/main/([^?\s#]+)",
+            link,
+            re.IGNORECASE,
+        )
+        if blob:
+            link = (
+                "https://raw.githubusercontent.com/free-nodes/clashfree/"
+                f"refs/heads/main/{blob.group(1)}"
+            )
+        if re.search(r"clash\d{8}\.ya?ml$", link, re.IGNORECASE):
+            urls.append(link)
+
+    for link in unique_ordered(urls):
+        try:
+            body = fetch_text(link)
+        except Exception:
+            continue
+        if body.strip():
+            print(f"[OK] clashfree discovered: {link}")
+            return [link]
+
+    print("[WARN] clashfree discovery failed: no download url")
+    return []
+
+
+def discover_freev2_urls() -> list[str]:
+    pages = [
+        "https://b.freev2.net/",
+        "https://freev2.net/",
+        "https://2v.tf/",
+    ]
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://freev2.net/",
+    }
+    pattern = re.compile(
+        r'data-clipboard-text="(https?://[^"]+)"',
+        re.IGNORECASE,
+    )
+
+    def pull(url: str) -> str | None:
+        session = requests.Session()
+        session.trust_env = False
+        session.verify = False
+        session.headers.update(headers)
+        tries = []
+        if PROXIES:
+            tries.append(PROXIES)
+        tries.append({})
+        for proxies in tries:
+            try:
+                response = session.get(
+                    url,
+                    timeout=SOURCE_TIMEOUT,
+                    proxies=proxies,
+                )
+                response.raise_for_status()
+                return response.content.decode("utf-8", errors="replace")
+            except Exception:
+                continue
+        return None
+
+    found: list[str] = []
+    for page in pages:
+        print(f"[INFO] freev2 try page: {page}")
+        html = pull(page)
+        if not html:
+            continue
+        for link in pattern.findall(html):
+            link = link.strip()
+            if not link.startswith("http"):
+                continue
+            if link.rstrip("/") in {
+                "https://b.freev2.net",
+                "https://freev2.net",
+                "http://b.freev2.net",
+                "http://freev2.net",
+                "https://2v.tf",
+                "http://2v.tf",
+            }:
+                continue
+            found.append(link)
+
+    found = unique_ordered(found)
+    for link in found:
+        print(f"[INFO] freev2 try sub: {link}")
+        body = pull(link)
+        if not body or not body.strip():
+            continue
+        print(f"[OK] freev2 discovered: {link}")
+        return [link]
+
+    print("[WARN] freev2 discovery failed: no subscription url")
+    return []
+
+    found: list[str] = []
+    for page in pages:
+        print(f"[INFO] freev2 try page: {page}")
+        html = pull(page)
+        if not html:
+            continue
+        for link in pattern.findall(html):
+            link = link.strip()
+            if not link.startswith("http"):
+                continue
+            if link.rstrip("/") in {
+                "https://b.freev2.net",
+                "https://freev2.net",
+                "http://b.freev2.net",
+                "http://freev2.net",
+                "https://2v.tf",
+                "http://2v.tf",
+            }:
+                continue
+            found.append(link)
+
+    found = unique_ordered(found)
+    for link in found:
+        print(f"[INFO] freev2 try sub: {link}")
+        body = pull(link)
+        if not body or not body.strip():
+            print(f"[WARN] freev2 sub empty: {link}")
+            continue
+        print(f"[OK] freev2 discovered: {link}")
+        return [link]
+
+    print("[WARN] freev2 discovery failed: no subscription url")
     return []
 
 
