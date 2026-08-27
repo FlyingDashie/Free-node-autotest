@@ -940,10 +940,8 @@ def discover_freev2_urls() -> list[str]:
         session.trust_env = False
         session.verify = False
         session.headers.update(headers)
-        tries = []
-        if PROXIES:
-            tries.append(PROXIES)
-        tries.append({})
+        tries = [PROXIES, {}] if PROXIES else [{}]
+        last_status = "no-response"
         for proxies in tries:
             try:
                 response = session.get(
@@ -951,10 +949,13 @@ def discover_freev2_urls() -> list[str]:
                     timeout=SOURCE_TIMEOUT,
                     proxies=proxies,
                 )
+                last_status = str(response.status_code)
                 response.raise_for_status()
                 return response.content.decode("utf-8", errors="replace")
-            except Exception:
+            except Exception as exc:
+                last_status = f"{last_status} {exc.__class__.__name__}"
                 continue
+        print(f"[WARN] freev2 page empty: {url} status={last_status}")
         return None
 
     found: list[str] = []
