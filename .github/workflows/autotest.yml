@@ -64,7 +64,7 @@ jobs:
           # 2. 备份本次生成的文件到 history 目录（按时间命名）
           cp output/clash.yaml "history/${INV}-${RUN_TIME}-clash.yaml"
           
-          # 3. 清理超过 48 小时的历史文件（按文件名时间，兼容新旧命名）
+          # 3. 清理超过 48 小时的历史文件（按文件名时间）
           python3 - <<'PY'
           from datetime import datetime, timedelta, timezone
           from pathlib import Path
