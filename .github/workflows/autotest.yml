@@ -64,8 +64,34 @@ jobs:
           # 2. 备份本次生成的文件到 history 目录（按时间命名）
           cp output/clash.yaml "history/${INV}-${RUN_TIME}-clash.yaml"
           
-          # 3. 清理 2 天前的历史文件（日志 + yaml）
-          find history -type f -mtime +2 -delete || true
+          # 3. 清理超过 48 小时的历史文件（按文件名时间，兼容新旧命名）
+          python3 - <<'PY'
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+          import re
+
+          cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+          pat = re.compile(r"(20\d{6})-(\d{4})")
+          hist = Path("history")
+          removed = []
+          if hist.is_dir():
+              for p in hist.iterdir():
+                  if not p.is_file():
+                      continue
+                  m = pat.search(p.name)
+                  if not m:
+                      continue
+                  try:
+                      ts = datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+                  except ValueError:
+                      continue
+                  if ts < cutoff:
+                      p.unlink(missing_ok=True)
+                      removed.append(p.name)
+          print(f"cutoff_utc={cutoff.strftime('%Y%m%d-%H%M')} removed={len(removed)}")
+          for name in sorted(removed):
+              print(f" deleted {name}")
+          PY
           
           echo "当前 history 目录内容："
           ls -lh history/ || true
