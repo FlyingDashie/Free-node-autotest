@@ -63,6 +63,13 @@ jobs:
           
           # 2. 备份本次生成的文件到 history 目录（按时间命名）
           cp output/clash.yaml "history/${INV}-${RUN_TIME}-clash.yaml"
+          if [ -f output/raw.yaml ]; then
+            cp output/raw.yaml "history/${INV}-${RUN_TIME}-raw.yaml"
+          else
+            echo "output/raw.yaml 不存在，本轮不写 raw 备份"
+          fi
+          
+          # 3. 清理超过 48 小时的历史文件（按文件名时间）
           
           # 3. 清理超过 48 小时的历史文件（按文件名时间）
           python3 - <<'PY'
