@@ -34,7 +34,7 @@ PROXIES = None
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-VERSION = "Modified"
+VERSION = "modified"
 OUTPUT_PATH = Path("output/clash.yaml")
 RAW_PATH = Path("output/raw.yaml")
 HISTORY_DIR = Path("history")
