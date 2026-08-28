@@ -145,7 +145,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点3",
-        "primary": "https://sunmiao4458.github.io/free-node-autotest/clash.yaml",
+        "primary": "https://sunmiao4458.github.io/free-proxy-airport/clash.yaml",
         "fallbacks": [],
         "prefix": "[免费节点3] ",
     },
