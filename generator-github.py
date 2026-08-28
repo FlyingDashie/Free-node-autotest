@@ -34,7 +34,7 @@ PROXIES = None
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-VERSION = "v7"
+VERSION = "Modified"
 OUTPUT_PATH = Path("output/clash.yaml")
 RAW_PATH = Path("output/raw.yaml")
 HISTORY_DIR = Path("history")
@@ -42,8 +42,8 @@ TEST_URL = "http://www.gstatic.com/generate_204"
 SOURCE_TIMEOUT = 25
 LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 3
-MAX_WORKERS = int(os.getenv("FREE_PROXY_AIRPORT_MAX_WORKERS", "24"))
-MAX_CANDIDATES = int(os.getenv("FREE_PROXY_AIRPORT_MAX_CANDIDATES", "0"))
+MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "24"))
+MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 
 SOURCE_GROUPS = [
     {
@@ -145,7 +145,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点3",
-        "primary": "https://sunmiao4458.github.io/free-proxy-airport/clash.yaml",
+        "primary": "https://sunmiao4458.github.io/free-node-autotest/clash.yaml",
         "fallbacks": [],
         "prefix": "[免费节点3] ",
     },
@@ -244,7 +244,7 @@ class ProxyMetric:
 
 def fetch_text(url: str, retries: int = MAX_RETRIES) -> str:
     headers = {
-        "User-Agent": f"free-proxy-airport/{VERSION} (+https://github.com/)",
+        "User-Agent": f"free-node-autotest/{VERSION} (+https://github.com/)",
         "Accept": "text/plain, text/yaml, application/yaml, */*",
         "Referer": "https://end-gfw.com/",
     }
@@ -1082,7 +1082,7 @@ def find_or_install_mihomo() -> Path:
             print(f"[OK] using proxy engine: {found}")
             return Path(found)
 
-    install_dir = Path(tempfile.gettempdir()) / "free-proxy-airport-mihomo"
+    install_dir = Path(tempfile.gettempdir()) / "free-node-autotest-mihomo"
     install_dir.mkdir(parents=True, exist_ok=True)
     binary = install_dir / ("mihomo.exe" if os.name == "nt" else "mihomo")
     if binary.exists():
@@ -1103,7 +1103,7 @@ def find_or_install_mihomo() -> Path:
 def select_mihomo_asset() -> str:
     api_url = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
     # 增加 verify=False
-    data = requests.get(api_url, headers={"User-Agent": "free-proxy-airport"}, timeout=SOURCE_TIMEOUT, verify=False, proxies=PROXIES).json()
+    data = requests.get(api_url, headers={"User-Agent": "free-node-autotest"}, timeout=SOURCE_TIMEOUT, verify=False, proxies=PROXIES).json()
     assets = data.get("assets", [])
     system = platform.system().lower()
     machine = platform.machine().lower()
@@ -1212,7 +1212,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
         "unified-delay": True,
         "tcp-concurrent": True,
         "global-client-fingerprint": "chrome",
-        "generated-by": f"free-proxy-airport-{VERSION}-raw",
+        "generated-by": f"free-node-autotest-{VERSION}-raw",
         "generated-at": datetime.now(timezone.utc).isoformat(),
         "proxies": nodes,
         "proxy-groups": [
@@ -1397,7 +1397,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         return []
 
     engine = find_or_install_mihomo()
-    with tempfile.TemporaryDirectory(prefix="free-proxy-airport-") as temp_name:
+    with tempfile.TemporaryDirectory(prefix="free-node-autotest-") as temp_name:
         temp_dir = Path(temp_name)
         config_path = temp_dir / "benchmark.yaml"
         controller_port = find_free_port()
@@ -1576,7 +1576,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
         "unified-delay": True,
         "tcp-concurrent": True,
         "global-client-fingerprint": "chrome",
-        "generated-by": f"free-proxy-airport-{VERSION}",
+        "generated-by": f"free-node-autotest-{VERSION}",
         "generated-at": datetime.now(timezone.utc).isoformat(),
         "proxies": proxies,
         "proxy-groups": [
