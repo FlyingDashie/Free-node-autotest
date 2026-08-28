@@ -125,7 +125,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点1",
-        "primary": "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml",
+        "primary": "https://raw.github空窗测试usercontent.com/free18/v2ray/refs/heads/main/c.yaml",
         "fallbacks": [],
         "prefix": "[免费节点1] ",
     },
