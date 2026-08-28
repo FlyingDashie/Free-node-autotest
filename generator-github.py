@@ -94,12 +94,6 @@ SOURCE_GROUPS = [
         "prefix": "[Yoyapai-RSS] ",
     },
     {
-        "name": "Clashfree-README",
-        "primary": "discover:clashfree-readme",
-        "fallbacks": [],
-        "prefix": "[Clashfree-README] ",
-    },
-    {
         "name": "Free-clash-v2ray-README",
         "primary": "discover:free-clash-v2ray",
         "fallbacks": [
@@ -204,6 +198,12 @@ SOURCE_GROUPS = [
         "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription3.yaml",
         "fallbacks": [],
         "prefix": "[免费节点9-3] ",
+    },
+    {
+        "name": "Clashfree-README",
+        "primary": "discover:clashfree-readme",
+        "fallbacks": [],
+        "prefix": "[Clashfree-README] ",
     },
 ]
 
