@@ -36,6 +36,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 VERSION = "v7"
 OUTPUT_PATH = Path("output/clash.yaml")
+RAW_PATH = Path("output/raw.yaml")
+HISTORY_DIR = Path("history")
 TEST_URL = "http://www.gstatic.com/generate_204"
 SOURCE_TIMEOUT = 25
 LATENCY_TIMEOUT_MS = 5000
@@ -559,9 +561,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                 print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
         if not source_found:
             print(f"[WARN] source={source['name']} no proxies")
+            source_found = load_previous_source_proxies(source)
         print("============================================================")
         collected.extend(source_found)
 
+    write_raw_backup(collected)
     sanitized = sanitize_and_deduplicate(collected)
     if MAX_CANDIDATES > 0 and len(sanitized) > MAX_CANDIDATES:
         print(f"[WARN] limiting candidates from {len(sanitized)} to {MAX_CANDIDATES}")
@@ -1193,6 +1197,81 @@ def dump_yaml(data: Any) -> str:
         sort_keys=False,
         default_flow_style=False,
     )
+
+
+def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
+    RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
+    nodes = [dict(item) for item in proxies if isinstance(item, dict)]
+    names = [str(item.get("name") or "") for item in nodes]
+    payload = {
+        "mixed-port": 7890,
+        "allow-lan": True,
+        "mode": "rule",
+        "log-level": "info",
+        "ipv6": True,
+        "unified-delay": True,
+        "tcp-concurrent": True,
+        "global-client-fingerprint": "chrome",
+        "generated-by": f"free-proxy-airport-{VERSION}-raw",
+        "generated-at": datetime.now(timezone.utc).isoformat(),
+        "proxies": nodes,
+        "proxy-groups": [
+            {
+                "name": "AUTO-FAST",
+                "type": "url-test",
+                "proxies": names or ["DIRECT"],
+                "url": TEST_URL,
+                "interval": 120,
+            }
+        ],
+        "rules": [
+            "MATCH,AUTO-FAST",
+        ],
+    }
+    RAW_PATH.write_text(dump_yaml(payload), encoding="utf-8")
+    print(f"[INFO] raw backup written path={RAW_PATH} proxies={len(nodes)}")
+
+
+def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]:
+    prefix = str(source.get("prefix") or "")
+    name = str(source.get("name") or "")
+    if not HISTORY_DIR.is_dir():
+        print(f"[WARN] source={name} no proxies; raw backup dir missing, skip reuse")
+        return []
+    pat = re.compile(r"(20\d{6})-(\d{4})")
+    ranked: list[tuple[str, Path]] = []
+    for path in HISTORY_DIR.glob("*raw.yaml"):
+        match = pat.search(path.name)
+        if match:
+            ranked.append((match.group(1) + match.group(2), path))
+    ranked.sort(reverse=True)
+    if not ranked:
+        print(f"[WARN] source={name} no proxies; no raw backup file, skip reuse")
+        return []
+    for stamp, path in ranked:
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print(f"[WARN] raw backup unreadable file={path.name} error={exc}")
+            continue
+        items = data.get("proxies") if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            continue
+        found = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            node_name = str(item.get("name") or "")
+            if prefix and node_name.startswith(prefix):
+                found.append(dict(item))
+        if found:
+            print(
+                f"[INFO] source={name} reused previous raw "
+                f"proxies={len(found)} file={path.name} stamp={stamp}"
+            )
+            return found
+    print(f"[WARN] source={name} no proxies; raw backups have no prefix={prefix!r}, skip reuse")
+    return []
 
 
 def write_benchmark_config(path: Path, proxies: list[dict[str, Any]], controller_port: int) -> None:
