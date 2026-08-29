@@ -791,19 +791,34 @@ def _probe_sub_file(tag: str, link: str) -> bool:
 
 def _score_sub_link(url: str, context: str = "", prefer: str = "") -> int:
     blob = f"{url} {context}".lower()
-    filename = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1].lower()
+    path = url.split("?", 1)[0].lower()
+    filename = path.rstrip("/").rsplit("/", 1)[-1]
     score = 1
     hint = prefer.strip().lower()
     if hint and hint in blob:
         score += 400
-    if re.search(r"v2ray|\.txt(?:\?|$)", blob) or filename.endswith(".txt"):
+
+    stamp = ""
+    found = re.search(r"(20\d{6})", filename) or re.search(r"(20\d{6})", path)
+    if found:
+        stamp = found.group(1)
+    else:
+        found = re.search(r"(20\d{2})[/_-](\d{1,2})[/_-](\d{1,2})", path)
+        if found:
+            stamp = f"{found.group(1)}{int(found.group(2)):02d}{int(found.group(3)):02d}"
+    if stamp:
+        score += int(stamp) * 1000
+
+    if filename.endswith(".txt"):
         score += 200
-    elif "mihomo" in blob or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
-        score += 100
-    elif re.search(r"clash\s*meta|clash-meta|meta订阅", blob):
-        score += 80
-    elif "clash" in blob or re.search(r"\.ya?ml(?:\?|$)", blob):
+    if filename.endswith((".yaml", ".yml")):
         score += 50
+    if "mihomo" in filename or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
+        score += 100
+    if re.search(r"clash-?meta", filename):
+        score += 80
+    if "v2ray" in filename and "clash" not in filename and not filename.endswith((".yaml", ".yml")):
+        score += 200
     return score
 
 
@@ -849,7 +864,6 @@ def discover_content_urls(page_url: str) -> list[str]:
     if not found:
         print(f"[WARN] content empty: {page_url}")
         return []
-    print(f"[OK] content discovered: {page_url}")
     return [page_url]
 
 
