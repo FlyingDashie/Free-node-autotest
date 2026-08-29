@@ -893,51 +893,54 @@ def discover_clashfree_readme_urls() -> list[str]:
         return []
 
     found: list[str] = []
-    for match in re.finditer(
-        r'(?:点击下载|download)[^\]\)<>]{0,80}?(?:href=|\]\()["\']?(https?://[^"\'\s<>]+)',
-        text,
-        re.IGNORECASE,
-    ):
-        found.append(match.group(1))
-    for match in re.finditer(
-        r'(?:href=|\]\()["\']?(https?://[^"\'\s<>]+)["\']?[^<\n]{0,80}点击下载',
-        text,
-        re.IGNORECASE,
-    ):
-        found.append(match.group(1))
-    for match in re.finditer(
-        r"https?://github\.com/free-nodes/clashfree/blob/main/clash\d{8}\.ya?ml",
-        text,
-        re.IGNORECASE,
-    ):
-        found.append(match.group(0))
+    for match in re.finditer(r"https?://[^\s\"'<>\]]+", text, re.IGNORECASE):
+        link = match.group(0).rstrip(").,;\"'")
+        if re.search(r"\.ya?ml(?:$|[?#])", link, re.IGNORECASE):
+            found.append(link)
 
     urls: list[str] = []
     for link in unique_ordered(found):
-        link = link.strip()
         blob = re.search(
-            r"github\.com/free-nodes/clashfree/blob/main/([^?\s#]+)",
+            r"github\.com/([^/]+)/([^/]+)/(?:blob|tree)/([^/]+)/(.+\.ya?ml)",
             link,
             re.IGNORECASE,
         )
         if blob:
-            link = (
-                "https://raw.githubusercontent.com/free-nodes/clashfree/"
-                f"refs/heads/main/{blob.group(1)}"
-            )
-        if re.search(r"clash\d{8}\.ya?ml$", link, re.IGNORECASE):
-            urls.append(link)
+            owner, repo, ref, path = blob.groups()
+            link = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
+        urls.append(link)
 
-    for link in unique_ordered(urls):
+    if not urls:
+        print("[WARN] clashfree discovery failed: no .yml/.yaml link in README")
+        return []
+
+    empty: list[str] = []
+    failed: list[str] = []
+    ranked = sorted(
+        unique_ordered(urls),
+        key=lambda item: re.search(r"(20\d{6})", item).group(1) if re.search(r"(20\d{6})", item) else "",
+        reverse=True,
+    )
+    for link in ranked:
+        print(f"[INFO] clashfree try file: {link}")
         try:
             body = fetch_text(link)
-        except Exception:
+        except Exception as exc:
+            print(f"[WARN] clashfree fetch failed: {link} {exc}")
+            failed.append(link)
             continue
         if body.strip():
-            print(f"[OK] clashfree discovered: {link}")
+            print(f"[OK] clashfree discovered: {link} bytes={len(body.encode('utf-8'))}")
             return [link]
+        print(f"[WARN] clashfree empty file: {link}")
+        empty.append(link)
 
-    print("[WARN] clashfree discovery failed: no download url")
+    if empty:
+        print(f"[WARN] clashfree discovery failed: empty subscription ({len(empty)})")
+    elif failed:
+        print(f"[WARN] clashfree discovery failed: fetch error ({len(failed)})")
+    else:
+        print("[WARN] clashfree discovery failed: no download url")
     return []
 
 
