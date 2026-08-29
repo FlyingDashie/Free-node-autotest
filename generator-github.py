@@ -96,6 +96,12 @@ SOURCE_GROUPS = [
         "prefix": "[Yoyapai-RSS] ",
     },
     {
+        "name": "V2rayclashfree-RSS",
+        "primary": "discover:v2rayclashfree",
+        "fallbacks": [],
+        "prefix": "[V2rayclashfree-RSS] ",
+    },
+    {
         "name": "Free-clash-v2ray-README",
         "primary": "discover:free-clash-v2ray",
         "fallbacks": [
@@ -200,6 +206,12 @@ SOURCE_GROUPS = [
         "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription3.yaml",
         "fallbacks": [],
         "prefix": "[免费节点9-3] ",
+    },
+    {
+        "name": "Epodonios-v2ray-configs",
+        "primary": "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
+        "fallbacks": [],
+        "prefix": "[Epodonios-v2ray-configs] ",
     },
     {
         "name": "Clashfree-README",
@@ -589,6 +601,8 @@ def expand_source_urls(source: dict[str, Any]) -> list[str]:
             urls.extend(discover_mibei77_urls())
         elif item == "discover:yoyapai":
             urls.extend(discover_yoyapai_urls())
+        elif item == "discover:v2rayclashfree":
+            urls.extend(discover_v2rayclashfree_urls())
         elif item == "discover:clashfree-readme":
             urls.extend(discover_clashfree_readme_urls())
         else:
@@ -598,13 +612,47 @@ def expand_source_urls(source: dict[str, Any]) -> list[str]:
 
 def discover_free_clash_v2ray_urls() -> list[str]:
     readme_url = "https://raw.githubusercontent.com/free-clash-v2ray/free-clash-v2ray.github.io/main/README.md"
+    print(f"[INFO] free-clash-v2ray try readme: {readme_url}")
     try:
         text = fetch_text(readme_url)
     except Exception as exc:
-        print(f"[WARN] free-clash-v2ray discovery failed: {exc}")
+        print(f"[WARN] free-clash-v2ray readme failed: {exc}")
         return []
-    pattern = r"https://free-clash-v2ray\.github\.io/uploads/\d{4}/\d{2}/[0-9]-\d{8}\.yaml"
-    return unique_ordered(re.findall(pattern, text))[:8]
+
+    def take(ext: str) -> list[str]:
+        found = re.findall(rf"https?://[^\s\"'<>\]]+\.{ext}(?=$|[?#\s<])", text, re.I)
+        def rank(u: str) -> tuple:
+            name = u.split("?", 1)[0].rsplit("/", 1)[-1].lower()
+            pref_3 = 0 if name.startswith("3-") else 1
+            pref_meta = 0 if re.search(r"mihomo|meta", name) else 1
+            return (pref_3, pref_meta, name)
+
+        ranked = sorted(unique_ordered(found), key=rank)
+        return ranked[:8]
+
+    empty_n = fail_n = 0
+    for stage, links in (("yaml", take("ya?ml")), ("txt", take("txt"))):
+        for link in links:
+            print(f"[INFO] free-clash-v2ray try file: {link}")
+            try:
+                body = fetch_text(link)
+            except Exception as exc:
+                print(f"[WARN] free-clash-v2ray fetch failed: {link} {exc}")
+                fail_n += 1
+                continue
+            if not body.strip():
+                print(f"[WARN] free-clash-v2ray empty file: {link}")
+                empty_n += 1
+                continue
+            print(f"[OK] free-clash-v2ray discovered: {link}")
+            return [link]
+    if empty_n:
+        print(f"[WARN] free-clash-v2ray discovery failed: empty subscription ({empty_n})")
+    elif fail_n:
+        print(f"[WARN] free-clash-v2ray discovery failed: fetch error ({fail_n})")
+    else:
+        print("[WARN] free-clash-v2ray discovery failed: no subscription url")
+    return []
 
 
 def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
@@ -741,6 +789,54 @@ def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
             )
         return unique_ordered(found)
 
+    txt_re = re.compile(r"https?://[^\s\"'<>\]]+?\.txt(?:$|[?#])", re.I)
+    yaml_re = re.compile(r"https?://[^\s\"'<>\]]+?\.(?:yaml|yml)(?:$|[?#])", re.I)
+
+    def blob_to_raw(link: str) -> str:
+        blob = re.search(
+            r"github\.com/([^/]+)/([^/]+)/(?:blob|tree)/([^/]+)/(.+)",
+            link,
+            re.IGNORECASE,
+        )
+        if blob:
+            owner, repo, ref, path = blob.groups()
+            return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
+        return link
+
+    def collect_ext(soup: Any, page_url: str, html: str, ext_re: re.Pattern[str]) -> list[str]:
+        ranked: list[tuple[int, str]] = []
+        for href in soup.find_all("a"):
+            link = normalize(href.get("href") or "", page_url)
+            if ext_re.search(link.split("#")[0]):
+                ranked.append((score_link(link, href.get_text(" ", strip=True)), blob_to_raw(link)))
+        for match in ext_re.finditer(re.sub(r"<[^>]+>", " ", html or "")):
+            ranked.append((score_link(match.group(0), ""), blob_to_raw(match.group(0))))
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return unique_ordered([url for _, url in ranked])
+
+    empty_n = 0
+    fail_n = 0
+    seen_files: set[str] = set()
+
+    def probe(link: str) -> bool:
+        nonlocal empty_n, fail_n
+        link = blob_to_raw(link.strip())
+        if link in seen_files:
+            return False
+        seen_files.add(link)
+        print(f"[INFO] {site} try file: {link}")
+        body = fetch_html(link)
+        if body is None:
+            print(f"[WARN] {site} fetch failed: {link}")
+            fail_n += 1
+            return False
+        if not str(body).strip():
+            print(f"[WARN] {site} empty file: {link}")
+            empty_n += 1
+            return False
+        print(f"[OK] {site} discovered: {link}")
+        return True
+
     for entry in parsed.entries[:10]:
         top_link = getattr(entry, "link", "")
         if not top_link:
@@ -748,19 +844,32 @@ def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
         print(f"[INFO] {site} try page: {top_link}")
         html = fetch_html(top_link)
         if not html:
+            print(f"[WARN] {site} page empty: {top_link}")
             continue
         soup = BeautifulSoup(html, "html.parser")
-        candidates = collect_yaml(soup, top_link, html)
-        if not candidates:
-            candidates = guessed_links(top_link)
-        for link in candidates:
-            body = fetch_html(link)
-            if not body:
-                continue
-            print(f"[OK] {site} discovered: {link}")
-            return [link]
 
-    print(f"[WARN] {site} discovery failed: no subscription url")
+        yaml_cands = collect_yaml(soup, top_link, html)
+        yaml_cands.extend(collect_ext(soup, top_link, html, yaml_re))
+        yaml_cands = unique_ordered(yaml_cands)
+        for link in yaml_cands:
+            if probe(link):
+                return [link]
+
+        txt_cands = collect_ext(soup, top_link, html, txt_re)
+        for link in txt_cands:
+            if probe(link):
+                return [link]
+
+        for link in guessed_links(top_link):
+            if probe(link):
+                return [link]
+
+    if empty_n:
+        print(f"[WARN] {site} discovery failed: empty subscription ({empty_n})")
+    elif fail_n:
+        print(f"[WARN] {site} discovery failed: fetch error ({fail_n})")
+    else:
+        print(f"[WARN] {site} discovery failed: no subscription url")
     return []
 
 
@@ -880,6 +989,69 @@ def discover_yoyapai_urls() -> list[str]:
                 print(f"[OK] yoyapai discovered: {guess}")
                 return [guess]
     print("[WARN] yoyapai discovery failed: no subscription url")
+    return []
+
+
+def discover_v2rayclashfree_urls() -> list[str]:
+    home = "https://v2rayclashfree.com/"
+    print(f"[INFO] v2rayclashfree try page: {home}")
+    try:
+        html = fetch_text(home)
+    except Exception as exc:
+        print(f"[WARN] v2rayclashfree home failed: {exc}")
+        return []
+
+    days = unique_ordered(re.findall(r"/fn/(20\d{6})\.html", html))
+    days.sort(reverse=True)
+    if not days:
+        print("[WARN] v2rayclashfree discovery failed: no subscription url")
+        return []
+
+    empty_n = fail_n = 0
+
+    def probe(link: str) -> bool:
+        nonlocal empty_n, fail_n
+        print(f"[INFO] v2rayclashfree try file: {link}")
+        try:
+            body = fetch_text(link)
+        except Exception as exc:
+            print(f"[WARN] v2rayclashfree fetch failed: {link} {exc}")
+            fail_n += 1
+            return False
+        if not str(body).strip():
+            print(f"[WARN] v2rayclashfree empty file: {link}")
+            empty_n += 1
+            return False
+        print(f"[OK] v2rayclashfree discovered: {link}")
+        return True
+
+    for day in days[:8]:
+        page = f"https://v2rayclashfree.com/fn/{day}.html"
+        print(f"[INFO] v2rayclashfree try page: {page}")
+        try:
+            body = fetch_text(page)
+        except Exception as exc:
+            print(f"[WARN] v2rayclashfree page failed: {page} {exc}")
+            continue
+        yaml_links = unique_ordered(re.findall(r"https?://[^\s\"'<>]+\.(?:yaml|yml)", body, re.I))
+        yaml_links = [u for u in yaml_links if "clash" in u.lower() or "mihomo" in u.lower() or "meta" in u.lower()] + \
+                     [u for u in yaml_links if "clash" not in u.lower() and "mihomo" not in u.lower() and "meta" not in u.lower()]
+        for link in unique_ordered(yaml_links):
+            if probe(link):
+                return [link]
+        txt_links = unique_ordered(re.findall(r"https?://[^\s\"'<>]+\.txt", body, re.I))
+        for link in txt_links:
+            if probe(link):
+                return [link]
+        if probe(f"https://v2rayclashfree.com/sub/{day}-clash.yaml"):
+            return [f"https://v2rayclashfree.com/sub/{day}-clash.yaml"]
+
+    if empty_n:
+        print(f"[WARN] v2rayclashfree discovery failed: empty subscription ({empty_n})")
+    elif fail_n:
+        print(f"[WARN] v2rayclashfree discovery failed: fetch error ({fail_n})")
+    else:
+        print("[WARN] v2rayclashfree discovery failed: no subscription url")
     return []
 
 
