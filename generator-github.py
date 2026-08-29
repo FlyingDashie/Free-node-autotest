@@ -97,12 +97,6 @@ SOURCE_GROUPS = [
         "prefix": "[Yoyapai-RSS] ",
     },
     {
-        "name": "V2rayclashfree-RSS",
-        "primary": "discover:v2rayclashfree",
-        "fallbacks": [],
-        "prefix": "[V2rayclashfree-RSS] ",
-    },
-    {
         "name": "Free-clash-v2ray-README",
         "primary": "discover:free-clash-v2ray",
         "fallbacks": [
@@ -209,18 +203,24 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点9-3] ",
     },
     {
-        "name": "Epodonios-v2ray-configs",
-        "primary": "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
-        "fallbacks": [],
-        "prefix": "[Epodonios-v2ray-configs] ",
-    },
-    {
         "name": "Clashfree-README",
         "primary": "discover:clashfree-readme",
         "fallbacks": [
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         ],
         "prefix": "[Clashfree-README] ",
+    },
+    {
+        "name": "Epodonios-v2ray-configs",
+        "primary": "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
+        "fallbacks": [],
+        "prefix": "[Epodonios-v2ray-configs] ",
+    },
+    {
+        "name": "V2rayclashfree-RSS",
+        "primary": "discover:v2rayclashfree",
+        "fallbacks": [],
+        "prefix": "[V2rayclashfree-RSS] ",
     },
 ]
 
