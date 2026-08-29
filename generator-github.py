@@ -87,13 +87,13 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2Rayshare-RSS",
-        "primary": "discover:v2rayshare",
+        "primary": "discover:rss:https://v2rayshare.com/feed",
         "fallbacks": [],
         "prefix": "[V2Rayshare-RSS] ",
     },
     {
         "name": "OpenRunner-RSS",
-        "primary": "discover:openrunner",
+        "primary": "discover:rss:https://free.datiya.com/index.xml",
         "fallbacks": [
             "https://raw.githubusercontent.com/openRunner/clash-freenode/main/sub.yaml",
             "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
@@ -103,19 +103,19 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Mibei77-RSS",
-        "primary": "discover:mibei77",
+        "primary": "discover:rss:https://www.mibei77.com/feed",
         "fallbacks": [],
         "prefix": "[Mibei77-RSS] ",
     },
     {
         "name": "Yoyapai-RSS",
-        "primary": "discover:yoyapai",
+        "primary": "discover:rss:https://yoyapai.com/feed",
         "fallbacks": [],
         "prefix": "[Yoyapai-RSS] ",
     },
     {
         "name": "Free-clash-v2ray-README",
-        "primary": "discover:free-clash-v2ray",
+        "primary": "discover:url:https://raw.githubusercontent.com/free-clash-v2ray/free-clash-v2ray.github.io/main/README.md",
         "fallbacks": [
             "https://free-clash-v2ray.github.io/uploads/latest.yaml",
         ],
@@ -161,7 +161,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点1-README自建",
-        "primary": "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
+        "primary": "discover:content:https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/free18/v2ray/main/README.md",
         ],
@@ -179,7 +179,7 @@ SOURCE_GROUPS = [
         "fallbacks": [],
         "prefix": "[免费节点3] ",
     },
-        {
+    {
         "name": "免费节点4",
         "primary": "https://raw.githubusercontent.com/mfuu/v2ray/master/clash.yaml",
         "fallbacks": [],
@@ -233,7 +233,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Clashfree-README",
-        "primary": "discover:clashfree-readme",
+        "primary": "discover:url:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         ],
@@ -247,7 +247,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2rayclashfree-RSS",
-        "primary": "discover:v2rayclashfree",
+        "primary": "discover:url:https://v2rayclashfree.com/",
         "fallbacks": [],
         "prefix": "[V2rayclashfree-RSS] ",
     },
@@ -268,11 +268,11 @@ SUPPORTED_PROXY_TYPES = {
 }
 
 REQUIRED_GROUPS = (
-    "AUTO-FAST",
+    "URL-TEST",
     "HK-POOL",
     "JP-POOL",
     "US-POOL",
-    "AI-POOL",
+    "FAST-POOL",
     "FALLBACK",
     "PROXY",
 )
@@ -383,7 +383,7 @@ def extract_proxy_block(text: str) -> list[Any]:
 
 
 _SHARE_URI_RE = re.compile(
-    r"(?:ss|ssr|vmess|vless|trojan|hysteria2?|hy2)://",
+    r"(?:ss|ssr|vmess|vless|trojan|hysteria2?|hy2|tuic|socks5h?|socks|https?)://",
     re.IGNORECASE,
 )
 
@@ -444,11 +444,128 @@ def parse_share_uri(uri: str) -> dict[str, Any] | None:
             return _parse_vmess_uri(raw)
         if scheme == "ss":
             return _parse_ss_uri(raw)
+        if scheme == "ssr":
+            return _parse_ssr_uri(raw)
+        if scheme == "tuic":
+            return _parse_tuic_uri(raw)
+        if scheme in {"socks", "socks5", "socks5h"}:
+            return _parse_userhost_uri(raw, "socks5")
+        if scheme in {"http", "https"}:
+            return _parse_userhost_uri(raw, scheme)
         if scheme in {"vless", "trojan", "hysteria", "hysteria2", "hy2"}:
             return _parse_standard_uri(raw, scheme)
     except Exception:
         return None
     return None
+
+
+def _b64url_decode(payload: str) -> str:
+    text = payload.strip().replace("-", "+").replace("_", "/")
+    pad = "=" * ((4 - len(text) % 4) % 4)
+    return base64.b64decode(text + pad).decode("utf-8", errors="replace")
+
+
+def _parse_ssr_uri(uri: str) -> dict[str, Any] | None:
+    payload = uri.split("://", 1)[1].split("#", 1)[0]
+    decoded = _b64url_decode(payload)
+    main, _, query = decoded.partition("/?")
+    if "?" in decoded and not query:
+        main, _, query = decoded.partition("?")
+    parts = main.split(":")
+    if len(parts) < 6:
+        return None
+    host, port, protocol, method, obfs = parts[0], parts[1], parts[2], parts[3], parts[4]
+    password = _b64url_decode(":".join(parts[5:]))
+    params = {k.lower(): v[0] for k, v in parse_qs(query).items() if v}
+
+    def _param_text(key: str) -> str:
+        raw_val = params.get(key, "")
+        if not raw_val:
+            return ""
+        try:
+            return _b64url_decode(raw_val)
+        except Exception:
+            return unquote(raw_val)
+
+    name = _param_text("remarks") or _fragment_name(uri, "ssr")
+    proxy: dict[str, Any] = {
+        "name": name,
+        "type": "ssr",
+        "server": host,
+        "port": int(port),
+        "cipher": method,
+        "password": password,
+        "protocol": protocol,
+        "obfs": obfs,
+    }
+    proto_param = _param_text("protoparam")
+    obfs_param = _param_text("obfsparam")
+    if proto_param:
+        proxy["protocol-param"] = proto_param
+    if obfs_param:
+        proxy["obfs-param"] = obfs_param
+    return proxy
+
+
+def _parse_tuic_uri(uri: str) -> dict[str, Any] | None:
+    name = _fragment_name(uri, "tuic")
+    parsed = urlparse(uri.split("#", 1)[0])
+    if not parsed.hostname:
+        return None
+    qs = {k.lower(): v[0] for k, v in parse_qs(parsed.query).items() if v}
+    user = unquote(parsed.username or "")
+    password = unquote(parsed.password or "")
+    if parsed.password is None and ":" in user:
+        user, password = user.split(":", 1)
+    uuid = qs.get("uuid") or user
+    secret = password or qs.get("password") or ""
+    if not uuid:
+        return None
+    proxy: dict[str, Any] = {
+        "name": name,
+        "type": "tuic",
+        "server": parsed.hostname,
+        "port": int(parsed.port or 443),
+        "uuid": uuid,
+        "password": secret,
+        "udp": True,
+    }
+    sni = qs.get("sni") or qs.get("peer") or ""
+    if sni:
+        proxy["sni"] = sni
+    cc = qs.get("congestion_control") or qs.get("congestion-control")
+    if cc:
+        proxy["congestion-controller"] = cc
+    mode = qs.get("udp_relay_mode") or qs.get("udp-relay-mode")
+    if mode:
+        proxy["udp-relay-mode"] = mode
+    if qs.get("alpn"):
+        proxy["alpn"] = [item.strip() for item in qs["alpn"].split(",") if item.strip()]
+    if qs.get("allowinsecure") in {"1", "true"} or qs.get("insecure") in {"1", "true"}:
+        proxy["skip-cert-verify"] = True
+    return proxy
+
+
+def _parse_userhost_uri(uri: str, scheme: str) -> dict[str, Any] | None:
+    name = _fragment_name(uri, scheme)
+    parsed = urlparse(uri.split("#", 1)[0])
+    if not parsed.hostname:
+        return None
+    proxy_type = "http" if scheme in {"http", "https"} else "socks5"
+    default_port = 443 if scheme == "https" else 80 if scheme == "http" else 1080
+    proxy: dict[str, Any] = {
+        "name": name,
+        "type": proxy_type,
+        "server": parsed.hostname,
+        "port": int(parsed.port or default_port),
+    }
+    if parsed.username:
+        proxy["username"] = unquote(parsed.username)
+    if parsed.password:
+        proxy["password"] = unquote(parsed.password)
+    if scheme == "https":
+        proxy["tls"] = True
+    return proxy
 
 
 def _fragment_name(uri: str, fallback: str) -> str:
@@ -620,254 +737,160 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
 def expand_source_urls(source: dict[str, Any]) -> list[str]:
     raw_items = [str(source["primary"])]
     raw_items.extend(str(item) for item in source.get("fallbacks", []))
-
     urls: list[str] = []
     for item in raw_items:
-        if item == "discover:free-clash-v2ray":
-            urls.extend(discover_free_clash_v2ray_urls())
-        elif item == "discover:v2rayshare":
-            urls.extend(discover_v2rayshare_urls())
-        elif item == "discover:openrunner":
-            urls.extend(discover_openrunner_urls())
-        elif item == "discover:mibei77":
-            urls.extend(discover_mibei77_urls())
-        elif item == "discover:yoyapai":
-            urls.extend(discover_yoyapai_urls())
-        elif item == "discover:v2rayclashfree":
-            urls.extend(discover_v2rayclashfree_urls())
-        elif item == "discover:clashfree-readme":
-            urls.extend(discover_clashfree_readme_urls())
+        if item.startswith("discover:rss:"):
+            urls.extend(discover_rss_urls(item[len("discover:rss:"):]))
+        elif item.startswith("discover:url:"):
+            urls.extend(discover_url_urls(item[len("discover:url:"):]))
+        elif item.startswith("discover:content:"):
+            urls.extend(discover_content_urls(item[len("discover:content:"):]))
         else:
             urls.append(item)
     return unique_ordered(urls)
 
 
-def discover_free_clash_v2ray_urls() -> list[str]:
-    readme_url = "https://raw.githubusercontent.com/free-clash-v2ray/free-clash-v2ray.github.io/main/README.md"
-    print(f"[INFO] free-clash-v2ray try readme: {readme_url}")
+def _blob_to_raw(link: str) -> str:
+    blob = re.search(
+        r"github\.com/([^/]+)/([^/]+)/(?:blob|tree)/([^/]+)/(.+)",
+        link,
+        re.IGNORECASE,
+    )
+    if blob:
+        owner, repo, ref, path = blob.groups()
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
+    return link
+
+
+def _probe_sub_file(tag: str, link: str) -> bool:
+    link = _blob_to_raw(link.strip())
+    print(f"[INFO] {tag} try file: {link}")
     try:
-        text = fetch_text(readme_url)
+        body = fetch_text(link)
     except Exception as exc:
-        print(f"[WARN] free-clash-v2ray readme failed: {exc}")
+        print(f"[WARN] {tag} fetch failed: {link} {exc}")
+        return False
+    if not str(body).strip():
+        print(f"[WARN] {tag} empty file: {link}")
+        return False
+    found = extract_proxies(body)
+    if not found:
+        print(f"[WARN] {tag} empty subscription: {link}")
+        return False
+    print(f"[OK] {tag} discovered: {link} proxies={len(found)}")
+    return True
+
+
+def _score_sub_link(url: str, context: str = "") -> int:
+    blob = f"{url} {context}".lower()
+    filename = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1].lower()
+    score = 1
+    if re.search(r"v2ray|\.txt(?:\?|$)", blob) or filename.endswith(".txt"):
+        score += 200
+    elif "mihomo" in blob or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
+        score += 100
+    elif re.search(r"clash\s*meta|clash-meta|meta订阅", blob):
+        score += 80
+    elif "clash" in blob or re.search(r"\.ya?ml(?:\?|$)", blob):
+        score += 50
+    return score
+
+
+def _collect_sub_links(text: str, page_url: str = "") -> list[str]:
+    ranked: list[tuple[int, str]] = []
+    for match in re.finditer(r"https?://[^\s\"'<>\]]+", text or "", re.I):
+        link = _blob_to_raw(match.group(0).rstrip(").,;\"'"))
+        if re.search(r"\.(?:yaml|yml|txt)(?:$|[?#])", link, re.I):
+            ranked.append((_score_sub_link(link, match.group(0)), link))
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return unique_ordered([url for _, url in ranked])
+
+
+def _collect_article_links(text: str, page_url: str) -> list[str]:
+    found: list[str] = []
+    for match in re.finditer(r"https?://[^\s\"'<>\]]+|href=[\"']([^\"']+)[\"']", text or "", re.I):
+        link = match.group(1) or match.group(0)
+        if link.lower().startswith("href="):
+            continue
+        if link.startswith("/"):
+            from urllib.parse import urljoin
+            link = urljoin(page_url, link)
+        if not link.startswith("http"):
+            continue
+        if re.search(r"/fn/\d{8}|/post/|/p/\d|20\d{6}", link) or link.endswith(".html"):
+            if re.search(r"\.(?:yaml|yml|txt)(?:$|[?#])", link, re.I):
+                continue
+            found.append(link)
+    return unique_ordered(found)
+
+
+def discover_content_urls(page_url: str) -> list[str]:
+    page_url = _blob_to_raw(page_url.strip())
+    print(f"[INFO] content try page: {page_url}")
+    try:
+        body = fetch_text(page_url)
+    except Exception as exc:
+        print(f"[WARN] content page failed: {page_url} {exc}")
         return []
+    found = extract_proxies(body)
+    if not found:
+        print(f"[WARN] content empty: {page_url}")
+        return []
+    print(f"[OK] content discovered: {page_url} proxies={len(found)}")
+    return [page_url]
 
-    def take(ext: str) -> list[str]:
-        found = re.findall(rf"https?://[^\s\"'<>\]]+\.{ext}(?=$|[?#\s<])", text, re.I)
-        def rank(u: str) -> tuple:
-            name = u.split("?", 1)[0].rsplit("/", 1)[-1].lower()
-            pref_3 = 0 if name.startswith("3-") else 1
-            pref_meta = 0 if re.search(r"mihomo|meta", name) else 1
-            return (pref_3, pref_meta, name)
 
-        ranked = sorted(unique_ordered(found), key=rank)
-        return ranked[:8]
-
-    empty_n = fail_n = 0
-    for stage, links in (("yaml", take("ya?ml")), ("txt", take("txt"))):
-        for link in links:
-            print(f"[INFO] free-clash-v2ray try file: {link}")
+def discover_url_urls(page_url: str) -> list[str]:
+    page_url = _blob_to_raw(page_url.strip())
+    print(f"[INFO] url try page: {page_url}")
+    try:
+        body = fetch_text(page_url)
+    except Exception as exc:
+        print(f"[WARN] url page failed: {page_url} {exc}")
+        return []
+    pages = [page_url]
+    pages.extend(_collect_article_links(body, page_url)[:8])
+    seen: set[str] = set()
+    for page in unique_ordered(pages):
+        if page in seen:
+            continue
+        seen.add(page)
+        if page != page_url:
+            print(f"[INFO] url try page: {page}")
             try:
-                body = fetch_text(link)
+                text = fetch_text(page)
             except Exception as exc:
-                print(f"[WARN] free-clash-v2ray fetch failed: {link} {exc}")
-                fail_n += 1
+                print(f"[WARN] url page failed: {page} {exc}")
                 continue
-            if not body.strip():
-                print(f"[WARN] free-clash-v2ray empty file: {link}")
-                empty_n += 1
-                continue
-            print(f"[OK] free-clash-v2ray discovered: {link}")
-            return [link]
-    if empty_n:
-        print(f"[WARN] free-clash-v2ray discovery failed: empty subscription ({empty_n})")
-    elif fail_n:
-        print(f"[WARN] free-clash-v2ray discovery failed: fetch error ({fail_n})")
-    else:
-        print("[WARN] free-clash-v2ray discovery failed: no subscription url")
+        else:
+            text = body
+        for link in _collect_sub_links(text, page):
+            if _probe_sub_file("url", link):
+                return [link]
+        found = extract_proxies(text)
+        if found:
+            print(f"[OK] url fallback content: {page} proxies={len(found)}")
+            return [page]
+    print(f"[WARN] url discovery failed: {page_url}")
     return []
 
 
-def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
+def discover_rss_urls(feed_url: str) -> list[str]:
+    tag = re.sub(r"^https?://", "", feed_url).split("/")[0]
+    print(f"[INFO] rss try feed: {feed_url}")
     try:
         import feedparser
-        from bs4 import BeautifulSoup
     except ImportError as exc:
-        print(f"[WARN] {site} discovery missing dependency: {exc}")
+        print(f"[WARN] rss missing dependency: {exc}")
         return []
-
     try:
-        feed_body = fetch_text(spec["feed"])
-        parsed = feedparser.parse(feed_body)
+        parsed = feedparser.parse(fetch_text(feed_url))
     except Exception as exc:
-        print(f"[WARN] {site} feed failed: {exc}")
+        print(f"[WARN] rss feed failed: {feed_url} {exc}")
         return []
     if not parsed.entries:
-        print(f"[WARN] {site} discovery: empty feed")
+        print(f"[WARN] rss empty feed: {feed_url}")
         return []
-
-    http = urllib3.PoolManager()
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
-
-    def fetch_html(url: str, retries: int = 3) -> str | None:
-        for _ in range(retries):
-            try:
-                response = http.request("get", url, headers=headers, timeout=10)
-                if response.status == 200:
-                    return response.data.decode("utf-8", errors="replace")
-            except Exception:
-                continue
-        return None
-
-    heading_names = spec.get("headings") or [r"订阅链接", r"订阅地址", r"订阅"]
-    label_names = spec.get("labels") or [
-        r"mihomo.{0,24}(?:订阅|配置|链接)",
-        r"clash[\s\-]*meta.{0,24}(?:订阅|配置|链接)",
-        r"clash.{0,24}(?:订阅|配置|链接)",
-        r"v2ray.{0,24}(?:订阅|配置|链接)",
-    ]
-    label_priority = [
-        (100, label_names[0]),
-        (80, label_names[1]),
-        (50, label_names[2]),
-        (10, label_names[3]),
-    ]
-    link_re = re.compile(spec.get("link_re") or r"https?://[^\s\"'<>]+?\.(?:yaml|yml)", re.I)
-
-    def normalize(link: str, page_url: str) -> str:
-        link = "".join(str(link).split())
-        if link.startswith("/"):
-            from urllib.parse import urljoin
-            return urljoin(page_url, link)
-        return link
-
-    def score_link(url: str, context: str = "") -> int:
-        blob = f"{url} {context}".lower()
-        filename = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1].lower()
-        score = 1
-        if "mihomo" in blob or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
-            score += 100
-        elif re.search(r"clash\s*meta|clash-meta|meta订阅", blob):
-            score += 80
-        elif "clash" in blob or re.fullmatch(r"20\d{6}\.ya?ml", filename):
-            score += 50
-        if re.search(r"v2ray|ssr|\.txt(?:\?|$)", blob):
-            score -= 80
-        return score
-
-    def collect_yaml(soup: Any, page_url: str, html: str = "") -> list[str]:
-        ranked: list[tuple[int, str]] = []
-        for bonus, name in label_priority:
-            pat = re.compile(
-                name + r"[\s:：]{0,40}(https?://[^\s\"'<>]+)",
-                re.IGNORECASE,
-            )
-            plain = re.sub(r"<[^>]+>", " ", html or "")
-            for match in pat.finditer(plain):
-                raw = normalize(match.group(1), page_url)
-                found = link_re.search(raw)
-                if found:
-                    url = found.group(0) if found.group(0).startswith("http") else raw
-                    ranked.append((bonus + score_link(url, name), url))
-        heading = None
-        for name in heading_names:
-            heading = soup.find(["h1", "h2", "h3", "h4"], string=re.compile(name))
-            if heading:
-                break
-        scope = heading.parent if heading and heading.parent else soup
-        for name in label_names:
-            node = scope.find(["strong", "b", "span", "p", "h3", "h4"], string=re.compile(name))
-            if not node:
-                continue
-            for nxt in node.find_all_next(["p", "code", "pre", "a"], limit=8):
-                text = nxt.get("href") if nxt.name == "a" else nxt.get_text(" ", strip=True)
-                text = normalize(text or "", page_url)
-                match = link_re.search(text)
-                if match:
-                    url = match.group(0) if match.group(0).startswith("http") else text
-                    ranked.append((score_link(url, name), url))
-        for href in soup.find_all("a"):
-            link = normalize(href.get("href") or "", page_url)
-            match = link_re.search(link)
-            if match:
-                url = match.group(0) if match.group(0).startswith("http") else link
-                ranked.append((score_link(url, href.get_text(" ", strip=True)), url))
-        for text in soup.stripped_strings:
-            compact = "".join(str(text).split())
-            match = link_re.search(compact)
-            if match:
-                ranked.append((score_link(match.group(0), compact), match.group(0)))
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        return unique_ordered([url for _, url in ranked])
-
-    def guessed_links(page_url: str) -> list[str]:
-        date_match = re.search(r"(20\d{6})", page_url)
-        if not date_match:
-            return []
-        day = date_match.group(1)
-        year, month, day2 = day[:4], day[4:6], day[6:8]
-        found: list[str] = []
-        for tmpl in spec.get("guess") or []:
-            found.append(
-                tmpl.replace("{date}", day)
-                .replace("{year}", year)
-                .replace("{month}", month)
-                .replace("{day}", day2)
-            )
-        return unique_ordered(found)
-
-    txt_re = re.compile(r"https?://[^\s\"'<>\]]+?\.txt(?:$|[?#])", re.I)
-    yaml_re = re.compile(r"https?://[^\s\"'<>\]]+?\.(?:yaml|yml)(?:$|[?#])", re.I)
-
-    def blob_to_raw(link: str) -> str:
-        blob = re.search(
-            r"github\.com/([^/]+)/([^/]+)/(?:blob|tree)/([^/]+)/(.+)",
-            link,
-            re.IGNORECASE,
-        )
-        if blob:
-            owner, repo, ref, path = blob.groups()
-            return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
-        return link
-
-    def collect_ext(soup: Any, page_url: str, html: str, ext_re: re.Pattern[str]) -> list[str]:
-        ranked: list[tuple[int, str]] = []
-        for href in soup.find_all("a"):
-            link = normalize(href.get("href") or "", page_url)
-            if ext_re.search(link.split("#")[0]):
-                ranked.append((score_link(link, href.get_text(" ", strip=True)), blob_to_raw(link)))
-        for match in ext_re.finditer(re.sub(r"<[^>]+>", " ", html or "")):
-            ranked.append((score_link(match.group(0), ""), blob_to_raw(match.group(0))))
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        return unique_ordered([url for _, url in ranked])
-
-    empty_n = 0
-    fail_n = 0
-    seen_files: set[str] = set()
-
-    def probe(link: str) -> bool:
-        nonlocal empty_n, fail_n
-        link = blob_to_raw(link.strip())
-        if link in seen_files:
-            return False
-        seen_files.add(link)
-        print(f"[INFO] {site} try file: {link}")
-        body = fetch_html(link)
-        if body is None:
-            print(f"[WARN] {site} fetch failed: {link}")
-            fail_n += 1
-            return False
-        if not str(body).strip():
-            print(f"[WARN] {site} empty file: {link}")
-            empty_n += 1
-            return False
-        print(f"[OK] {site} discovered: {link}")
-        return True
 
     def entry_stamp(entry: Any) -> str:
         title = str(getattr(entry, "title", "") or "")
@@ -879,283 +902,15 @@ def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
             return f"{parsed_time.tm_year:04d}{parsed_time.tm_mon:02d}{parsed_time.tm_mday:02d}"
         return "00000000"
 
-    ranked_entries = sorted(parsed.entries[:20], key=entry_stamp, reverse=True)
-    for entry in ranked_entries[:10]:
-        top_link = getattr(entry, "link", "")
-        if not top_link:
+    for entry in sorted(parsed.entries[:20], key=entry_stamp, reverse=True)[:10]:
+        page = str(getattr(entry, "link", "") or "")
+        if not page:
             continue
-        print(f"[INFO] {site} try page: {top_link}")
-        html = fetch_html(top_link)
-        if not html:
-            print(f"[WARN] {site} page empty: {top_link}")
-            continue
-        soup = BeautifulSoup(html, "html.parser")
-
-        yaml_cands = collect_yaml(soup, top_link, html)
-        yaml_cands.extend(collect_ext(soup, top_link, html, yaml_re))
-        yaml_cands = unique_ordered(yaml_cands)
-        for link in yaml_cands:
-            if probe(link):
-                return [link]
-
-        txt_cands = collect_ext(soup, top_link, html, txt_re)
-        for link in txt_cands:
-            if probe(link):
-                return [link]
-
-        for link in guessed_links(top_link):
-            if probe(link):
-                return [link]
-
-    if empty_n:
-        print(f"[WARN] {site} discovery failed: empty subscription ({empty_n})")
-    elif fail_n:
-        print(f"[WARN] {site} discovery failed: fetch error ({fail_n})")
-    else:
-        print(f"[WARN] {site} discovery failed: no subscription url")
-    return []
-
-
-def discover_v2rayshare_urls() -> list[str]:
-    return _discover_rss_urls("v2rayshare", {
-        "feed": "https://v2rayshare.com/feed",
-        "link_re": r"https?://[^\s\"'<>]*v2rayshare[^\s\"'<>]*\.(?:yaml|yml)",
-        "guess": [
-            "https://static.v2rayshare.net/{year}/{month}/m{date}.yaml",
-        ],
-    })
-
-
-def discover_openrunner_urls() -> list[str]:
-    return _discover_rss_urls("openrunner", {
-        "feed": "https://free.datiya.com/index.xml",
-        "link_re": r"https?://[^\s\"'<>]*datiya\.com[^\s\"'<>]*\.(?:yaml|yml)|/uploads/[^\s\"'<>]+\.(?:yaml|yml)",
-        "guess": [
-            "https://free.datiya.com/uploads/{date}-clash.yaml",
-        ],
-    })
-
-
-def discover_mibei77_urls() -> list[str]:
-    return _discover_rss_urls("mibei77", {
-        "feed": "https://www.mibei77.com/feed",
-        "link_re": r"https?://[^\s\"'<>]*mibei77\.com[^\s\"'<>]*\.(?:yaml|yml)",
-    })
-
-
-def discover_yoyapai_urls() -> list[str]:
-    found = _discover_rss_urls("yoyapai", {
-        "feed": "https://yoyapai.com/feed",
-        "link_re": r"https?://[^\s\"'<>]*yoyapai\.com[^\s\"'<>]*\.(?:yaml|yml)",
-        "guess": [
-            "https://freenode.yoyapai.com/{year}/{month}/{day}-yoyapai.com-clash-vpn-mian-fei-jiedian.yaml",
-        ],
-    })
-    if found:
-        return found
-
-    print("[INFO] yoyapai fallback category page")
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
-    try:
-        import feedparser  # noqa: F401
-        from bs4 import BeautifulSoup
-    except ImportError:
-        return []
-    try:
-        html = requests.get(
-            "https://yoyapai.com/category/mianfeijiedian",
-            headers=headers,
-            timeout=SOURCE_TIMEOUT,
-            verify=False,
-            proxies=PROXIES,
-        )
-        html.raise_for_status()
-        soup = BeautifulSoup(html.content.decode("utf-8", "replace"), "html.parser")
-    except Exception as exc:
-        print(f"[WARN] yoyapai category failed: {exc}")
-        return []
-
-    posts: list[str] = []
-    for href in soup.find_all("a"):
-        link = str(href.get("href") or "").strip()
-        if re.fullmatch(r"https://yoyapai\.com/\d+", link.rstrip("/")):
-            posts.append(link.rstrip("/"))
-    posts = unique_ordered(posts)[:8]
-    fake_feed = "https://yoyapai.com/category/mianfeijiedian"
-    class _E:
-        def __init__(self, link: str) -> None:
-            self.link = link
-    parsed_entries = [_E(p) for p in posts]
-    if not parsed_entries:
-        print("[WARN] yoyapai discovery failed: no subscription url")
-        return []
-
-    # 把分类页里的文章当 RSS entries 再跑同一套抽取
-    import feedparser as _fp
-    parsed = _fp.FeedParserDict()
-    parsed.entries = parsed_entries
-    # 直接复用扫描：逐篇打开找 yaml
-    http = urllib3.PoolManager()
-    def fetch_html(url: str) -> str | None:
-        try:
-            response = http.request("get", url, headers=headers, timeout=10)
-            if response.status == 200:
-                return response.data.decode("utf-8", errors="replace")
-        except Exception:
-            return None
-        return None
-    link_re = re.compile(r"https?://[^\s\"'<>]*yoyapai\.com[^\s\"'<>]*\.(?:yaml|yml)", re.I)
-    for post in posts:
-        print(f"[INFO] yoyapai try page: {post}")
-        body = fetch_html(post)
-        if not body:
-            continue
-        for match in link_re.findall(body):
-            sub = fetch_html(match)
-            if sub:
-                print(f"[OK] yoyapai discovered: {match}")
-                return [match]
-        date_match = re.search(r"(20\d{2})年\s*(\d{1,2})月\s*(\d{1,2})日", body)
-        if date_match:
-            year = date_match.group(1)
-            month = date_match.group(2).zfill(2)
-            day2 = date_match.group(3).zfill(2)
-            guess = f"https://freenode.yoyapai.com/{year}/{month}/{day2}-yoyapai.com-clash-vpn-mian-fei-jiedian.yaml"
-            sub = fetch_html(guess)
-            if sub:
-                print(f"[OK] yoyapai discovered: {guess}")
-                return [guess]
-    print("[WARN] yoyapai discovery failed: no subscription url")
-    return []
-
-
-def discover_v2rayclashfree_urls() -> list[str]:
-    home = "https://v2rayclashfree.com/"
-    print(f"[INFO] v2rayclashfree try page: {home}")
-    try:
-        html = fetch_text(home)
-    except Exception as exc:
-        print(f"[WARN] v2rayclashfree home failed: {exc}")
-        return []
-
-    days = unique_ordered(re.findall(r"/fn/(20\d{6})\.html", html))
-    days.sort(reverse=True)
-    if not days:
-        print("[WARN] v2rayclashfree discovery failed: no subscription url")
-        return []
-
-    empty_n = fail_n = 0
-
-    def probe(link: str) -> bool:
-        nonlocal empty_n, fail_n
-        print(f"[INFO] v2rayclashfree try file: {link}")
-        try:
-            body = fetch_text(link)
-        except Exception as exc:
-            print(f"[WARN] v2rayclashfree fetch failed: {link} {exc}")
-            fail_n += 1
-            return False
-        if not str(body).strip():
-            print(f"[WARN] v2rayclashfree empty file: {link}")
-            empty_n += 1
-            return False
-        print(f"[OK] v2rayclashfree discovered: {link}")
-        return True
-
-    for day in days[:8]:
-        page = f"https://v2rayclashfree.com/fn/{day}.html"
-        print(f"[INFO] v2rayclashfree try page: {page}")
-        try:
-            body = fetch_text(page)
-        except Exception as exc:
-            print(f"[WARN] v2rayclashfree page failed: {page} {exc}")
-            continue
-        yaml_links = unique_ordered(re.findall(r"https?://[^\s\"'<>]+\.(?:yaml|yml)", body, re.I))
-        yaml_links = [u for u in yaml_links if "clash" in u.lower() or "mihomo" in u.lower() or "meta" in u.lower()] + \
-                     [u for u in yaml_links if "clash" not in u.lower() and "mihomo" not in u.lower() and "meta" not in u.lower()]
-        for link in unique_ordered(yaml_links):
-            if probe(link):
-                return [link]
-        txt_links = unique_ordered(re.findall(r"https?://[^\s\"'<>]+\.txt", body, re.I))
-        for link in txt_links:
-            if probe(link):
-                return [link]
-        if probe(f"https://v2rayclashfree.com/sub/{day}-clash.yaml"):
-            return [f"https://v2rayclashfree.com/sub/{day}-clash.yaml"]
-
-    if empty_n:
-        print(f"[WARN] v2rayclashfree discovery failed: empty subscription ({empty_n})")
-    elif fail_n:
-        print(f"[WARN] v2rayclashfree discovery failed: fetch error ({fail_n})")
-    else:
-        print("[WARN] v2rayclashfree discovery failed: no subscription url")
-    return []
-
-
-def discover_clashfree_readme_urls() -> list[str]:
-    readme = "https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md"
-    print(f"[INFO] clashfree try readme: {readme}")
-    try:
-        text = fetch_text(readme)
-    except Exception as exc:
-        print(f"[WARN] clashfree readme failed: {exc}")
-        return []
-
-    found: list[str] = []
-    for match in re.finditer(r"https?://[^\s\"'<>\]]+", text, re.IGNORECASE):
-        link = match.group(0).rstrip(").,;\"'")
-        if re.search(r"\.ya?ml(?:$|[?#])", link, re.IGNORECASE):
-            found.append(link)
-
-    urls: list[str] = []
-    for link in unique_ordered(found):
-        blob = re.search(
-            r"github\.com/([^/]+)/([^/]+)/(?:blob|tree)/([^/]+)/(.+\.ya?ml)",
-            link,
-            re.IGNORECASE,
-        )
-        if blob:
-            owner, repo, ref, path = blob.groups()
-            link = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
-        urls.append(link)
-
-    if not urls:
-        print("[WARN] clashfree discovery failed: no .yml/.yaml link in README")
-        return []
-
-    empty: list[str] = []
-    failed: list[str] = []
-    ranked = sorted(
-        unique_ordered(urls),
-        key=lambda item: re.search(r"(20\d{6})", item).group(1) if re.search(r"(20\d{6})", item) else "",
-        reverse=True,
-    )
-    for link in ranked:
-        print(f"[INFO] clashfree try file: {link}")
-        try:
-            body = fetch_text(link)
-        except Exception as exc:
-            print(f"[WARN] clashfree fetch failed: {link} {exc}")
-            failed.append(link)
-            continue
-        if body.strip():
-            print(f"[OK] clashfree discovered: {link} bytes={len(body.encode('utf-8'))}")
-            return [link]
-        print(f"[WARN] clashfree empty file: {link}")
-        empty.append(link)
-
-    if empty:
-        print(f"[WARN] clashfree discovery failed: empty subscription ({len(empty)})")
-    elif failed:
-        print(f"[WARN] clashfree discovery failed: fetch error ({len(failed)})")
-    else:
-        print("[WARN] clashfree discovery failed: no download url")
+        found = discover_url_urls(page)
+        if found:
+            print(f"[OK] rss discovered via {tag}: {found[0]}")
+            return found
+    print(f"[WARN] rss discovery failed: {feed_url}")
     return []
 
 
@@ -1316,9 +1071,10 @@ def find_or_install_mihomo() -> Path:
         print(f"[OK] using cached proxy engine: {binary}")
         return binary
 
-    url = select_mihomo_asset()
+    url, expected_sha256 = select_mihomo_asset()
     print(f"[INFO] downloading proxy engine: {url}")
     archive = download_file(url, install_dir)
+    verify_file_sha256(archive, expected_sha256)
     extracted = extract_mihomo_binary(archive, install_dir)
     extracted.chmod(extracted.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     if extracted != binary:
@@ -1327,10 +1083,51 @@ def find_or_install_mihomo() -> Path:
     return binary
 
 
-def select_mihomo_asset() -> str:
+def _asset_sha256(asset: dict[str, Any]) -> str:
+    digest = str(asset.get("digest") or "").strip()
+    if digest.lower().startswith("sha256:"):
+        return digest.split(":", 1)[1].strip().lower()
+    return ""
+
+
+def _fetch_checksum_text(url: str) -> str:
+    response = requests.get(
+        url,
+        headers={"User-Agent": "free-node-autotest"},
+        timeout=SOURCE_TIMEOUT,
+        verify=False,
+        proxies=PROXIES,
+    )
+    response.raise_for_status()
+    return response.text
+
+
+def _checksum_from_text(text: str, filename: str) -> str:
+    needle = filename.lower()
+    for line in text.splitlines():
+        parts = line.strip().split()
+        if len(parts) >= 2 and parts[-1].lstrip("*").lower().endswith(needle):
+            candidate = parts[0].strip().lower()
+            if re.fullmatch(r"[0-9a-f]{64}", candidate):
+                return candidate
+        if len(parts) >= 1 and re.fullmatch(r"[0-9a-f]{64}", parts[0].strip().lower()):
+            if needle in line.lower():
+                return parts[0].strip().lower()
+    text = text.strip().lower()
+    if re.fullmatch(r"[0-9a-f]{64}", text):
+        return text
+    return ""
+
+
+def select_mihomo_asset() -> tuple[str, str]:
     api_url = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
-    # 增加 verify=False
-    data = requests.get(api_url, headers={"User-Agent": "free-node-autotest"}, timeout=SOURCE_TIMEOUT, verify=False, proxies=PROXIES).json()
+    data = requests.get(
+        api_url,
+        headers={"User-Agent": "free-node-autotest"},
+        timeout=SOURCE_TIMEOUT,
+        verify=False,
+        proxies=PROXIES,
+    ).json()
     assets = data.get("assets", [])
     system = platform.system().lower()
     machine = platform.machine().lower()
@@ -1345,33 +1142,68 @@ def select_mihomo_asset() -> str:
         raise RuntimeError(f"unsupported OS for Mihomo download: {system}")
 
     if machine in {"x86_64", "amd64"}:
-        arch_tokens = ["amd64-compatible", "amd64"]
+        arch_tokens = ["amd64"]
     elif machine in {"arm64", "aarch64"}:
         arch_tokens = ["arm64"]
     else:
         raise RuntimeError(f"unsupported architecture for Mihomo download: {machine}")
 
-    candidates: list[tuple[int, str]] = []
+    checksum_assets: dict[str, str] = {}
+    sum_files: list[str] = []
+    binaries: list[tuple[str, str, str]] = []
     for asset in assets:
-        name = str(asset.get("name", "")).lower()
+        name = str(asset.get("name", ""))
+        lower = name.lower()
         download_url = str(asset.get("browser_download_url", ""))
         if not download_url:
             continue
-        if os_token not in name:
+        if lower.endswith(".sha256") or lower.endswith(".sha256sum"):
+            checksum_assets[lower.rsplit(".", 1)[0]] = download_url
             continue
-        if not any(token in name for token in arch_tokens):
+        if lower in {"checksums.txt", "sha256sums.txt", "sha256sums", "checksums"}:
+            sum_files.append(download_url)
             continue
-        if not (name.endswith(".gz") or name.endswith(".zip")):
+        if os_token not in lower:
             continue
-        score = 0
-        if "compatible" in name:
-            continue            # 直接跳过这个资产
-        candidates.append((score, download_url))
+        if not any(token in lower for token in arch_tokens):
+            continue
+        if "compatible" in lower:
+            continue
+        if not (lower.endswith(".gz") or lower.endswith(".zip")):
+            continue
+        binaries.append((name, download_url, _asset_sha256(asset)))
 
-    if not candidates:
+    if not binaries:
         raise RuntimeError("no matching Mihomo release asset found")
-    candidates.sort(reverse=True)
-    return candidates[0][1]
+    name, url, expected = binaries[0]
+    if expected:
+        print(f"[INFO] release digest sha256={expected} asset={name}")
+        return url, expected
+
+    stem = name.lower()
+    for key, checksum_url in checksum_assets.items():
+        if stem.startswith(key) or key.startswith(stem):
+            expected = _checksum_from_text(_fetch_checksum_text(checksum_url), name)
+            if expected:
+                print(f"[INFO] checksum file sha256={expected} asset={name}")
+                return url, expected
+    for checksum_url in sum_files:
+        expected = _checksum_from_text(_fetch_checksum_text(checksum_url), name)
+        if expected:
+            print(f"[INFO] checksums list sha256={expected} asset={name}")
+            return url, expected
+    raise RuntimeError(f"no sha256 found for Mihomo asset: {name}")
+
+
+def verify_file_sha256(path: Path, expected: str) -> None:
+    expected = expected.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise RuntimeError(f"invalid sha256 value: {expected}")
+    actual = hashlib.sha256(path.read_bytes()).hexdigest().lower()
+    if actual != expected:
+        path.unlink(missing_ok=True)
+        raise RuntimeError(f"proxy engine checksum mismatch expected={expected} actual={actual}")
+    print(f"[OK] proxy engine sha256 verified: {actual}")
 
 
 def download_file(url: str, directory: Path) -> Path:
@@ -1444,7 +1276,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
         "proxies": nodes,
         "proxy-groups": [
             {
-                "name": "AUTO-FAST",
+                "name": "URL-TEST",
                 "type": "url-test",
                 "proxies": names or ["DIRECT"],
                 "url": TEST_URL,
@@ -1452,7 +1284,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
             }
         ],
         "rules": [
-            "MATCH,AUTO-FAST",
+            "MATCH,URL-TEST",
         ],
     }
     RAW_PATH.write_text(dump_yaml(payload), encoding="utf-8")
@@ -1732,7 +1564,8 @@ def region_bonus(region: str) -> int:
 def health_score(name: str, latency: int, region: str) -> float:
     stability_seed = int(hashlib.sha256(name.encode("utf-8")).hexdigest()[:12], 16)
     stability = random.Random(stability_seed).random()
-    return (1 / latency) * 0.6 + region_bonus(region) * 0.3 + stability * 0.1
+    latency_term = LATENCY_TIMEOUT_MS / max(int(latency), 1)
+    return latency_term + region_bonus(region) + stability * 0.1
 
 
 def low_latency_pool(metrics: list[ProxyMetric]) -> list[str]:
@@ -1758,29 +1591,50 @@ def build_direct_fallback_metric() -> ProxyMetric:
 
 
 def load_existing_metrics() -> list[ProxyMetric]:
-    if not OUTPUT_PATH.exists():
+    if not HISTORY_DIR.is_dir():
+        print("[WARN] clash fallback dir missing, skip reuse")
         return []
-    try:
-        data = yaml.safe_load(OUTPUT_PATH.read_text(encoding="utf-8"))
-    except Exception:
+    pat = re.compile(r"(20\d{6})-(\d{4})")
+    ranked: list[tuple[str, Path]] = []
+    for path in HISTORY_DIR.glob("*clash.yaml"):
+        match = pat.search(path.name)
+        if match:
+            ranked.append((match.group(1) + match.group(2), path))
+    ranked.sort(reverse=True)
+    if not ranked:
+        print("[WARN] no clash backup file in history, skip reuse")
         return []
-    if not isinstance(data, dict) or not isinstance(data.get("proxies"), list):
-        return []
-    metrics: list[ProxyMetric] = []
-    for proxy in data["proxies"]:
-        if not isinstance(proxy, dict):
+    for stamp, path in ranked:
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print(f"[WARN] clash backup unreadable file={path.name} error={exc}")
             continue
-        name = str(proxy.get("name", ""))
-        region = detect_region(name)
-        metrics.append(
-            ProxyMetric(
-                proxy=dict(proxy),
-                latency=LATENCY_TIMEOUT_MS,
-                region=region,
-                health_score=health_score(name, LATENCY_TIMEOUT_MS, region),
+        items = data.get("proxies") if isinstance(data, dict) else None
+        if not isinstance(items, list) or not items:
+            continue
+        metrics: list[ProxyMetric] = []
+        for proxy in items:
+            if not isinstance(proxy, dict):
+                continue
+            name = str(proxy.get("name", ""))
+            region = detect_region(name)
+            metrics.append(
+                ProxyMetric(
+                    proxy=dict(proxy),
+                    latency=LATENCY_TIMEOUT_MS,
+                    region=region,
+                    health_score=health_score(name, LATENCY_TIMEOUT_MS, region),
+                )
             )
-        )
-    return metrics
+        if metrics:
+            print(
+                f"[INFO] reused previous clash proxies={len(metrics)} "
+                f"file={path.name} stamp={stamp}"
+            )
+            return metrics
+    print("[WARN] clash backups have no proxies, skip reuse")
+    return []
 
 
 def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
@@ -1792,7 +1646,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
     hk_names = names_for_region(metrics, "HK")
     jp_names = names_for_region(metrics, "JP")
     us_names = names_for_region(metrics, "US")
-    ai_names = low_latency_pool(metrics)
+    fast_names = low_latency_pool(metrics)
 
     return {
         "mixed-port": 7890,
@@ -1808,7 +1662,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
         "proxies": proxies,
         "proxy-groups": [
             {
-                "name": "AUTO-FAST",
+                "name": "URL-TEST",
                 "type": "url-test",
                 "proxies": all_names,
                 "url": TEST_URL,
@@ -1836,30 +1690,26 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
                 "interval": 120,
             },
             {
-                "name": "AI-POOL",
+                "name": "FAST-POOL",
                 "type": "url-test",
-                "proxies": ai_names,
+                "proxies": fast_names,
                 "url": TEST_URL,
                 "interval": 120,
             },
             {
                 "name": "FALLBACK",
                 "type": "fallback",
-                "proxies": ["AUTO-FAST", "HK-POOL", "JP-POOL", "US-POOL"],
+                "proxies": ["URL-TEST", "HK-POOL", "JP-POOL", "US-POOL"],
                 "url": TEST_URL,
                 "interval": 120,
             },
             {
                 "name": "PROXY",
                 "type": "select",
-                "proxies": ["AUTO-FAST", "FALLBACK"],
+                "proxies": ["URL-TEST", "FALLBACK"],
             },
         ],
         "rules": [
-            "DOMAIN-SUFFIX,openai.com,AI-POOL",
-            "DOMAIN-SUFFIX,chatgpt.com,AI-POOL",
-            "DOMAIN-SUFFIX,claude.ai,AI-POOL",
-            "DOMAIN-SUFFIX,anthropic.com,AI-POOL",
             "GEOIP,CN,DIRECT",
             "MATCH,PROXY",
         ],
@@ -1881,10 +1731,6 @@ def validate_config(config: dict[str, Any]) -> None:
         raise RuntimeError(f"generated config missing groups: {missing}")
     rules = config.get("rules", [])
     for rule in (
-        "DOMAIN-SUFFIX,openai.com,AI-POOL",
-        "DOMAIN-SUFFIX,chatgpt.com,AI-POOL",
-        "DOMAIN-SUFFIX,claude.ai,AI-POOL",
-        "DOMAIN-SUFFIX,anthropic.com,AI-POOL",
         "GEOIP,CN,DIRECT",
         "MATCH,PROXY",
     ):
@@ -1963,7 +1809,7 @@ def main() -> None:
     if not metrics:
         metrics = load_existing_metrics()
         if metrics:
-            print("[WARN] no live nodes passed; reusing previous non-empty output as degraded fallback")
+            print("[WARN] no live nodes passed; reusing previous history clash as degraded fallback")
 
     if not metrics:
         metrics = [build_direct_fallback_metric()]
