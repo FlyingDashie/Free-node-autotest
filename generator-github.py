@@ -30,10 +30,8 @@ import yaml
 # 代理设置（Clash 的 HTTP 端口）
 PROXIES = None
 
-
 # 关闭 SSL 警告（配合 verify=False）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 
 VERSION = "modified"
 OUTPUT_PATH = Path("output/clash.yaml")
@@ -138,12 +136,6 @@ SOURCE_GROUPS = [
         "prefix": "[Pawdroid-Base64] ",
     },
     {
-        "name": "V2Rayshare-订阅",
-        "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
-        "fallbacks": [],
-        "prefix": "[V2Rayshare-订阅] ",
-    },
-    {
         "name": "Bocchi2b-Base64",
         "primary": "https://links.bocchi2b.top/clash",
         "fallbacks": [],
@@ -154,6 +146,12 @@ SOURCE_GROUPS = [
         "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
         "fallbacks": [],
         "prefix": "[Freesocks-Base64] ",
+    },
+    {
+        "name": "V2Rayshare-订阅",
+        "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
+        "fallbacks": [],
+        "prefix": "[V2Rayshare-订阅] ",
     },
     {
         "name": "免费节点1",
@@ -871,7 +869,18 @@ def _discover_rss_urls(site: str, spec: dict[str, Any]) -> list[str]:
         print(f"[OK] {site} discovered: {link}")
         return True
 
-    for entry in parsed.entries[:10]:
+    def entry_stamp(entry: Any) -> str:
+        title = str(getattr(entry, "title", "") or "")
+        match = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", title)
+        if match:
+            return f"{match.group(1)}{int(match.group(2)):02d}{int(match.group(3)):02d}"
+        parsed_time = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+        if parsed_time:
+            return f"{parsed_time.tm_year:04d}{parsed_time.tm_mon:02d}{parsed_time.tm_mday:02d}"
+        return "00000000"
+
+    ranked_entries = sorted(parsed.entries[:20], key=entry_stamp, reverse=True)
+    for entry in ranked_entries[:10]:
         top_link = getattr(entry, "link", "")
         if not top_link:
             continue
