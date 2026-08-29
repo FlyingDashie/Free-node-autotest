@@ -30,6 +30,7 @@ import yaml
 # 代理设置（Clash 的 HTTP 端口）
 PROXIES = None
 
+
 # 关闭 SSL 警告（配合 verify=False）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -61,6 +62,12 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
         ],
         "prefix": "[大FQ运动-官网] ",
+    },
+    {
+        "name": "大FQ运动-补充",
+        "primary": "https://raw.githubusercontent.com/hello-world-1989/v2-sub/main/end-gfw-together-af3e13",
+        "fallbacks": [],
+        "prefix": "[大FQ运动-补充] ",
     },
     {
         "name": "ChromeGO",
