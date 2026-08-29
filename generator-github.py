@@ -69,6 +69,18 @@ SOURCE_GROUPS = [
         "prefix": "[ChromeGO] ",
     },
     {
+        "name": "ChromeGO-Merge",
+        "primary": "https://chromego-sub.netlify.app/sub/merged_proxies_new.yaml",
+        "fallbacks": [],
+        "prefix": "[ChromeGO-Merge] ",
+    },
+    {
+        "name": "NEKOWARP",
+        "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
+        "fallbacks": [],
+        "prefix": "[NEKOWARP] ",
+    },
+    {
         "name": "V2Rayshare-RSS",
         "primary": "discover:v2rayshare",
         "fallbacks": [],
@@ -123,6 +135,18 @@ SOURCE_GROUPS = [
         "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
         "fallbacks": [],
         "prefix": "[V2Rayshare-订阅] ",
+    },
+    {
+        "name": "Bocchi2b-Base64",
+        "primary": "https://links.bocchi2b.top/clash",
+        "fallbacks": [],
+        "prefix": "[Bocchi2b-Base64] ",
+    },
+    {
+        "name": "Freesocks-Base64",
+        "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
+        "fallbacks": [],
+        "prefix": "[Freesocks-Base64] ",
     },
     {
         "name": "免费节点1",
