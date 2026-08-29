@@ -44,7 +44,7 @@ LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 3
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "24"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
-MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "100"))
+MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
 
 SOURCE_GROUPS = [
     {
@@ -1227,18 +1227,27 @@ def normalize_proxy(raw: dict[str, Any], index: int) -> dict[str, Any] | None:
     return proxy
 
 
-def proxy_fingerprint(proxy: dict[str, Any]) -> str:
+def proxy_core_key(proxy: dict[str, Any]) -> str:
+    proxy_type = str(proxy.get("type") or "").lower()
+    secret = str(
+        proxy.get("uuid")
+        or proxy.get("password")
+        or proxy.get("auth-str")
+        or proxy.get("auth_str")
+        or ""
+    )
     important = {
-        "type": proxy.get("type"),
-        "server": proxy.get("server"),
-        "port": proxy.get("port"),
-        "uuid": proxy.get("uuid"),
-        "password": proxy.get("password"),
-        "cipher": proxy.get("cipher"),
-        "network": proxy.get("network"),
+        "type": proxy_type,
+        "server": str(proxy.get("server") or "").strip().lower(),
+        "port": str(proxy.get("port") or ""),
+        "secret": secret,
+        "cipher": str(proxy.get("cipher") or "") if proxy_type == "ss" else "",
     }
-    payload = json.dumps(important, sort_keys=True, ensure_ascii=True)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return json.dumps(important, sort_keys=True, ensure_ascii=True)
+
+
+def proxy_fingerprint(proxy: dict[str, Any]) -> str:
+    return hashlib.sha256(proxy_core_key(proxy).encode("utf-8")).hexdigest()
 
 
 def find_free_port() -> int:
@@ -1850,6 +1859,22 @@ def source_prefix_of(name: str) -> str:
     return "(无前缀)"
 
 
+def dedupe_metrics_by_core(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
+    best: dict[str, ProxyMetric] = {}
+    order: list[str] = []
+    for item in metrics:
+        key = proxy_core_key(item.proxy)
+        if key not in best:
+            best[key] = item
+            order.append(key)
+        elif item.health_score > best[key].health_score:
+            best[key] = item
+    dropped = len(metrics) - len(best)
+    if dropped:
+        print(f"[INFO] core-dedupe dropped {dropped} same-host variants, kept higher health_score")
+    return [best[key] for key in order]
+
+
 def limit_metrics_per_source(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     grouped: dict[str, list[ProxyMetric]] = {}
     order: list[str] = []
@@ -1904,6 +1929,7 @@ def main() -> None:
         metrics = [build_direct_fallback_metric()]
         print("[WARN] no live or previous nodes; using DIRECT-FALLBACK degraded config")
 
+    metrics = dedupe_metrics_by_core(metrics)
     metrics = limit_metrics_per_source(metrics)
     order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
     metrics.sort(key=lambda item: order.get(str(item.proxy["name"]), 10**9))
