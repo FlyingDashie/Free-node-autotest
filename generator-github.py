@@ -216,7 +216,8 @@ SOURCE_GROUPS = [
     {
         "name": "Clashfree-README",
         "primary": "discover:clashfree-readme",
-        "fallbacks": [],
+        "fallbacks": [
+            "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         "prefix": "[Clashfree-README] ",
     },
 ]
