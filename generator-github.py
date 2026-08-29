@@ -44,6 +44,7 @@ LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 3
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "24"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
+MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "100"))
 
 SOURCE_GROUPS = [
     {
@@ -1842,6 +1843,35 @@ def validate_config(config: dict[str, Any]) -> None:
             raise RuntimeError(f"generated config missing rule: {rule}")
 
 
+def source_prefix_of(name: str) -> str:
+    text = str(name or "")
+    if text.startswith("[") and "]" in text:
+        return text.split("]", 1)[0] + "]"
+    return "(无前缀)"
+
+
+def limit_metrics_per_source(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
+    grouped: dict[str, list[ProxyMetric]] = {}
+    order: list[str] = []
+    for item in metrics:
+        key = source_prefix_of(str(item.proxy.get("name") or ""))
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(item)
+
+    limited: list[ProxyMetric] = []
+    for key in order:
+        group = grouped[key]
+        if len(group) > MAX_LIVE_PER_SOURCE:
+            print(
+                f"[INFO] cap live source={key} from {len(group)} to {MAX_LIVE_PER_SOURCE} by health_score"
+            )
+            group = sorted(group, key=lambda item: item.health_score, reverse=True)[:MAX_LIVE_PER_SOURCE]
+        limited.extend(group)
+    return limited
+
+
 def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric]) -> None:
     hk_count = sum(1 for item in metrics if item.region == "HK")
     jp_count = sum(1 for item in metrics if item.region == "JP")
@@ -1874,6 +1904,7 @@ def main() -> None:
         metrics = [build_direct_fallback_metric()]
         print("[WARN] no live or previous nodes; using DIRECT-FALLBACK degraded config")
 
+    metrics = limit_metrics_per_source(metrics)
     order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
     metrics.sort(key=lambda item: order.get(str(item.proxy["name"]), 10**9))
     config = build_config(metrics)
