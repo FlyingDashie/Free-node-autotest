@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import html
 from urllib.parse import quote, unquote, urlparse, parse_qs
 
 import requests
@@ -384,7 +385,7 @@ def extract_proxy_block(text: str) -> list[Any]:
 
 
 _SHARE_URI_RE = re.compile(
-    r"(?:ss|ssr|vmess|vless|trojan|hysteria2?|hy2|tuic|socks5h?|socks|https?)://",
+    r"(?:ss|ssr|vmess|vless|trojan|hysteria2?|hy2|tuic|socks5h?|socks)://",
     re.IGNORECASE,
 )
 
@@ -452,7 +453,10 @@ def parse_share_uri(uri: str) -> dict[str, Any] | None:
         if scheme in {"socks", "socks5", "socks5h"}:
             return _parse_userhost_uri(raw, "socks5")
         if scheme in {"http", "https"}:
-            return _parse_userhost_uri(raw, scheme)
+            parsed = _parse_userhost_uri(raw, scheme)
+            if parsed and (parsed.get("username") or parsed.get("password")):
+                return parsed
+            return None
         if scheme in {"vless", "trojan", "hysteria", "hysteria2", "hy2"}:
             return _parse_standard_uri(raw, scheme)
     except Exception:
@@ -782,7 +786,6 @@ def _probe_sub_file(tag: str, link: str) -> bool:
     if not found:
         print(f"[WARN] {tag} empty subscription: {link}")
         return False
-    print(f"[OK] {tag} discovered: {link}")
     return True
 
 
@@ -805,8 +808,9 @@ def _score_sub_link(url: str, context: str = "", prefer: str = "") -> int:
 
 
 def _collect_sub_links(text: str, page_url: str = "", prefer: str = "") -> list[str]:
+    text = html.unescape(text or "")
     ranked: list[tuple[int, str]] = []
-    for match in re.finditer(r"https?://[^\s\"'<>\]]+", text or "", re.I):
+    for match in re.finditer(r"https?://[^\s\"'<>\]]+", text, re.I):
         link = _blob_to_raw(match.group(0).rstrip(").,;\"'"))
         if re.search(r"\.(?:yaml|yml|txt)(?:$|[?#])", link, re.I):
             ranked.append((_score_sub_link(link, match.group(0), prefer=prefer), link))
@@ -815,8 +819,9 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "") -> list[
 
 
 def _collect_article_links(text: str, page_url: str) -> list[str]:
+    text = html.unescape(text or "")
     found: list[str] = []
-    for match in re.finditer(r"https?://[^\s\"'<>\]]+|href=[\"']([^\"']+)[\"']", text or "", re.I):
+    for match in re.finditer(r"https?://[^\s\"'<>\]]+|href=[\"']([^\"']+)[\"']", text, re.I):
         link = match.group(1) or match.group(0)
         if link.lower().startswith("href="):
             continue
@@ -912,7 +917,6 @@ def discover_rss_urls(feed_url: str, prefer: str = "") -> list[str]:
             continue
         found = discover_url_urls(page, prefer=prefer)
         if found:
-            print(f"[OK] rss discovered via {tag}: {found[0]}")
             return found
     print(f"[WARN] rss discovery failed: {feed_url}")
     return []
