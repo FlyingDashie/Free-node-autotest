@@ -119,6 +119,7 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://free-clash-v2ray.github.io/uploads/latest.yaml",
         ],
+        "prefer": "3-",
         "prefix": "[Free-clash-v2ray] ",
     },
     {
@@ -705,11 +706,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
     collected: list[dict[str, Any]] = []
     for source in SOURCE_GROUPS:
         source_found: list[dict[str, Any]] = []
+        used_url = ""
         for url in expand_source_urls(source):
             try:
                 text = fetch_text(url)
                 found = extract_proxies(text)
-                print(f"[OK] source={source['name']} proxies={len(found)} url={url}")
                 if found:
                     prefix = source.get("prefix", "")
                     if prefix:
@@ -717,12 +718,15 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                             if isinstance(p, dict):
                                 p["name"] = prefix + str(p.get("name", "")).strip()
                     source_found.extend(found)
+                    used_url = url
                     break
             except Exception as exc:
                 print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
         if not source_found:
             print(f"[WARN] source={source['name']} no proxies")
             source_found = load_previous_source_proxies(source)
+        elif used_url:
+            print(f"[OK] source={source['name']} proxies={len(source_found)} url={used_url}")
         print("============================================================")
         collected.extend(source_found)
 
@@ -737,12 +741,13 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
 def expand_source_urls(source: dict[str, Any]) -> list[str]:
     raw_items = [str(source["primary"])]
     raw_items.extend(str(item) for item in source.get("fallbacks", []))
+    prefer = str(source.get("prefer") or "")
     urls: list[str] = []
     for item in raw_items:
         if item.startswith("discover:rss:"):
-            urls.extend(discover_rss_urls(item[len("discover:rss:"):]))
+            urls.extend(discover_rss_urls(item[len("discover:rss:"):], prefer=prefer))
         elif item.startswith("discover:url:"):
-            urls.extend(discover_url_urls(item[len("discover:url:"):]))
+            urls.extend(discover_url_urls(item[len("discover:url:"):], prefer=prefer))
         elif item.startswith("discover:content:"):
             urls.extend(discover_content_urls(item[len("discover:content:"):]))
         else:
@@ -777,14 +782,17 @@ def _probe_sub_file(tag: str, link: str) -> bool:
     if not found:
         print(f"[WARN] {tag} empty subscription: {link}")
         return False
-    print(f"[OK] {tag} discovered: {link} proxies={len(found)}")
+    print(f"[OK] {tag} discovered: {link}")
     return True
 
 
-def _score_sub_link(url: str, context: str = "") -> int:
+def _score_sub_link(url: str, context: str = "", prefer: str = "") -> int:
     blob = f"{url} {context}".lower()
     filename = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1].lower()
     score = 1
+    hint = prefer.strip().lower()
+    if hint and hint in blob:
+        score += 400
     if re.search(r"v2ray|\.txt(?:\?|$)", blob) or filename.endswith(".txt"):
         score += 200
     elif "mihomo" in blob or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
@@ -796,12 +804,12 @@ def _score_sub_link(url: str, context: str = "") -> int:
     return score
 
 
-def _collect_sub_links(text: str, page_url: str = "") -> list[str]:
+def _collect_sub_links(text: str, page_url: str = "", prefer: str = "") -> list[str]:
     ranked: list[tuple[int, str]] = []
     for match in re.finditer(r"https?://[^\s\"'<>\]]+", text or "", re.I):
         link = _blob_to_raw(match.group(0).rstrip(").,;\"'"))
         if re.search(r"\.(?:yaml|yml|txt)(?:$|[?#])", link, re.I):
-            ranked.append((_score_sub_link(link, match.group(0)), link))
+            ranked.append((_score_sub_link(link, match.group(0), prefer=prefer), link))
     ranked.sort(key=lambda item: item[0], reverse=True)
     return unique_ordered([url for _, url in ranked])
 
@@ -836,11 +844,11 @@ def discover_content_urls(page_url: str) -> list[str]:
     if not found:
         print(f"[WARN] content empty: {page_url}")
         return []
-    print(f"[OK] content discovered: {page_url} proxies={len(found)}")
+    print(f"[OK] content discovered: {page_url}")
     return [page_url]
 
 
-def discover_url_urls(page_url: str) -> list[str]:
+def discover_url_urls(page_url: str, prefer: str = "") -> list[str]:
     page_url = _blob_to_raw(page_url.strip())
     print(f"[INFO] url try page: {page_url}")
     try:
@@ -864,18 +872,14 @@ def discover_url_urls(page_url: str) -> list[str]:
                 continue
         else:
             text = body
-        for link in _collect_sub_links(text, page):
+        for link in _collect_sub_links(text, page, prefer=prefer):
             if _probe_sub_file("url", link):
                 return [link]
-        found = extract_proxies(text)
-        if found:
-            print(f"[OK] url fallback content: {page} proxies={len(found)}")
-            return [page]
     print(f"[WARN] url discovery failed: {page_url}")
     return []
 
 
-def discover_rss_urls(feed_url: str) -> list[str]:
+def discover_rss_urls(feed_url: str, prefer: str = "") -> list[str]:
     tag = re.sub(r"^https?://", "", feed_url).split("/")[0]
     print(f"[INFO] rss try feed: {feed_url}")
     try:
@@ -906,7 +910,7 @@ def discover_rss_urls(feed_url: str) -> list[str]:
         page = str(getattr(entry, "link", "") or "")
         if not page:
             continue
-        found = discover_url_urls(page)
+        found = discover_url_urls(page, prefer=prefer)
         if found:
             print(f"[OK] rss discovered via {tag}: {found[0]}")
             return found
