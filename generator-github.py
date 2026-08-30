@@ -730,7 +730,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
             print(f"[WARN] source={source['name']} no proxies")
             source_found = load_previous_source_proxies(source)
         elif used_url:
-            print(f"[OK] source={source['name']} proxies={len(source_found)} url={used_url}")
+            print(f"[OK] proxies={len(source_found)} source={source['name']} url={used_url}")
         print("============================================================")
         collected.extend(source_found)
 
@@ -1330,8 +1330,8 @@ def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]
                 found.append(dict(item))
         if found:
             print(
-                f"[INFO] source={name} reused previous raw "
-                f"proxies={len(found)} file={path.name} stamp={stamp}"
+                f"[INFO] proxies={len(found)} source={name} reused previous raw "
+                f"file={path.name} stamp={stamp}"
             )
             return found
     print(f"[WARN] source={name} no proxies; raw backups have no prefix={prefix!r}, skip reuse")
