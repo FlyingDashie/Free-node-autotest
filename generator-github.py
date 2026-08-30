@@ -142,6 +142,7 @@ SOURCE_GROUPS = [
         "primary": "https://links.bocchi2b.top/clash",
         "fallbacks": [],
         "prefix": "[Bocchi2b-Base64] ",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
     {
         "name": "Freesocks-Base64",
@@ -288,9 +289,9 @@ class ProxyMetric:
     health_score: float
 
 
-def fetch_text(url: str, retries: int = MAX_RETRIES) -> str:
+def fetch_text(url: str, retries: int = MAX_RETRIES, user_agent: str = "") -> str:
     headers = {
-        "User-Agent": f"free-node-autotest/{VERSION} (+https://github.com/)",
+        "User-Agent": user_agent or "ClashMeta/1.19.30",
         "Accept": "text/plain, text/yaml, application/yaml, */*",
         "Referer": "https://end-gfw.com/",
     }
@@ -330,11 +331,44 @@ def maybe_base64_decode(text: str) -> str:
     return decoded if "proxies:" in decoded or "://" in decoded else text
 
 
+def _yaml_error_brief(exc: Exception) -> str:
+    text = str(exc)
+    name = ""
+    match = re.search(r"name:\s*(.+)", text)
+    if match:
+        name = match.group(1).split(",")[0].strip().strip("'\"")
+        name = re.sub(r"\s+", " ", name)[:80]
+    snippet = ""
+    mark = getattr(exc, "problem_mark", None)
+    if mark is not None:
+        try:
+            snippet = " ".join(str(mark.get_snippet() or "").split())[:80]
+        except Exception:
+            snippet = ""
+        if not snippet:
+            snippet = f"line {mark.line + 1} col {mark.column + 1}"
+    if not snippet:
+        line_match = re.search(r"column \d+:\s*\n\s*(.+)", text)
+        if line_match:
+            snippet = line_match.group(1).strip()[:80]
+    reason = "YAML syntax"
+    if "expected ',' or '}'" in text:
+        reason = "broken quotes in flow mapping"
+    elif "while scanning" in text:
+        reason = "YAML scan error"
+    bits = [reason]
+    if name:
+        bits.append(f"name={name}")
+    if snippet:
+        bits.append(f"at={snippet}")
+    return " ".join(bits)
+
+
 def load_yaml_document(text: str) -> Any:
     try:
         return yaml.safe_load(maybe_base64_decode(text))
     except yaml.YAMLError as exc:
-        print(f"[WARN] YAML document parse failed: {exc}")
+        print(f"[WARN] YAML parse failed: {_yaml_error_brief(exc)}")
         return None
 
 
@@ -356,14 +390,14 @@ def extract_proxy_block(text: str) -> list[Any]:
             block.append(line)
 
     # 1. 先尝试完整解析
+    yaml_fail = ""
     try:
         parsed = yaml.safe_load("proxies:\n" + "\n".join(block))
         if isinstance(parsed, dict) and isinstance(parsed.get("proxies"), list):
             return parsed["proxies"]
     except yaml.YAMLError as exc:
-        print(f"[WARN] proxy block parse failed, fallback to per-line: {exc}")
+        yaml_fail = _yaml_error_brief(exc)
 
-    # 2. 完整解析失败时，逐行解析，只跳过坏节点
     proxies: list[Any] = []
     skipped = 0
     for line in block:
@@ -379,8 +413,11 @@ def extract_proxy_block(text: str) -> list[Any]:
         except yaml.YAMLError:
             skipped += 1
             continue
-    if skipped:
-        print(f"[WARN] skipped {skipped} invalid proxy line(s) in this source")
+    if yaml_fail:
+        extra = f" skipped={skipped}" if skipped else ""
+        print(f"[WARN] YAML parse failed: {yaml_fail}{extra}")
+    elif skipped:
+        print(f"[WARN] skipped {skipped} invalid proxy line(s)")
     return proxies
 
 
@@ -713,7 +750,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
         used_url = ""
         for url in expand_source_urls(source):
             try:
-                text = fetch_text(url)
+                text = fetch_text(url, user_agent=str(source.get("user_agent") or ""))
                 found = extract_proxies(text)
                 if found:
                     prefix = source.get("prefix", "")
@@ -1098,7 +1135,7 @@ def _asset_sha256(asset: dict[str, Any]) -> str:
 def _fetch_checksum_text(url: str) -> str:
     response = requests.get(
         url,
-        headers={"User-Agent": "free-node-autotest"},
+        headers={"User-Agent": "ClashMeta/1.19.30"},
         timeout=SOURCE_TIMEOUT,
         verify=False,
         proxies=PROXIES,
@@ -1128,7 +1165,7 @@ def select_mihomo_asset() -> tuple[str, str]:
     api_url = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
     data = requests.get(
         api_url,
-        headers={"User-Agent": "free-node-autotest"},
+        headers={"User-Agent": "ClashMeta/1.19.30"},
         timeout=SOURCE_TIMEOUT,
         verify=False,
         proxies=PROXIES,
