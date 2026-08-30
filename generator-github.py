@@ -1364,12 +1364,13 @@ def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]
     if not HISTORY_DIR.is_dir():
         print(f"[WARN] source={name} no proxies; raw backup dir missing, skip reuse")
         return []
-    pat = re.compile(r"(20\d{6})-(\d{4})")
+    pat = re.compile(r"(?:(20\d{6})-(\d{4})|(\d{4})-(20\d{6}))")
     ranked: list[tuple[str, Path]] = []
     for path in HISTORY_DIR.glob("*raw*.yaml"):
         match = pat.search(path.name)
         if match:
-            ranked.append((match.group(1) + match.group(2), path))
+            stamp = (match.group(1) + match.group(2)) if match.group(1) else (match.group(4) + match.group(3))
+            ranked.append((stamp, path))
     ranked.sort(reverse=True)
     if not ranked:
         print(f"[WARN] source={name} no proxies; no raw backup file, skip reuse")
@@ -1665,12 +1666,13 @@ def load_existing_metrics() -> list[ProxyMetric]:
     if not HISTORY_DIR.is_dir():
         print("[WARN] clash fallback dir missing, skip reuse")
         return []
-    pat = re.compile(r"(20\d{6})-(\d{4})")
+    pat = re.compile(r"(?:(20\d{6})-(\d{4})|(\d{4})-(20\d{6}))")
     ranked: list[tuple[str, Path]] = []
     for path in HISTORY_DIR.glob("*clash*.yaml"):
         match = pat.search(path.name)
         if match:
-            ranked.append((match.group(1) + match.group(2), path))
+            stamp = (match.group(1) + match.group(2)) if match.group(1) else (match.group(4) + match.group(3))
+            ranked.append((stamp, path))
     ranked.sort(reverse=True)
     if not ranked:
         print("[WARN] no clash backup file in history, skip reuse")
