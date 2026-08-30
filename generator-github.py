@@ -145,10 +145,10 @@ SOURCE_GROUPS = [
         "user_agent": "Chrome",
     },
     {
-        "name": "Freesocks-Base64",
+        "name": "Freesocks",
         "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
         "fallbacks": [],
-        "prefix": "[Freesocks-Base64] ",
+        "prefix": "[Freesocks] ",
     },
     {
         "name": "V2Rayshare-订阅",
