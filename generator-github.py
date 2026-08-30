@@ -77,7 +77,9 @@ SOURCE_GROUPS = [
     {
         "name": "ChromeGO-Merge",
         "primary": "https://chromego-sub.netlify.app/sub/merged_proxies_new.yaml",
-        "fallbacks": [],
+        "fallbacks": [
+            "https://chromego-sub.netlify.app/sub/base64.txt",
+        ],
         "prefix": "[ChromeGO-Merge] ",
     },
     {
