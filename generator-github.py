@@ -1509,7 +1509,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         return []
 
     engine = find_or_install_mihomo()
-    print("============================================================")
+    print_sep()
     with tempfile.TemporaryDirectory(prefix="free-node-autotest-") as temp_name:
         temp_dir = Path(temp_name)
         config_path = temp_dir / "benchmark.yaml"
@@ -1518,7 +1518,9 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         metrics = _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, list(proxies)
         )
-        print("============================================================")
+        global _SEP_JUST_PRINTED
+        _SEP_JUST_PRINTED = False
+        print_sep()
         if not metrics:
             raise RuntimeError("Mihomo benchmark produced no live proxies")
         return metrics
@@ -1833,12 +1835,26 @@ def limit_metrics_per_source(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
             print(
                 f"[INFO] cap live source={key} from {len(group)} to {MAX_LIVE_PER_SOURCE} by health_score"
             )
+            global _SEP_JUST_PRINTED
+            _SEP_JUST_PRINTED = False
             group = sorted(group, key=lambda item: item.health_score, reverse=True)[:MAX_LIVE_PER_SOURCE]
         limited.extend(group)
     return limited
 
 
+_SEP_JUST_PRINTED = False
+
+
+def print_sep() -> None:
+    global _SEP_JUST_PRINTED
+    if _SEP_JUST_PRINTED:
+        return
+    print("============================================================")
+    _SEP_JUST_PRINTED = True
+
+
 def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric]) -> None:
+    print_sep()
     hk_count = sum(1 for item in metrics if item.region == "HK")
     jp_count = sum(1 for item in metrics if item.region == "JP")
     us_count = sum(1 for item in metrics if item.region == "US")
