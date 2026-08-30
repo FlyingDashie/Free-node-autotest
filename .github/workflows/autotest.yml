@@ -48,7 +48,7 @@ jobs:
           echo "INV=${INV}" >> $GITHUB_ENV
           
           # 运行脚本并同时保存日志
-          python generator-github.py 2>&1 | tee "history/${INV}-${RUN_TIME}-run.log"
+          python generator-github.py 2>&1 | tee "history/${INV}-run-${RUN_TIME}.log"
           
           # 检查是否成功生成文件
           if [ ! -f output/clash.yaml ]; then
@@ -62,14 +62,12 @@ jobs:
           cp output/clash.yaml ./clash.yaml
           
           # 2. 备份本次生成的文件到 history 目录（按时间命名）
-          cp output/clash.yaml "history/${INV}-${RUN_TIME}-clash.yaml"
+          cp output/clash.yaml "history/${INV}-clash-${RUN_TIME}.yaml"
           if [ -f output/raw.yaml ]; then
-            cp output/raw.yaml "history/${INV}-${RUN_TIME}-raw.yaml"
+            cp output/raw.yaml "history/${INV}-raw-${RUN_TIME}.yaml"
           else
             echo "output/raw.yaml 不存在，本轮不写 raw 备份"
           fi
-          
-          # 3. 清理超过 48 小时的历史文件（按文件名时间）
           
           # 3. 清理超过 48 小时的历史文件（按文件名时间）
           python3 - <<'PY'
