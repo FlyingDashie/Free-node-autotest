@@ -142,7 +142,7 @@ SOURCE_GROUPS = [
         "primary": "https://links.bocchi2b.top/clash",
         "fallbacks": [],
         "prefix": "[Bocchi2b-Base64] ",
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "user_agent": "Chrome",
     },
     {
         "name": "Freesocks-Base64",
@@ -289,9 +289,20 @@ class ProxyMetric:
     health_score: float
 
 
+UA_PRESETS = {
+    "ClashMeta": "ClashMeta/1.19.30",
+    "Chrome": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+}
+
+
 def fetch_text(url: str, retries: int = MAX_RETRIES, user_agent: str = "") -> str:
+    ua_key = (user_agent or "ClashMeta").strip()
     headers = {
-        "User-Agent": user_agent or "ClashMeta/1.19.30",
+        "User-Agent": UA_PRESETS.get(ua_key, ua_key),
         "Accept": "text/plain, text/yaml, application/yaml, */*",
         "Referer": "https://end-gfw.com/",
     }
