@@ -1509,6 +1509,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         return []
 
     engine = find_or_install_mihomo()
+    print("============================================================")
     with tempfile.TemporaryDirectory(prefix="free-node-autotest-") as temp_name:
         temp_dir = Path(temp_name)
         config_path = temp_dir / "benchmark.yaml"
