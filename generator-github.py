@@ -81,6 +81,12 @@ SOURCE_GROUPS = [
         "prefix": "[ChromeGO-Merge] ",
     },
     {
+        "name": "Freesocks",
+        "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
+        "fallbacks": [],
+        "prefix": "[Freesocks] ",
+    },
+    {
         "name": "NEKOWARP",
         "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
         "fallbacks": [],
@@ -143,12 +149,6 @@ SOURCE_GROUPS = [
         "fallbacks": [],
         "prefix": "[Bocchi2b-Base64] ",
         "user_agent": "Chrome",
-    },
-    {
-        "name": "Freesocks",
-        "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
-        "fallbacks": [],
-        "prefix": "[Freesocks] ",
     },
     {
         "name": "V2Rayshare-订阅",
