@@ -41,21 +41,18 @@ jobs:
         id: run
         run: |
           mkdir -p output history
-          # 记录运行时间（UTC）
-          RUN_TIME=$(date -u +%Y%m%d-%H%M)
-          INV=$((999999999999 - 10#$(date -u +%Y%m%d%H%M)))
-          echo "RUN_TIME=${RUN_TIME}" >> $GITHUB_ENV
-          echo "INV=${INV}" >> $GITHUB_ENV
-          
-          # 运行脚本并同时保存日志
-          python generator-github.py 2>&1 | tee "history/${INV}-run-${RUN_TIME}.log"
-          
-          # 检查是否成功生成文件
+          RUN_DATE=$(date -u +%Y%m%d)
+          RUN_HM=$(date -u +%H%M)
+          RUN_TIME="$RUN_HM-$RUN_DATE"
+          INV=$((999999999999 - 10#$RUN_DATE$RUN_HM))
+          echo "RUN_TIME=$RUN_TIME" >> $GITHUB_ENV
+          echo "INV=$INV" >> $GITHUB_ENV
+          python generator-github.py 2>&1 | tee "history/"$INV"-run-"$RUN_TIME".log"
           if [ ! -f output/clash.yaml ]; then
             echo "生成失败，output/clash.yaml 不存在"
             exit 1
           fi
-
+          
       - name: Prepare files
         run: |
           # 1. 覆盖仓库根目录的最新文件
@@ -69,6 +66,42 @@ jobs:
             echo "output/raw.yaml 不存在，本轮不写 raw 备份"
           fi
           
+          # 2.5 旧文件名改成 INV-kind-HHMM-YYYYMMDD.ext
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          hist = Path("history")
+          target_re = re.compile(r"^\d+-(?:run|clash|raw)-\d{4}-20\d{6}\.(?:log|yaml)$")
+          patterns = [
+              re.compile(r"^(?P<inv>\d+)-(?P<date>20\d{6})-(?P<hm>\d{4})-(?P<kind>run|clash|raw)\.(?P<ext>log|yaml)$"),
+              re.compile(r"^(?P<inv>\d+)-(?P<kind>run|clash|raw)-(?P<date>20\d{6})-(?P<hm>\d{4})\.(?P<ext>log|yaml)$"),
+              re.compile(r"^(?P<kind>run|clash|raw)-(?P<date>20\d{6})-(?P<hm>\d{4})\.(?P<ext>log|yaml)$"),
+          ]
+          if hist.is_dir():
+              for p in list(hist.iterdir()):
+                  if not p.is_file() or target_re.match(p.name):
+                      continue
+                  parsed = None
+                  for pat in patterns:
+                      match = pat.match(p.name)
+                      if match:
+                          parsed = match.groupdict()
+                          break
+                  if not parsed:
+                      print(f" skip unknown {p.name}")
+                      continue
+                  date, hm, kind, ext = parsed["date"], parsed["hm"], parsed["kind"], parsed["ext"]
+                  inv = str(999999999999 - int(date + hm))
+                  new_name = f"{inv}-{kind}-{hm}-{date}.{ext}"
+                  dest = p.with_name(new_name)
+                  if dest.exists() and dest.resolve() != p.resolve():
+                      print(f" skip exists {p.name} -> {new_name}")
+                      continue
+                  p.rename(dest)
+                  print(f" renamed {p.name} -> {new_name}")
+          PY
+
           # 3. 清理超过 48 小时的历史文件（按文件名时间）
           python3 - <<'PY'
           from datetime import datetime, timedelta, timezone
@@ -76,7 +109,7 @@ jobs:
           import re
 
           cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
-          pat = re.compile(r"(20\d{6})-(\d{4})")
+          pat = re.compile(r"(?:(20\d{6})-(\d{4})|(\d{4})-(20\d{6}))")
           hist = Path("history")
           removed = []
           if hist.is_dir():
@@ -87,7 +120,11 @@ jobs:
                   if not m:
                       continue
                   try:
-                      ts = datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+                      if m.group(1) and m.group(2):
+                          stamp = m.group(1) + m.group(2)
+                      else:
+                          stamp = m.group(4) + m.group(3)
+                      ts = datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
                   except ValueError:
                       continue
                   if ts < cutoff:
