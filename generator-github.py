@@ -448,7 +448,18 @@ def extract_share_uris(text: str) -> list[str]:
     uris: list[str] = []
     for index, match in enumerate(starts):
         end = starts[index + 1].start() if index + 1 < len(starts) else len(stripped)
-        chunk = re.sub(r"\s+", "", stripped[match.start():end])
+        piece = stripped[match.start():end].split("```")[0]
+        scheme = match.group(0).split("://", 1)[0].lower()
+        if scheme == "vmess":
+            body = re.match(r"vmess://[A-Za-z0-9+/=\s]+", piece, re.I)
+            if not body:
+                continue
+            chunk = re.sub(r"\s+", "", body.group(0))
+            frag = re.match(r"#[^\s`#]+", piece[body.end():])
+            if frag:
+                chunk += frag.group(0)
+        else:
+            chunk = re.split(r"\s+", piece, maxsplit=1)[0]
         chunk = re.split(r"[<>\"']", chunk)[0]
         if "://" in chunk:
             uris.append(chunk)
