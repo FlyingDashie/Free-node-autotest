@@ -1358,18 +1358,29 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     print(f"[INFO] raw backup written path={RAW_PATH} proxies={len(nodes)}")
 
 
+def history_file_stamp(name: str) -> str:
+    match = re.search(r"-(?:run|clash|raw)-(\d{4})-(20\d{6})\.(?:log|yaml)$", name)
+    if match:
+        return match.group(2) + match.group(1)
+    match = re.search(r"-(?:run|clash|raw)-(20\d{6})-(\d{4})\.(?:log|yaml)$", name)
+    if match:
+        return match.group(1) + match.group(2)
+    match = re.search(r"-(20\d{6})-(\d{4})-(?:run|clash|raw)\.(?:log|yaml)$", name)
+    if match:
+        return match.group(1) + match.group(2)
+    return ""
+
+
 def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]:
     prefix = str(source.get("prefix") or "")
     name = str(source.get("name") or "")
     if not HISTORY_DIR.is_dir():
         print(f"[WARN] source={name} no proxies; raw backup dir missing, skip reuse")
         return []
-    pat = re.compile(r"(?:(20\d{6})-(\d{4})|(\d{4})-(20\d{6}))")
     ranked: list[tuple[str, Path]] = []
     for path in HISTORY_DIR.glob("*raw*.yaml"):
-        match = pat.search(path.name)
-        if match:
-            stamp = (match.group(1) + match.group(2)) if match.group(1) else (match.group(4) + match.group(3))
+        stamp = history_file_stamp(path.name)
+        if stamp:
             ranked.append((stamp, path))
     ranked.sort(reverse=True)
     if not ranked:
@@ -1666,12 +1677,10 @@ def load_existing_metrics() -> list[ProxyMetric]:
     if not HISTORY_DIR.is_dir():
         print("[WARN] clash fallback dir missing, skip reuse")
         return []
-    pat = re.compile(r"(?:(20\d{6})-(\d{4})|(\d{4})-(20\d{6}))")
     ranked: list[tuple[str, Path]] = []
     for path in HISTORY_DIR.glob("*clash*.yaml"):
-        match = pat.search(path.name)
-        if match:
-            stamp = (match.group(1) + match.group(2)) if match.group(1) else (match.group(4) + match.group(3))
+        stamp = history_file_stamp(path.name)
+        if stamp:
             ranked.append((stamp, path))
     ranked.sort(reverse=True)
     if not ranked:
