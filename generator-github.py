@@ -774,6 +774,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                     source_found.extend(found)
                     used_url = url
                     break
+                print(f"[WARN] source={source['name']} empty url={url}")
             except Exception as exc:
                 print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
         if not source_found:
