@@ -109,21 +109,29 @@ jobs:
           import re
 
           cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
-          pat = re.compile(r"(?:(20\d{6})-(\d{4})|(\d{4})-(20\d{6}))")
           hist = Path("history")
           removed = []
+
+          def history_file_stamp(name):
+              match = re.search(r"-(?:run|clash|raw)-(\d{4})-(20\d{6})\.(?:log|yaml)$", name)
+              if match:
+                  return match.group(2) + match.group(1)
+              match = re.search(r"-(?:run|clash|raw)-(20\d{6})-(\d{4})\.(?:log|yaml)$", name)
+              if match:
+                  return match.group(1) + match.group(2)
+              match = re.search(r"-(20\d{6})-(\d{4})-(?:run|clash|raw)\.(?:log|yaml)$", name)
+              if match:
+                  return match.group(1) + match.group(2)
+              return ""
+
           if hist.is_dir():
               for p in hist.iterdir():
                   if not p.is_file():
                       continue
-                  m = pat.search(p.name)
-                  if not m:
+                  stamp = history_file_stamp(p.name)
+                  if not stamp:
                       continue
                   try:
-                      if m.group(1) and m.group(2):
-                          stamp = m.group(1) + m.group(2)
-                      else:
-                          stamp = m.group(4) + m.group(3)
                       ts = datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
                   except ValueError:
                       continue
