@@ -1352,7 +1352,7 @@ def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]
         return []
     pat = re.compile(r"(20\d{6})-(\d{4})")
     ranked: list[tuple[str, Path]] = []
-    for path in HISTORY_DIR.glob("*raw.yaml"):
+    for path in HISTORY_DIR.glob("*raw*.yaml"):
         match = pat.search(path.name)
         if match:
             ranked.append((match.group(1) + match.group(2), path))
@@ -1653,7 +1653,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
         return []
     pat = re.compile(r"(20\d{6})-(\d{4})")
     ranked: list[tuple[str, Path]] = []
-    for path in HISTORY_DIR.glob("*clash.yaml"):
+    for path in HISTORY_DIR.glob("*clash*.yaml"):
         match = pat.search(path.name)
         if match:
             ranked.append((match.group(1) + match.group(2), path))
