@@ -163,7 +163,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点1-README自建",
-        "primary": "discover:content:https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
+        "primary": "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/free18/v2ray/main/README.md",
         ],
@@ -749,11 +749,9 @@ def expand_source_urls(source: dict[str, Any]) -> list[str]:
     urls: list[str] = []
     for item in raw_items:
         if item.startswith("discover:rss:"):
-            urls.extend(discover_rss_urls(item[len("discover:rss:"):], prefer=prefer))
+            urls.extend(discover_rss(item[len("discover:rss:"):], prefer=prefer))
         elif item.startswith("discover:url:"):
-            urls.extend(discover_url_urls(item[len("discover:url:"):], prefer=prefer))
-        elif item.startswith("discover:content:"):
-            urls.extend(discover_content_urls(item[len("discover:content:"):]))
+            urls.extend(discover_url(item[len("discover:url:"):], prefer=prefer))
         else:
             urls.append(item)
     return unique_ordered(urls)
@@ -852,22 +850,7 @@ def _collect_article_links(text: str, page_url: str) -> list[str]:
     return unique_ordered(found)
 
 
-def discover_content_urls(page_url: str) -> list[str]:
-    page_url = _blob_to_raw(page_url.strip())
-    print(f"[INFO] content try page: {page_url}")
-    try:
-        body = fetch_text(page_url)
-    except Exception as exc:
-        print(f"[WARN] content page failed: {page_url} {exc}")
-        return []
-    found = extract_proxies(body)
-    if not found:
-        print(f"[WARN] content empty: {page_url}")
-        return []
-    return [page_url]
-
-
-def discover_url_urls(page_url: str, prefer: str = "") -> list[str]:
+def discover_url(page_url: str, prefer: str = "") -> list[str]:
     page_url = _blob_to_raw(page_url.strip())
     print(f"[INFO] url try page: {page_url}")
     try:
@@ -898,7 +881,7 @@ def discover_url_urls(page_url: str, prefer: str = "") -> list[str]:
     return []
 
 
-def discover_rss_urls(feed_url: str, prefer: str = "") -> list[str]:
+def discover_rss(feed_url: str, prefer: str = "") -> list[str]:
     tag = re.sub(r"^https?://", "", feed_url).split("/")[0]
     print(f"[INFO] rss try feed: {feed_url}")
     try:
@@ -929,7 +912,7 @@ def discover_rss_urls(feed_url: str, prefer: str = "") -> list[str]:
         page = str(getattr(entry, "link", "") or "")
         if not page:
             continue
-        found = discover_url_urls(page, prefer=prefer)
+        found = discover_url(page, prefer=prefer)
         if found:
             return found
     print(f"[WARN] rss discovery failed: {feed_url}")
