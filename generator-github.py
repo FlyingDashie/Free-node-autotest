@@ -1518,6 +1518,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         metrics = _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, list(proxies)
         )
+        print("============================================================")
         if not metrics:
             raise RuntimeError("Mihomo benchmark produced no live proxies")
         return metrics
