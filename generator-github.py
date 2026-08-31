@@ -817,26 +817,41 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
         first = False
         source_found: list[dict[str, Any]] = []
         used_url = ""
-        for url in expand_source_urls(source):
-            try:
-                text = fetch_text(
-                    url,
-                    user_agent=str(source.get("user_agent") or ""),
-                    referer=str(source.get("Referer") or ""),
+        for item in source_queue(source):
+            if source_found:
+                break
+            if item.startswith("discover:rss:"):
+                candidates = discover_rss(item[len("discover:rss:"):], prefer=str(source.get("prefer") or ""))
+            elif item.startswith("discover:url:"):
+                candidates = discover_url(
+                    item[len("discover:url:"):],
+                    prefer=str(source.get("prefer") or ""),
+                    exclude=str(source.get("exclude") or ""),
                 )
-                found = extract_proxies(text)
-                if found:
-                    prefix = source.get("prefix", "")
-                    if prefix:
-                        for p in found:
-                            if isinstance(p, dict):
-                                p["name"] = prefix + str(p.get("name", "")).strip()
-                    source_found.extend(found)
-                    used_url = url
+            else:
+                candidates = [item]
+            for url in unique_ordered(candidates):
+                try:
+                    text = fetch_text(
+                        url,
+                        user_agent=str(source.get("user_agent") or ""),
+                        referer=str(source.get("Referer") or ""),
+                    )
+                    found = extract_proxies(text)
+                    if found:
+                        prefix = source.get("prefix", "")
+                        if prefix:
+                            for p in found:
+                                if isinstance(p, dict):
+                                    p["name"] = prefix + str(p.get("name", "")).strip()
+                        source_found.extend(found)
+                        used_url = url
+                        break
+                    print(f"[WARN] source={source['name']} empty url={url}")
+                except Exception as exc:
+                    print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
+                if source_found:
                     break
-                print(f"[WARN] source={source['name']} empty url={url}")
-            except Exception as exc:
-                print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
         if not source_found:
             print(f"[WARN] source={source['name']} no proxies")
             source_found = load_previous_source_proxies(source)
@@ -852,24 +867,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
     return len(collected), sanitized
 
 
-def expand_source_urls(source: dict[str, Any]) -> list[str]:
-    raw_items = [str(source["primary"])]
-    raw_items.extend(str(item) for item in source.get("fallbacks", []))
-    prefer = str(source.get("prefer") or "")
-    exclude = str(source.get("exclude") or "")
-    urls: list[str] = []
-    for item in raw_items:
-        if item.startswith("discover:rss:"):
-            if urls:
-                continue
-            urls.extend(discover_rss(item[len("discover:rss:"):], prefer=prefer))
-        elif item.startswith("discover:url:"):
-            if urls:
-                continue
-            urls.extend(discover_url(item[len("discover:url:"):], prefer=prefer, exclude=exclude))
-        else:
-            urls.append(item)
-    return unique_ordered(urls)
+def source_queue(source: dict[str, Any]) -> list[str]:
+    items = [str(source["primary"])]
+    items.extend(str(item) for item in source.get("fallbacks", []))
+    return items
 
 
 def _blob_to_raw(link: str) -> str:
