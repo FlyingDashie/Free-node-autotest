@@ -936,12 +936,20 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "") -> list[
     files: list[tuple[int, str]] = []
     bare: list[tuple[int, str]] = []
     file_re = re.compile(r"\.(?:yaml|yml|txt)(?:$|[?#])", re.I)
+    skip_re = re.compile(
+        r"(github\.com|youtube\.com|youtu\.be|karing\.app|"
+        r"t\.me/|telegram\.(?:me|org)|api\.w\.org|clarity\.ms|"
+        r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|zip|exe|dmg)(?:$|[?#&]))",
+        re.I,
+    )
     for match in re.finditer(r"https?://[^\s\"'<>\]]+", text, re.I):
         raw = match.group(0).split("`")[0].rstrip(").,;\"'")
         link = _blob_to_raw(raw)
         scored = _score_sub_link(link, match.group(0), prefer=prefer)
         if file_re.search(link):
             files.append((scored, link))
+        elif skip_re.search(link):
+            continue
         else:
             bare.append((scored, link))
     chosen = files if files else bare
