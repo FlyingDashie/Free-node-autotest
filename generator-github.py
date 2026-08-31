@@ -256,11 +256,8 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点9-2",
-        "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_try",
-        ],
-        "prefer": "subscription_try",
+        "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_try",
+        "fallbacks": [],
         "prefix": "[免费节点9-2] ",
     },
     {
