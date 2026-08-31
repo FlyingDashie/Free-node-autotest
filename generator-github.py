@@ -1990,7 +1990,21 @@ def print_source_live_stats(
         return
     _SEP_JUST_PRINTED = False
     print_sep()
-    rule = "+------------------------------+--------+------+--------+--------+"
+    rule = "+------------------------------+--------+------+---------+--------+"
+    print(rule)
+    print(
+        "| "
+        + _live_cell("source", 28)
+        + " | "
+        + _live_cell("raw", 6, ">")
+        + " | "
+        + _live_cell("live", 4, ">")
+        + " | "
+        + _live_cell("deduped", 7, ">")
+        + " | "
+        + _live_cell("capped", 6, ">")
+        + " |"
+    )
     print(rule)
     print(
         "| "
@@ -2020,7 +2034,7 @@ def print_source_live_stats(
             + _live_cell(d, 6, ">")
             + " |"
         )
-    print(rule)
+        print(rule)
     _SEP_JUST_PRINTED = False
     print_sep()
 
