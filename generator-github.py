@@ -50,7 +50,9 @@ SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
         "primary": "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
-        "fallbacks": [],
+        "fallbacks": [
+            "discover:url:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
+        ],
         "prefix": "[大FQ运动] ",
     },
     {
@@ -70,14 +72,17 @@ SOURCE_GROUPS = [
     },
     {
         "name": "ChromeGO",
-        "primary": "https://chg26.makou.cc.cd/",
-        "fallbacks": [],
+        "primary": "discover:url:https://raw.githubusercontent.com/shiteThings/extractNodes/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://chg26.makou.cc.cd/",
+        ],
         "prefix": "[ChromeGO] ",
     },
     {
         "name": "ChromeGO-Merge",
-        "primary": "https://chromego-sub.netlify.app/sub/merged_proxies_new.yaml",
+        "primary": "discover:url:https://github.com/Misaka-blog/chromego_merge/raw/refs/heads/main/README.md",
         "fallbacks": [
+            "https://chromego-sub.netlify.app/sub/merged_proxies_new.yaml",
             "https://chromego-sub.netlify.app/sub/base64.txt",
         ],
         "prefix": "[ChromeGO-Merge] ",
@@ -123,7 +128,7 @@ SOURCE_GROUPS = [
         "prefix": "[Yoyapai-RSS] ",
     },
     {
-        "name": "Free-clash-v2ray-README",
+        "name": "Free-clash-v2ray",
         "primary": "discover:url:https://raw.githubusercontent.com/free-clash-v2ray/free-clash-v2ray.github.io/main/README.md",
         "fallbacks": [
             "https://free-clash-v2ray.github.io/uploads/latest.yaml",
@@ -132,18 +137,19 @@ SOURCE_GROUPS = [
         "prefix": "[Free-clash-v2ray] ",
     },
     {
+        "name": "Pawdroid",
+        "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
+            "https://mirror.v2gh.com/https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
+        ],
+        "prefix": "[Pawdroid-Base64] ",
+    },
+    {
         "name": "FreeV2-Base64",
         "primary": "https://xmxosfepggzm.503403.xyz",
         "fallbacks": [],
         "prefix": "[FreeV2-Base64] ",
-    },
-    {
-        "name": "Pawdroid-Base64",
-        "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
-        "fallbacks": [
-            "https://mirror.v2gh.com/https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
-        ],
-        "prefix": "[Pawdroid-Base64] ",
     },
     {
         "name": "Bocchi2b-Base64",
@@ -154,100 +160,127 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2Rayshare-订阅",
-        "primary": "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
-        "fallbacks": [],
+        "primary": "discover:url:https://github.com/firefoxmmx2/v2rayshare_subcription/raw/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
+        ],
         "prefix": "[V2Rayshare-订阅] ",
     },
     {
         "name": "免费节点1",
-        "primary": "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml",
-        "fallbacks": [],
+        "primary": "discover:url:https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml",
+        ],
         "prefix": "[免费节点1] ",
     },
     {
-        "name": "免费节点1-README自建",
+        "name": "免费节点1-自建",
         "primary": "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/free18/v2ray/main/README.md",
-        ],
-        "prefix": "[免费节点1-README自建] ",
+        "fallbacks": [],
+        "prefix": "[免费节点1-自建] ",
     },
     {
         "name": "免费节点2",
-        "primary": "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml",
-        "fallbacks": [],
+        "primary": "discover:url:https://github.com/ermaozi/get_subscribe/raw/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml",
+        ],
         "prefix": "[免费节点2] ",
     },
     {
         "name": "免费节点3",
-        "primary": "https://sunmiao4458.github.io/free-proxy-airport/clash.yaml",
-        "fallbacks": [],
+        "primary": "discover:url:https://raw.githubusercontent.com/sunmiao4458/free-proxy-airport/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://sunmiao4458.github.io/free-proxy-airport/clash.yaml",
+        ],
         "prefix": "[免费节点3] ",
     },
     {
         "name": "免费节点4",
-        "primary": "https://raw.githubusercontent.com/mfuu/v2ray/master/clash.yaml",
-        "fallbacks": [],
+        "primary": "discover:url:https://raw.githubusercontent.com/mfuu/FreeProxies/refs/heads/master/README.md",
+        "fallbacks": [
+             "https://raw.githubusercontent.com/mfuu/FreeProxies/master/sub.yaml",
+        ],
         "prefix": "[免费节点4] ",
     },
     {
         "name": "免费节点5",
-        "primary": "https://cdn.jsdelivr.net/gh/vxiaov/free_proxies@main/clash/clash.provider.yaml",
+        "primary": "discover:url:https://github.com/vxiaov/free_proxies/raw/refs/heads/main/README.md",
         "fallbacks": [
+            "https://cdn.jsdelivr.net/gh/vxiaov/free_proxies@main/clash/clash.provider.yaml",
             "https://raw.githubusercontent.com/vxiaov/free_proxies/main/clash/clash.provider.yaml",
         ],
         "prefix": "[免费节点5] ",
     },
     {
         "name": "免费节点6",
-        "primary": "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
+        "primary": "discover:url:https://github.com/anaer/Sub/raw/refs/heads/main/README.MD",
         "fallbacks": [
+            "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
             "https://anaer.github.io/Sub/clash.yaml",
         ],
         "prefix": "[免费节点6] ",
     },
     {
         "name": "免费节点7",
-        "primary": "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta-2.yaml",
-        "fallbacks": [],
+        "primary": "discover:url:https://github.com/snakem982/proxypool/raw/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta-2.yaml",
+        ],
         "prefix": "[免费节点7] ",
     },
     {
         "name": "免费节点8",
-        "primary": "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml",
-        "fallbacks": [],
+        "primary": "discover:url:https://raw.githubusercontent.com/mahdibland/V2RayAggregator/refs/heads/master/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml",
+        ],
+        "prefer": "sub_merge",
         "prefix": "[免费节点8] ",
     },
     {
         "name": "免费节点9-1",
-        "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription1.yaml",
-        "fallbacks": [],
+        "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription1.yaml",
+        ],
+        "prefer": "subscription1",
         "prefix": "[免费节点9-1] ",
     },
     {
         "name": "免费节点9-2",
-        "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription2.yaml",
-        "fallbacks": [],
+        "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription2.yaml",
+        ],
+        "prefer": "subscription2",
         "prefix": "[免费节点9-2] ",
     },
     {
         "name": "免费节点9-3",
-        "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription3.yaml",
-        "fallbacks": [],
+        "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription3.yaml",
+        ],
+        "prefer": "subscription3",
         "prefix": "[免费节点9-3] ",
     },
     {
-        "name": "Clashfree-README",
+        "name": "Clashfree",
         "primary": "discover:url:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         ],
-        "prefix": "[Clashfree-README] ",
+        "prefix": "[Clashfree] ",
     },
     {
         "name": "Epodonios-v2ray-configs",
-        "primary": "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
-        "fallbacks": [],
+        "primary": "discover:url:https://github.com/Epodonios/v2ray-configs/raw/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
+        ],
+        "prefer": "All_Configs",
         "prefix": "[Epodonios-v2ray-configs] ",
     },
     {
@@ -885,10 +918,20 @@ def _score_sub_link(url: str, context: str = "", prefer: str = "") -> int:
 def _collect_sub_links(text: str, page_url: str = "", prefer: str = "") -> list[str]:
     text = html.unescape(text or "")
     ranked: list[tuple[int, str]] = []
+    skip_re = re.compile(
+        r"(github\.com|youtube\.com|youtu\.be|karing\.app|"
+        r"\.(?:html?|png|jpe?g|gif|svg|js|css|zip|exe|dmg)(?:$|[?#]))",
+        re.I,
+    )
     for match in re.finditer(r"https?://[^\s\"'<>\]]+", text, re.I):
         link = _blob_to_raw(match.group(0).rstrip(").,;\"'"))
+        scored = _score_sub_link(link, match.group(0), prefer=prefer)
         if re.search(r"\.(?:yaml|yml|txt)(?:$|[?#])", link, re.I):
-            ranked.append((_score_sub_link(link, match.group(0), prefer=prefer), link))
+            ranked.append((scored, link))
+        elif skip_re.search(link):
+            continue
+        else:
+            ranked.append((scored, link))
     ranked.sort(key=lambda item: item[0], reverse=True)
     return unique_ordered([url for _, url in ranked])
 
