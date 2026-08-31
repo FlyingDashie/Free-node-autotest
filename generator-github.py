@@ -49,25 +49,31 @@ MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "5
 SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
-        "primary": "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
+        "primary": "discover:url:https://end-gfw.com/",
         "fallbacks": [
+            "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
             "discover:url:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
         ],
         "prefix": "[大FQ运动] ",
     },
     {
-        "name": "大FQ运动-官网",
+        "name": "大FQ运动-SS密钥",
         "primary": "https://end-gfw.com/ss-key",
         "fallbacks": [
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together-ss",
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
         ],
-        "prefix": "[大FQ运动-官网] ",
+        "Referer": "https://end-gfw.com/",
+        "prefix": "[大FQ运动-SS密钥] ",
     },
     {
         "name": "大FQ运动-补充",
-        "primary": "https://raw.githubusercontent.com/hello-world-1989/v2-sub/main/end-gfw-together-af3e13",
-        "fallbacks": [],
+        "primary": "discover:url:https://github.com/hello-world-1989/cn-news/raw/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/hello-world-1989/v2-sub/main/end-gfw-together-af3e13",
+        ],
+        "prefer": "速度更快",
+        "exclude": "end-gfw.com",
         "prefix": "[大FQ运动-补充] ",
     },
     {
@@ -334,13 +340,14 @@ UA_PRESETS = {
 }
 
 
-def fetch_text(url: str, retries: int = MAX_RETRIES, user_agent: str = "") -> str:
+def fetch_text(url: str, retries: int = MAX_RETRIES, user_agent: str = "", referer: str = "") -> str:
     ua_key = (user_agent or "ClashMeta").strip()
     headers = {
         "User-Agent": UA_PRESETS.get(ua_key, ua_key),
         "Accept": "text/plain, text/yaml, application/yaml, */*",
-        "Referer": "https://end-gfw.com/",
     }
+    if referer:
+        headers["Referer"] = referer
     session = requests.Session()
     session.trust_env = False
     session.verify = False
@@ -812,13 +819,23 @@ def _parse_standard_uri(uri: str, scheme: str) -> dict[str, Any] | None:
 
 
 def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
+    global _SEP_JUST_PRINTED
     collected: list[dict[str, Any]] = []
+    first = True
     for source in SOURCE_GROUPS:
+        if not first:
+            _SEP_JUST_PRINTED = False
+            print_sep()
+        first = False
         source_found: list[dict[str, Any]] = []
         used_url = ""
         for url in expand_source_urls(source):
             try:
-                text = fetch_text(url, user_agent=str(source.get("user_agent") or ""))
+                text = fetch_text(
+                    url,
+                    user_agent=str(source.get("user_agent") or ""),
+                    referer=str(source.get("Referer") or ""),
+                )
                 found = extract_proxies(text)
                 if found:
                     prefix = source.get("prefix", "")
@@ -837,7 +854,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
             source_found = load_previous_source_proxies(source)
         elif used_url:
             print(f"[OK] proxies={len(source_found)} source={source['name']} url={used_url}")
-        print("============================================================")
         collected.extend(source_found)
 
     write_raw_backup(collected)
@@ -852,12 +868,17 @@ def expand_source_urls(source: dict[str, Any]) -> list[str]:
     raw_items = [str(source["primary"])]
     raw_items.extend(str(item) for item in source.get("fallbacks", []))
     prefer = str(source.get("prefer") or "")
+    exclude = str(source.get("exclude") or "")
     urls: list[str] = []
     for item in raw_items:
         if item.startswith("discover:rss:"):
+            if urls:
+                continue
             urls.extend(discover_rss(item[len("discover:rss:"):], prefer=prefer))
         elif item.startswith("discover:url:"):
-            urls.extend(discover_url(item[len("discover:url:"):], prefer=prefer))
+            if urls:
+                continue
+            urls.extend(discover_url(item[len("discover:url:"):], prefer=prefer, exclude=exclude))
         else:
             urls.append(item)
     return unique_ordered(urls)
@@ -893,15 +914,16 @@ def _probe_sub_file(tag: str, link: str) -> bool:
     return True
 
 
-def _score_sub_link(url: str, context: str = "", prefer: str = "") -> int:
+def _score_sub_link(url: str, context: str = "", prefer: str = "", distance: int = 9999) -> int:
     blob = f"{url} {context}".lower()
     path = url.split("?", 1)[0].lower()
     filename = path.rstrip("/").rsplit("/", 1)[-1]
     score = 1
     hint = prefer.strip().lower()
     if hint and hint in blob:
-        score += 400
-
+        score += 4000
+    if hint and distance < 400:
+        score += max(0, 8000 - distance * 10)
     stamp = ""
     found = re.search(r"(20\d{6})", filename) or re.search(r"(20\d{6})", path)
     if found:
@@ -917,66 +939,67 @@ def _score_sub_link(url: str, context: str = "", prefer: str = "") -> int:
                 score += int(stamp) * 1000
         except ValueError:
             pass
-
     if filename.endswith(".txt"):
-        score += 200
+        score += 500
     if filename.endswith((".yaml", ".yml")):
-        score += 50
+        score += 300
     if "mihomo" in filename or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
-        score += 100
+        score += 400
     if re.search(r"clash-?meta", filename):
-        score += 80
-    if "v2ray" in filename and "clash" not in filename and not filename.endswith((".yaml", ".yml")):
         score += 200
+    if "v2ray" in filename and "clash" not in filename and not filename.endswith((".yaml", ".yml")):
+        score += 500
     return score
 
 
-def _collect_sub_links(text: str, page_url: str = "", prefer: str = "") -> list[str]:
+def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude: str = "") -> list[str]:
     text = html.unescape(text or "")
     files: list[tuple[int, str]] = []
     bare: list[tuple[int, str]] = []
     file_re = re.compile(r"\.(?:yaml|yml|txt)(?:$|[?#])", re.I)
     skip_re = re.compile(
         r"(github\.com|youtube\.com|youtu\.be|karing\.app|"
-        r"t\.me/|telegram\.(?:me|org)|api\.w\.org|clarity\.ms|"
-        r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|zip|exe|dmg)(?:$|[?#&]))",
+        r"t\.me/|telegram\.(?:me|org)|api\.w\.org|clarity\.ms|v2ray\.com|"
+        r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|zip|exe|dmg|apk)(?:$|[?#&]))",
         re.I,
     )
-    for match in re.finditer(r"https?://[^\s\"'<>\]]+", text, re.I):
+    exclude_keyword = exclude.strip().lower()
+    hint = prefer.strip().lower()
+    prefer_positions = []
+    if hint:
+        lower_text = text.lower()
+        start = 0
+        while True:
+            pos = lower_text.find(hint, start)
+            if pos == -1:
+                break
+            prefer_positions.append(pos)
+            start = pos + len(hint)
+    for match in re.finditer(r"https?://[^\s\"'<>\]\)]+", text, re.I):
         raw = match.group(0).split("`")[0].rstrip(").,;\"'")
         link = _blob_to_raw(raw)
-        scored = _score_sub_link(link, match.group(0), prefer=prefer)
+        if exclude_keyword and exclude_keyword in link.lower():
+            continue
+        url_start = match.start()
+        min_distance = 9999
+        if prefer_positions:
+            min_distance = min(abs(url_start - pos) for pos in prefer_positions)
+        scored = _score_sub_link(link, match.group(0), prefer=prefer, distance=min_distance)
         if file_re.search(link):
             files.append((scored, link))
         elif skip_re.search(link):
             continue
         else:
             bare.append((scored, link))
-    chosen = files if files else bare
+    if prefer_positions:
+        chosen = files + bare
+    else:
+        chosen = files if files else bare
     chosen.sort(key=lambda item: item[0], reverse=True)
     return unique_ordered([url for _, url in chosen])
 
 
-def _collect_article_links(text: str, page_url: str) -> list[str]:
-    text = html.unescape(text or "")
-    found: list[str] = []
-    for match in re.finditer(r"https?://[^\s\"'<>\]]+|href=[\"']([^\"']+)[\"']", text, re.I):
-        link = match.group(1) or match.group(0)
-        if link.lower().startswith("href="):
-            continue
-        if link.startswith("/"):
-            from urllib.parse import urljoin
-            link = urljoin(page_url, link)
-        if not link.startswith("http"):
-            continue
-        if re.search(r"/fn/\d{8}|/post/|/p/\d|20\d{6}", link) or link.endswith(".html"):
-            if re.search(r"\.(?:yaml|yml|txt)(?:$|[?#])", link, re.I):
-                continue
-            found.append(link)
-    return unique_ordered(found)
-
-
-def discover_url(page_url: str, prefer: str = "") -> list[str]:
+def discover_url(page_url: str, prefer: str = "", exclude: str = "") -> list[str]:
     page_url = _blob_to_raw(page_url.strip())
     print(f"[INFO] url try page: {page_url}")
     try:
@@ -1000,11 +1023,35 @@ def discover_url(page_url: str, prefer: str = "") -> list[str]:
                 continue
         else:
             text = body
-        for link in _collect_sub_links(text, page, prefer=prefer):
+
+        candidate_links = _collect_sub_links(text, page, prefer=prefer, exclude=exclude)
+        for link in candidate_links:
             if _probe_sub_file("url", link):
                 return [link]
     print(f"[WARN] url discovery failed: {page_url}")
     return []
+
+
+def _collect_article_links(text: str, page_url: str) -> list[str]:
+    text = html.unescape(text or "")
+    found: list[str] = []
+    for match in re.finditer(r"https?://[^\s\"'<>\]]+|href=[\"']([^\"']+)[\"']", text, re.I):
+        link = match.group(1) or match.group(0)
+        if link.lower().startswith("href="):
+            continue
+        if link.startswith("/"):
+            from urllib.parse import urljoin
+            link = urljoin(page_url, link)
+        if not link.startswith("http"):
+            continue
+        if re.search(r"\.(?:yaml|yml|txt|apk|exe|dmg|zip|png|jpe?g|gif|svg|webp|js|css)(?:$|[?#])", link, re.I):
+            continue
+        if re.search(r"/fn/\d{8}|/post/|/p/\d+", link) or link.endswith(".html"):
+            found.append(link)
+    return unique_ordered(found)
+
+
+
 
 
 def discover_rss(feed_url: str, prefer: str = "") -> list[str]:
@@ -1379,6 +1426,9 @@ def _represent_str(dumper: yaml.Dumper, data: str):
 QuotedDumper.add_representer(str, _represent_str)
 
 
+_SEP_JUST_PRINTED = False
+
+
 def dump_yaml(data: Any) -> str:
     return yaml.dump(
         data,
@@ -1419,6 +1469,9 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
         ],
     }
     RAW_PATH.write_text(dump_yaml(payload), encoding="utf-8")
+    global _SEP_JUST_PRINTED
+    _SEP_JUST_PRINTED = False
+    print_sep()
     print(f"[INFO] raw backup written path={RAW_PATH} proxies={len(nodes)}")
 
 
@@ -1595,10 +1648,12 @@ def _benchmark_batch(
 
 
 def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
+    global _SEP_JUST_PRINTED
     if not proxies:
         return []
 
     engine = find_or_install_mihomo()
+    _SEP_JUST_PRINTED = False
     print_sep()
     with tempfile.TemporaryDirectory(prefix="free-node-autotest-") as temp_name:
         temp_dir = Path(temp_name)
@@ -1608,7 +1663,6 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         metrics = _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, list(proxies)
         )
-        global _SEP_JUST_PRINTED
         _SEP_JUST_PRINTED = False
         print_sep()
         if not metrics:
@@ -1986,8 +2040,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    print_sep()
     try:
         main()
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         raise
+    finally:
+        _SEP_JUST_PRINTED = False
+        print_sep()
