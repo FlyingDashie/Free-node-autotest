@@ -864,7 +864,13 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
     if MAX_CANDIDATES > 0 and len(sanitized) > MAX_CANDIDATES:
         print(f"[WARN] limiting candidates from {len(sanitized)} to {MAX_CANDIDATES}")
         sanitized = sanitized[:MAX_CANDIDATES]
-    return len(collected), sanitized
+    collected_counts: dict[str, int] = {}
+    for proxy in collected:
+        if not isinstance(proxy, dict):
+            continue
+        key = source_prefix_of(str(proxy.get("name") or ""))
+        collected_counts[key] = collected_counts.get(key, 0) + 1
+    return len(collected), sanitized, collected_counts
 
 
 def source_queue(source: dict[str, Any]) -> list[str]:
@@ -1934,6 +1940,91 @@ def source_prefix_of(name: str) -> str:
     return "(无前缀)"
 
 
+def count_live_by_prefix(metrics: list[ProxyMetric]) -> dict[str, int]:
+    tallies: dict[str, int] = {}
+    for item in metrics:
+        key = source_prefix_of(str(item.proxy.get("name") or ""))
+        tallies[key] = tallies.get(key, 0) + 1
+    return tallies
+
+
+def _live_cell(text: str, width: int, align: str = "<") -> str:
+    raw = str(text)
+    visual = 0
+    for ch in raw:
+        visual += 2 if ord(ch) > 127 else 1
+    pad = max(0, width - visual)
+    if align == ">":
+        return " " * pad + raw
+    return raw + " " * pad
+
+
+def print_source_live_stats(
+    collected: dict[str, int],
+    raw_live: dict[str, int],
+    deduped: dict[str, int],
+    capped: dict[str, int],
+) -> None:
+    global _SEP_JUST_PRINTED
+    prefixes: list[str] = []
+    seen: set[str] = set()
+    for source in SOURCE_GROUPS:
+        key = str(source.get("prefix") or "").strip() or f"[{source.get('name')}]"
+        if key not in seen:
+            prefixes.append(key)
+            seen.add(key)
+    for key in list(collected) + list(raw_live) + list(deduped) + list(capped):
+        if key not in seen:
+            prefixes.append(key)
+            seen.add(key)
+    rows = []
+    for key in prefixes:
+        a = collected.get(key, 0)
+        b = raw_live.get(key, 0)
+        c = deduped.get(key, 0)
+        d = capped.get(key, 0)
+        if a == 0 and b == 0 and c == 0 and d == 0:
+            continue
+        rows.append((key, a, b, c, d))
+    if not rows:
+        return
+    _SEP_JUST_PRINTED = False
+    print_sep()
+    rule = "+------------------------------+--------+------+--------+--------+"
+    print(rule)
+    print(
+        "| "
+        + _live_cell("source", 28)
+        + " | "
+        + _live_cell("raw", 6, ">")
+        + " | "
+        + _live_cell("live", 4, ">")
+        + " | "
+        + _live_cell("deduped", 6, ">")
+        + " | "
+        + _live_cell("capped", 6, ">")
+        + " |"
+    )
+    print(rule)
+    for key, a, b, c, d in rows:
+        print(
+            "| "
+            + _live_cell(key, 28)
+            + " | "
+            + _live_cell(a, 6, ">")
+            + " | "
+            + _live_cell(b, 4, ">")
+            + " | "
+            + _live_cell(c, 6, ">")
+            + " | "
+            + _live_cell(d, 6, ">")
+            + " |"
+        )
+    print(rule)
+    _SEP_JUST_PRINTED = False
+    print_sep()
+
+
 def dedupe_metrics_by_core(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     best: dict[str, ProxyMetric] = {}
     order: list[str] = []
@@ -2000,7 +2091,7 @@ def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric])
 
 
 def main() -> None:
-    total_nodes, candidates = collect_proxies()
+    total_nodes, candidates, collected_counts = collect_proxies()
     metrics: list[ProxyMetric] = []
 
     if candidates:
@@ -2018,8 +2109,12 @@ def main() -> None:
         metrics = [build_direct_fallback_metric()]
         print("[WARN] no live or previous nodes; using DIRECT-FALLBACK degraded config")
 
+    raw_live = count_live_by_prefix(metrics)
     metrics = dedupe_metrics_by_core(metrics)
+    deduped_live = count_live_by_prefix(metrics)
     metrics = limit_metrics_per_source(metrics)
+    capped_live = count_live_by_prefix(metrics)
+    print_source_live_stats(collected_counts, raw_live, deduped_live, capped_live)
     order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
     metrics.sort(key=lambda item: order.get(str(item.proxy["name"]), 10**9))
     config = build_config(metrics)
