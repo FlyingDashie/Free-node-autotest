@@ -944,7 +944,7 @@ def _score_sub_link(url: str, context: str = "", prefer: str = "", distance: int
     if filename.endswith((".yaml", ".yml")):
         score += 300
     if "mihomo" in filename or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
-        score += 400
+        score += 80
     if re.search(r"clash-?meta", filename):
         score += 200
     if "v2ray" in filename and "clash" not in filename and not filename.endswith((".yaml", ".yml")):
