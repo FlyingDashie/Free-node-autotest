@@ -1428,9 +1428,34 @@ class QuotedDumper(yaml.SafeDumper):
     pass
 
 
+_QUOTE_BOOLS = {
+    "true", "false", "yes", "no", "on", "off", "y", "n", "null", "\~",
+}
+_RISKY_SCALAR = re.compile(
+    r"^(?:"
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)"  # 科学计数 953e8078
+    r"|[-+]?\d+:\d+(?::\d+(?:\.\d*)?)?"              # YAML 1.1 六十进制
+    r"|[-+]?0[0-9]+"                                 # 前导 0
+    r")$"
+)
+
+
+def _needs_quote(text: str) -> bool:
+    if text == "" or text.strip() != text:
+        return True
+    if text[0] in "-?:{}[]&*!#|>%@`'\",":
+        return True
+    if any(ch in text for ch in ":#[]{},"):
+        return True
+    if text.lower() in _QUOTE_BOOLS:
+        return True
+    if _RISKY_SCALAR.match(text):
+        return True
+    return False
+
+
 def _represent_str(dumper: yaml.Dumper, data: str):
-    # 含非 ASCII（旗帜等）用单引号，避免 \U 转义；其余双引号防止 953e8078 等被当成数字
-    style = "'" if any(ord(ch) > 127 for ch in data) else '"'
+    style = "'" if _needs_quote(data) else None
     return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
 
 
