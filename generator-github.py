@@ -246,13 +246,22 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点8] ",
     },
     {
-        "name": "免费节点9",
+        "name": "免费节点9-1",
         "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
         "prefer": "subscription_num",
-        "prefix": "[免费节点9] ",
+        "prefix": "[免费节点9-1] ",
+    },
+    {
+        "name": "免费节点9-2",
+        "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_try",
+        ],
+        "prefer": "subscription_try",
+        "prefix": "[免费节点9-2] ",
     },
     {
         "name": "Clashfree",
