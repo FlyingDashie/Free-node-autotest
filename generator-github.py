@@ -1429,7 +1429,7 @@ class QuotedDumper(yaml.SafeDumper):
 
 
 _QUOTE_BOOLS = {
-    "true", "false", "yes", "no", "on", "off", "y", "n", "null", "\~",
+    "true", "false", "yes", "no", "on", "off", "y", "n", "null", "~",
 }
 _RISKY_SCALAR = re.compile(
     r"^(?:"
