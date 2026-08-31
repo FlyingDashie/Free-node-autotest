@@ -377,6 +377,17 @@ def maybe_base64_decode(text: str) -> str:
     return decoded if "proxies:" in decoded or "://" in decoded else text
 
 
+_YAML_WARN_SEEN: set[str] = set()
+
+
+def _yaml_warn(brief: str) -> None:
+    key = re.sub(r"\s*skipped=\d+", "", brief).strip()
+    if not key or key in _YAML_WARN_SEEN:
+        return
+    _YAML_WARN_SEEN.add(key)
+    print(f"[WARN] YAML parse failed: {brief}")
+
+
 def _yaml_error_brief(exc: Exception) -> str:
     text = str(exc)
     name = ""
@@ -414,7 +425,7 @@ def load_yaml_document(text: str) -> Any:
     try:
         return yaml.safe_load(maybe_base64_decode(text))
     except yaml.YAMLError as exc:
-        print(f"[WARN] YAML parse failed: {_yaml_error_brief(exc)}")
+        _yaml_warn(_yaml_error_brief(exc))
         return None
 
 
@@ -461,9 +472,9 @@ def extract_proxy_block(text: str) -> list[Any]:
             continue
     if yaml_fail:
         extra = f" skipped={skipped}" if skipped else ""
-        print(f"[WARN] YAML parse failed: {yaml_fail}{extra}")
+        _yaml_warn(f"{yaml_fail}{extra}")
     elif skipped:
-        print(f"[WARN] skipped {skipped} invalid proxy line(s)")
+        _yaml_warn(f"skipped {skipped} invalid proxy line(s)")
     return proxies
 
 
@@ -922,25 +933,20 @@ def _score_sub_link(url: str, context: str = "", prefer: str = "") -> int:
 
 def _collect_sub_links(text: str, page_url: str = "", prefer: str = "") -> list[str]:
     text = html.unescape(text or "")
-    ranked: list[tuple[int, str]] = []
-    skip_re = re.compile(
-        r"(github\.com|youtube\.com|youtu\.be|karing\.app|"
-        r"t\.me/|telegram\.(?:me|org)|api\.w\.org|clarity\.ms|"
-        r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|zip|exe|dmg)(?:$|[?#&]))",
-        re.I,
-    )
+    files: list[tuple[int, str]] = []
+    bare: list[tuple[int, str]] = []
+    file_re = re.compile(r"\.(?:yaml|yml|txt)(?:$|[?#])", re.I)
     for match in re.finditer(r"https?://[^\s\"'<>\]]+", text, re.I):
         raw = match.group(0).split("`")[0].rstrip(").,;\"'")
         link = _blob_to_raw(raw)
         scored = _score_sub_link(link, match.group(0), prefer=prefer)
-        if re.search(r"\.(?:yaml|yml|txt)(?:$|[?#])", link, re.I):
-            ranked.append((scored, link))
-        elif skip_re.search(link):
-            continue
+        if file_re.search(link):
+            files.append((scored, link))
         else:
-            ranked.append((scored, link))
-    ranked.sort(key=lambda item: item[0], reverse=True)
-    return unique_ordered([url for _, url in ranked])
+            bare.append((scored, link))
+    chosen = files if files else bare
+    chosen.sort(key=lambda item: item[0], reverse=True)
+    return unique_ordered([url for _, url in chosen])
 
 
 def _collect_article_links(text: str, page_url: str) -> list[str]:
