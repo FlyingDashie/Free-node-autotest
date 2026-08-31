@@ -18,7 +18,7 @@ import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 import html
@@ -900,7 +900,12 @@ def _score_sub_link(url: str, context: str = "", prefer: str = "") -> int:
         if found:
             stamp = f"{found.group(1)}{int(found.group(2)):02d}{int(found.group(3)):02d}"
     if stamp:
-        score += int(stamp) * 1000
+        try:
+            day = datetime.strptime(stamp, "%Y%m%d").replace(tzinfo=timezone.utc)
+            if day >= datetime.now(timezone.utc) - timedelta(days=10):
+                score += int(stamp) * 1000
+        except ValueError:
+            pass
 
     if filename.endswith(".txt"):
         score += 200
@@ -920,11 +925,13 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "") -> list[
     ranked: list[tuple[int, str]] = []
     skip_re = re.compile(
         r"(github\.com|youtube\.com|youtu\.be|karing\.app|"
-        r"\.(?:html?|png|jpe?g|gif|svg|js|css|zip|exe|dmg)(?:$|[?#]))",
+        r"t\.me/|telegram\.(?:me|org)|api\.w\.org|clarity\.ms|"
+        r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|zip|exe|dmg)(?:$|[?#&]))",
         re.I,
     )
     for match in re.finditer(r"https?://[^\s\"'<>\]]+", text, re.I):
-        link = _blob_to_raw(match.group(0).rstrip(").,;\"'"))
+        raw = match.group(0).split("`")[0].rstrip(").,;\"'")
+        link = _blob_to_raw(raw)
         scored = _score_sub_link(link, match.group(0), prefer=prefer)
         if re.search(r"\.(?:yaml|yml|txt)(?:$|[?#])", link, re.I):
             ranked.append((scored, link))
