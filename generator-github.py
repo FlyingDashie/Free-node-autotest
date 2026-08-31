@@ -1961,8 +1961,8 @@ def _live_cell(text: str, width: int, align: str = "<") -> str:
 
 def print_source_live_stats(
     collected: dict[str, int],
+    unique: dict[str, int],
     raw_live: dict[str, int],
-    deduped: dict[str, int],
     capped: dict[str, int],
 ) -> None:
     global _SEP_JUST_PRINTED
@@ -1973,15 +1973,15 @@ def print_source_live_stats(
         if key not in seen:
             prefixes.append(key)
             seen.add(key)
-    for key in list(collected) + list(raw_live) + list(deduped) + list(capped):
+    for key in list(collected) + list(unique) + list(raw_live) + list(capped):
         if key not in seen:
             prefixes.append(key)
             seen.add(key)
     rows = []
     for key in prefixes:
         a = collected.get(key, 0)
-        b = raw_live.get(key, 0)
-        c = deduped.get(key, 0)
+        b = unique.get(key, 0)
+        c = raw_live.get(key, 0)
         d = capped.get(key, 0)
         if a == 0 and b == 0 and c == 0 and d == 0:
             continue
@@ -1990,7 +1990,7 @@ def print_source_live_stats(
         return
     _SEP_JUST_PRINTED = False
     print_sep()
-    rule = "+------------------------------+--------+------+---------+--------+"
+    rule = "+------------------------------+--------+--------+------+--------+"
     print(rule)
     print(
         "| "
@@ -2012,9 +2012,9 @@ def print_source_live_stats(
         + " | "
         + _live_cell("raw", 6, ">")
         + " | "
-        + _live_cell("live", 4, ">")
+        + _live_cell("unique", 6, ">")
         + " | "
-        + _live_cell("deduped", 6, ">")
+        + _live_cell("live", 4, ">")
         + " | "
         + _live_cell("capped", 6, ">")
         + " |"
@@ -2027,11 +2027,11 @@ def print_source_live_stats(
             + " | "
             + _live_cell(a, 6, ">")
             + " | "
-            + _live_cell(b, 4, ">")
+            + _live_cell(b, 6, ">")
             + " | "
-            + _live_cell(c, 6, ">")
+            + _live_cell(c, 4, ">")
             + " | "
-            + _live_cell(d, 6, ">")
+            + _live_cell(d, 6, ">")>
             + " |"
         )
         print(rule)
@@ -2123,18 +2123,15 @@ def main() -> None:
         metrics = [build_direct_fallback_metric()]
         print("[WARN] no live or previous nodes; using DIRECT-FALLBACK degraded config")
 
+    unique_counts: dict[str, int] = {}
+    for proxy in candidates:
+        key = source_prefix_of(str(proxy.get("name") or ""))
+        unique_counts[key] = unique_counts.get(key, 0) + 1
     raw_live = count_live_by_prefix(metrics)
     metrics = dedupe_metrics_by_core(metrics)
-    deduped_live = count_live_by_prefix(metrics)
     metrics = limit_metrics_per_source(metrics)
     capped_live = count_live_by_prefix(metrics)
-    print_source_live_stats(collected_counts, raw_live, deduped_live, capped_live)
-    order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
-    metrics.sort(key=lambda item: order.get(str(item.proxy["name"]), 10**9))
-    config = build_config(metrics)
-    validate_config(config)
-    write_config(config)
-    print_summary(total_nodes, len(candidates), metrics)
+    print_source_live_stats(collected_counts, unique_counts, raw_live, capped_live)
 
 
 if __name__ == "__main__":
