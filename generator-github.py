@@ -475,7 +475,7 @@ def extract_proxy_block(text: str) -> list[Any]:
 
 
 _SHARE_URI_RE = re.compile(
-    r"(?:ss|ssr|vmess|vless|trojan|hysteria2?|hy2|tuic|socks5h?|socks)://",
+    r"(?:ss|ssr|vmess|vless|trojan|hysteria2?|hy2|tuic|socks5h?|socks|wireguard)://",
     re.IGNORECASE,
 )
 
@@ -558,6 +558,8 @@ def parse_share_uri(uri: str) -> dict[str, Any] | None:
             if parsed and (parsed.get("username") or parsed.get("password")):
                 return parsed
             return None
+        if scheme in {"wireguard", "wg"}:
+            return _parse_wireguard_uri(raw)
         if scheme in {"vless", "trojan", "hysteria", "hysteria2", "hy2"}:
             return _parse_standard_uri(raw, scheme)
     except Exception:
@@ -744,6 +746,61 @@ def _parse_ss_uri(uri: str) -> dict[str, Any] | None:
         qs = parse_qs(plugin)
         if qs.get("plugin"):
             proxy["plugin"] = qs["plugin"][0]
+    return proxy
+
+
+def _parse_wireguard_uri(uri: str) -> dict[str, Any] | None:
+    name = _fragment_name(uri, "wireguard")
+    parsed = urlparse(uri.split("#", 1)[0])
+    qs = {k.lower().replace("_", "-"): v[0] for k, v in parse_qs(parsed.query).items() if v}
+    private_key = unquote(parsed.username or "") or qs.get("privatekey") or qs.get("private-key") or ""
+    public_key = qs.get("publickey") or qs.get("public-key") or qs.get("peer-public-key") or ""
+    host = parsed.hostname or qs.get("server") or qs.get("endpoint") or ""
+    port = parsed.port or qs.get("port") or 51820
+    if not private_key or not host:
+        return None
+    try:
+        port = int(port)
+    except Exception:
+        return None
+    proxy: dict[str, Any] = {
+        "name": name,
+        "type": "wireguard",
+        "server": host,
+        "port": port,
+        "private-key": private_key,
+        "udp": True,
+    }
+    if public_key:
+        proxy["public-key"] = public_key
+    address = qs.get("address") or qs.get("ip") or ""
+    if address:
+        first = address.split(",")[0].split("/")[0].strip()
+        if ":" in first:
+            proxy["ipv6"] = first
+        elif first:
+            proxy["ip"] = first
+    if qs.get("ipv6"):
+        proxy["ipv6"] = qs["ipv6"].split("/")[0].strip()
+    if qs.get("dns"):
+        proxy["dns"] = [item.strip() for item in qs["dns"].split(",") if item.strip()]
+    if qs.get("mtu"):
+        try:
+            proxy["mtu"] = int(qs["mtu"])
+        except Exception:
+            pass
+    reserved = qs.get("reserved") or ""
+    if reserved:
+        if "," in reserved:
+            try:
+                proxy["reserved"] = [int(item.strip()) for item in reserved.split(",") if item.strip()]
+            except Exception:
+                proxy["reserved"] = reserved
+        else:
+            proxy["reserved"] = reserved
+    psk = qs.get("presharedkey") or qs.get("preshared-key") or ""
+    if psk:
+        proxy["preshared-key"] = psk
     return proxy
 
 
