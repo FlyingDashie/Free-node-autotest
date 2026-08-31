@@ -2017,7 +2017,7 @@ def print_source_live_stats(
             + " | "
             + _live_cell(c, 4, ">")
             + " | "
-            + _live_cell(d, 6, ">")>
+            + _live_cell(d, 6, ">")
             + " |"
         )
         print(rule)
