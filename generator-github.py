@@ -279,7 +279,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2rayclashfree-RSS",
-        "primary": "discover:url:https://v2rayclashfree.com/",
+        "primary": "discover:rss:https://v2rayclashfree.com/",
         "fallbacks": [],
         "prefix": "[V2rayclashfree-RSS] ",
     },
@@ -1060,27 +1060,10 @@ def discover_url(page_url: str, prefer: str = "", exclude: str = "") -> list[str
     except Exception as exc:
         print(f"[WARN] url page failed: {page_url} {exc}")
         return []
-    pages = [page_url]
-    pages.extend(_collect_article_links(body, page_url)[:8])
-    seen: set[str] = set()
-    for page in unique_ordered(pages):
-        if page in seen:
-            continue
-        seen.add(page)
-        if page != page_url:
-            print(f"[INFO] url try page: {page}")
-            try:
-                text = fetch_text(page)
-            except Exception as exc:
-                print(f"[WARN] url page failed: {page} {exc}")
-                continue
-        else:
-            text = body
-
-        candidate_links = _collect_sub_links(text, page, prefer=prefer, exclude=exclude)
-        for link in candidate_links:
-            if _probe_sub_file("url", link):
-                return [link]
+    candidate_links = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
+    for link in candidate_links:
+        if _probe_sub_file("url", link):
+            return [link]
     print(f"[WARN] url discovery failed: {page_url}")
     return []
 
@@ -1107,37 +1090,61 @@ def _collect_article_links(text: str, page_url: str) -> list[str]:
 
 
 
+def _page_stamp(text: str) -> str:
+    match = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", text)
+    if match:
+        return f"{match.group(1)}{int(match.group(2)):02d}{int(match.group(3)):02d}"
+    match = re.search(r"(20\d{6})", text)
+    if match:
+        return match.group(1)
+    match = re.search(r"(20\d{2})[/_-](\d{1,2})[/_-](\d{1,2})", text)
+    if match:
+        return f"{match.group(1)}{int(match.group(2)):02d}{int(match.group(3)):02d}"
+    return "00000000"
+
+
 def discover_rss(feed_url: str, prefer: str = "") -> list[str]:
-    tag = re.sub(r"^https?://", "", feed_url).split("/")[0]
     print(f"[INFO] rss try feed: {feed_url}")
+    body = ""
     try:
-        import feedparser
-    except ImportError as exc:
-        print(f"[WARN] rss missing dependency: {exc}")
-        return []
-    try:
-        parsed = feedparser.parse(fetch_text(feed_url))
+        body = fetch_text(feed_url)
     except Exception as exc:
         print(f"[WARN] rss feed failed: {feed_url} {exc}")
         return []
-    if not parsed.entries:
+
+    pages: list[str] = []
+    try:
+        import feedparser
+        parsed = feedparser.parse(body)
+    except Exception as exc:
+        print(f"[WARN] rss feed failed: {feed_url} {exc}")
+        parsed = None
+    if parsed and parsed.entries:
+        def entry_stamp(entry: Any) -> str:
+            title = str(getattr(entry, "title", "") or "")
+            link = str(getattr(entry, "link", "") or "")
+            stamp = _page_stamp(title) 
+            if stamp != "00000000":
+                return stamp
+            stamp = _page_stamp(link)
+            if stamp != "00000000":
+                return stamp
+            parsed_time = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+            if parsed_time:
+                return f"{parsed_time.tm_year:04d}{parsed_time.tm_mon:02d}{parsed_time.tm_mday:02d}"
+            return "00000000"
+
+        ranked = sorted(parsed.entries[:20], key=entry_stamp, reverse=True)[:10]
+        pages = [str(getattr(entry, "link", "") or "") for entry in ranked]
+        pages = [page for page in pages if page]
+    else:
         print(f"[WARN] rss empty feed: {feed_url}")
-        return []
+        pages = _collect_article_links(body, feed_url)
+        pages = sorted(pages, key=_page_stamp, reverse=True)[:10]
+        if pages:
+            print(f"[INFO] rss try page: {feed_url}")
 
-    def entry_stamp(entry: Any) -> str:
-        title = str(getattr(entry, "title", "") or "")
-        match = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", title)
-        if match:
-            return f"{match.group(1)}{int(match.group(2)):02d}{int(match.group(3)):02d}"
-        parsed_time = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
-        if parsed_time:
-            return f"{parsed_time.tm_year:04d}{parsed_time.tm_mon:02d}{parsed_time.tm_mday:02d}"
-        return "00000000"
-
-    for entry in sorted(parsed.entries[:20], key=entry_stamp, reverse=True)[:10]:
-        page = str(getattr(entry, "link", "") or "")
-        if not page:
-            continue
+    for page in unique_ordered(pages):
         found = discover_url(page, prefer=prefer)
         if found:
             return found
