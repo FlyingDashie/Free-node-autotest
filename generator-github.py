@@ -297,6 +297,7 @@ SUPPORTED_PROXY_TYPES = {
     "tuic",
     "socks5",
     "http",
+    "wireguard",
 }
 
 REQUIRED_GROUPS = (
@@ -1134,6 +1135,20 @@ def normalize_proxy(raw: dict[str, Any], index: int) -> dict[str, Any] | None:
         proxy_type = "hysteria2"
     proxy["type"] = proxy_type
 
+    if proxy_type == "wireguard":
+        if not proxy.get("server") or not proxy.get("port"):
+            return None
+        if not proxy.get("private-key") or not proxy.get("public-key"):
+            return None
+        proxy["udp"] = True
+
+    if proxy_type == "wireguard":
+        if not proxy.get("server") or not proxy.get("port"):
+            return None
+        if not proxy.get("private-key") or not proxy.get("public-key"):
+            return None
+        proxy["udp"] = True
+
     # 修复常见无效 vless encryption 值（部分免费源会把 Reality 公钥等塞进 encryption 字段）
     if proxy_type == "vless":
         enc = str(proxy.get("encryption", "")).strip()
@@ -1202,6 +1217,7 @@ def proxy_core_key(proxy: dict[str, Any]) -> str:
         or proxy.get("password")
         or proxy.get("auth-str")
         or proxy.get("auth_str")
+        or proxy.get("private-key")
         or ""
     )
     important = {
