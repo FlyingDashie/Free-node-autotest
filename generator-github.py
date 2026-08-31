@@ -2006,20 +2006,6 @@ def print_source_live_stats(
         + " |"
     )
     print(rule)
-    print(
-        "| "
-        + _live_cell("source", 28)
-        + " | "
-        + _live_cell("raw", 6, ">")
-        + " | "
-        + _live_cell("unique", 6, ">")
-        + " | "
-        + _live_cell("live", 4, ">")
-        + " | "
-        + _live_cell("capped", 6, ">")
-        + " |"
-    )
-    print(rule)
     for key, a, b, c, d in rows:
         print(
             "| "
@@ -2132,6 +2118,12 @@ def main() -> None:
     metrics = limit_metrics_per_source(metrics)
     capped_live = count_live_by_prefix(metrics)
     print_source_live_stats(collected_counts, unique_counts, raw_live, capped_live)
+    order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
+    metrics.sort(key=lambda item: order.get(str(item.proxy["name"]), 10**9))
+    config = build_config(metrics)
+    validate_config(config)
+    write_config(config)
+    print_summary(total_nodes, len(candidates), metrics)
 
 
 if __name__ == "__main__":
