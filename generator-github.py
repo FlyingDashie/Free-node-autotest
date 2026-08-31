@@ -1998,9 +1998,9 @@ def print_source_live_stats(
         + " | "
         + _live_cell("raw", 6, ">")
         + " | "
-        + _live_cell("live", 4, ">")
+        + _live_cell("unique", 6, ">")
         + " | "
-        + _live_cell("deduped", 7, ">")
+        + _live_cell("live", 4, ">")
         + " | "
         + _live_cell("capped", 6, ">")
         + " |"
