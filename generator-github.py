@@ -246,31 +246,13 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点8] ",
     },
     {
-        "name": "免费节点9-1",
+        "name": "免费节点9",
         "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
         "fallbacks": [
-            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription1.yaml",
+            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
-        "prefer": "subscription1",
-        "prefix": "[免费节点9-1] ",
-    },
-    {
-        "name": "免费节点9-2",
-        "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription2.yaml",
-        ],
-        "prefer": "subscription2",
-        "prefix": "[免费节点9-2] ",
-    },
-    {
-        "name": "免费节点9-3",
-        "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription3.yaml",
-        ],
-        "prefer": "subscription3",
-        "prefix": "[免费节点9-3] ",
+        "prefer": "subscription_num",
+        "prefix": "[免费节点9] ",
     },
     {
         "name": "Clashfree",
