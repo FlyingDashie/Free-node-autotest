@@ -261,13 +261,15 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点9-2] ",
     },
     {
-        "name": "Clashfree",
+"name": "Clashfree",
         "primary": "discover:url:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
         "fallbacks": [
-            "discover:url:https://github.com/free-nodes/v2rayfree",
+            {
+                "url": "discover:url:https://raw.githubusercontent.com/free-nodes/v2rayfree/refs/heads/main/README.md",
+                "prefer": "订阅地址",
+            },
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         ],
-        "prefer": "订阅地址",
         "prefix": "[Clashfree] ",
     },
     {
@@ -880,16 +882,17 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
         for item in source_queue(source):
             if source_found:
                 break
-            if item.startswith("discover:rss:"):
-                candidates = discover_rss(item[len("discover:rss:"):], prefer=str(source.get("prefer") or ""))
-            elif item.startswith("discover:url:"):
+            url, prefer, exclude = item_spec(item, source)
+            if url.startswith("discover:rss:"):
+                candidates = discover_rss(url[len("discover:rss:"):], prefer=prefer)
+            elif url.startswith("discover:url:"):
                 candidates = discover_url(
-                    item[len("discover:url:"):],
-                    prefer=str(source.get("prefer") or ""),
-                    exclude=str(source.get("exclude") or ""),
+                    url[len("discover:url:"):],
+                    prefer=prefer,
+                    exclude=exclude,
                 )
             else:
-                candidates = [item]
+                candidates = [url]
             for url in unique_ordered(candidates):
                 try:
                     text = fetch_text(
@@ -933,10 +936,19 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
     return len(collected), sanitized, collected_counts
 
 
-def source_queue(source: dict[str, Any]) -> list[str]:
-    items = [str(source["primary"])]
-    items.extend(str(item) for item in source.get("fallbacks", []))
+def source_queue(source: dict[str, Any]) -> list[Any]:
+    items = [source["primary"]]
+    items.extend(source.get("fallbacks", []))
     return items
+
+
+def item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
+    if isinstance(item, dict):
+        url = str(item.get("url") or "")
+        prefer = str(item["prefer"]) if "prefer" in item else str(source.get("prefer") or "")
+        exclude = str(item["exclude"]) if "exclude" in item else str(source.get("exclude") or "")
+        return url, prefer, exclude
+    return str(item), str(source.get("prefer") or ""), str(source.get("exclude") or "")
 
 
 def _blob_to_raw(link: str) -> str:
