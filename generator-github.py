@@ -387,6 +387,8 @@ _YAML_WARN_SEEN: set[str] = set()
 
 
 def _yaml_warn(brief: str) -> None:
+    if _YAML_WARN_SILENT:
+        return
     key = re.sub(r"\s*skipped=\d+", "", brief).strip()
     if not key or key in _YAML_WARN_SEEN:
         return
@@ -1568,8 +1570,9 @@ _TOOLKIT_SKIP_HOST_RE = re.compile(
 _TOOLKIT_TEXT_EXT = {
     ".bat", ".cmd", ".txt", ".url", ".yaml", ".yml", ".json", ".md", ".ini", ".conf",
 }
-_TOOLKIT_CONFIG_EXT = {".yaml", ".yml", ".json"}
+_TOOLKIT_CONFIG_EXT = {".yaml", ".yml", ".json", ".txt"}
 _TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
+_YAML_WARN_SILENT = False
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
@@ -1768,7 +1771,12 @@ def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             continue
-        nodes = extract_proxies(text)
+        global _YAML_WARN_SILENT
+        _YAML_WARN_SILENT = True
+        try:
+            nodes = extract_proxies(text)
+        finally:
+            _YAML_WARN_SILENT = False
         if nodes:
             found.extend(nodes)
     return found
