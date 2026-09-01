@@ -1309,6 +1309,16 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                 candidates = [url]
             filled_slots: set[str] = set()
             toolkit_hits: list[tuple[str, int]] = []
+            if merge_all and _TOOLKIT_EMBEDDED:
+                prefix = source.get("prefix", "")
+                local_nodes = []
+                for proxy in _TOOLKIT_EMBEDDED:
+                    item = dict(proxy)
+                    if prefix:
+                        item["name"] = prefix + str(item.get("name", "")).strip()
+                    local_nodes.append(item)
+                source_found.extend(local_nodes)
+                toolkit_hits.append(("embedded://archive-config", len(local_nodes)))
             for url in unique_ordered(candidates):
                 slot = "/".join(
                     [p for p in urlparse(url).path.lower().rstrip("/").split("/") if p][-4:]
@@ -1558,6 +1568,8 @@ _TOOLKIT_SKIP_HOST_RE = re.compile(
 _TOOLKIT_TEXT_EXT = {
     ".bat", ".cmd", ".txt", ".url", ".yaml", ".yml", ".json", ".md", ".ini", ".conf",
 }
+_TOOLKIT_CONFIG_EXT = {".yaml", ".yml", ".json"}
+_TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
@@ -1743,6 +1755,25 @@ def _collect_toolkit_sub_urls(root: Path) -> list[str]:
     return unique_ordered(found)
 
 
+def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if "win7-win8" in path.as_posix():
+            continue
+        if path.suffix.lower() not in _TOOLKIT_CONFIG_EXT:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        nodes = extract_proxies(text)
+        if nodes:
+            found.extend(nodes)
+    return found
+
+
 def _toolkit_url_pattern(url: str) -> str:
     path = urlparse(url).path
     path = re.sub(r"/\d+(?=/)", "/*", path)
@@ -1764,6 +1795,8 @@ def _print_toolkit_groups(hits: list[tuple[str, int]]) -> None:
 
 
 def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
+    global _TOOLKIT_EMBEDDED
+    _TOOLKIT_EMBEDDED = []
     page_url = page_url.strip()
     print(f"[INFO] toolkit try release: {page_url}")
     archives = unique_ordered(_expand_github_release_assets(page_url, prefer=prefer))
@@ -1780,11 +1813,16 @@ def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
             unpack.mkdir(exist_ok=True)
             if not _extract_archive(archive, unpack):
                 continue
+            embedded = _collect_toolkit_embedded_proxies(unpack)
             urls = _collect_toolkit_sub_urls(unpack)
+            if embedded:
+                _TOOLKIT_EMBEDDED = embedded
+                print(f"[OK] toolkit embedded proxies={len(embedded)} archive={archive.name}")
             if urls:
                 print(f"[OK] toolkit discovered subs={len(urls)} archive={archive.name}")
+            if embedded or urls:
                 return urls
-            print(f"[WARN] toolkit empty subs: {archive.name}")
+            print(f"[WARN] toolkit empty bundle: {archive.name}")
         print(f"[WARN] toolkit discovery failed: {page_url}")
         return []
     finally:
