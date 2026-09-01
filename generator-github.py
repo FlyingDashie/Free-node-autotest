@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Any
 import html
 from urllib.parse import quote, unquote, urlparse, parse_qs
-
 import requests
 import urllib3
 import yaml
@@ -77,12 +76,19 @@ SOURCE_GROUPS = [
         "prefix": "[大FQ运动-补充] ",
     },
     {
-        "name": "ChromeGO",
-        "primary": "discover:url:https://raw.githubusercontent.com/shiteThings/extractNodes/refs/heads/main/README.md",
+        "name": "Chromego-工具包",
+        "primary": "discover:toolkit:https://github.com/bannedbook/fanqiang/releases",
+        "fallbacks": [],
+        "prefer": "ChromeGo",
+        "prefix": "[Chromego-工具包] ",
+    },
+    {
+        "name": "Chromego-ShiteThings",
+        "primary": "discover:url:https://raw.githubusercontent.com/ShiteThings/extractNodes/refs/heads/main/README.md",
         "fallbacks": [
             "https://chg26.makou.cc.cd/",
         ],
-        "prefix": "[ChromeGO] ",
+        "prefix": "[Chromego-ShiteThings] ",
     },
     {
         "name": "ChromeGO-Merge",
@@ -510,8 +516,412 @@ def extract_share_uris(text: str) -> list[str]:
     return uris
 
 
+_SINGBOX_SKIP_TYPES = {
+    "direct", "block", "dns", "selector", "urltest", "loadbalance",
+    "pass", "reject", "compatible",
+}
+
+
+def _singbox_tls(proxy: dict[str, Any], tls: Any) -> None:
+    if not isinstance(tls, dict) or not tls:
+        return
+    if tls.get("enabled") is False:
+        return
+    proxy["tls"] = True
+    sni = tls.get("server_name") or tls.get("sni")
+    if sni:
+        proxy["sni"] = sni
+    if tls.get("insecure") is True:
+        proxy["skip-cert-verify"] = True
+    alpn = tls.get("alpn")
+    if alpn:
+        proxy["alpn"] = alpn
+    utls = tls.get("utls") if isinstance(tls.get("utls"), dict) else {}
+    fp = utls.get("fingerprint") or tls.get("fingerprint")
+    if fp:
+        proxy["client-fingerprint"] = fp
+    reality = tls.get("reality") if isinstance(tls.get("reality"), dict) else {}
+    if reality.get("enabled"):
+        proxy["reality-opts"] = {
+            "public-key": reality.get("public_key") or "",
+            "short-id": reality.get("short_id") or "",
+        }
+
+
+def _singbox_transport(proxy: dict[str, Any], transport: Any) -> None:
+    if not isinstance(transport, dict):
+        return
+    net = str(transport.get("type") or "").lower()
+    if not net:
+        return
+    if net == "ws":
+        proxy["network"] = "ws"
+        headers = transport.get("headers") if isinstance(transport.get("headers"), dict) else {}
+        proxy["ws-opts"] = {
+            "path": transport.get("path") or "/",
+            "headers": {"Host": headers.get("Host") or headers.get("host") or ""},
+        }
+    elif net == "grpc":
+        proxy["network"] = "grpc"
+        proxy["grpc-opts"] = {
+            "grpc-service-name": transport.get("service_name") or transport.get("servicename") or "",
+        }
+    elif net in {"http", "h2", "httpupgrade"}:
+        proxy["network"] = "http"
+        proxy["http-opts"] = {"path": transport.get("path") or "/"}
+
+
+def convert_singbox_outbound(item: dict[str, Any]) -> dict[str, Any] | None:
+    raw_type = str(item.get("type") or "").lower().strip()
+    if raw_type in _SINGBOX_SKIP_TYPES or not raw_type:
+        return None
+    mapped = {
+        "shadowsocks": "ss",
+        "shadowsocks2022": "ss",
+        "hy2": "hysteria2",
+        "socks": "socks5",
+    }.get(raw_type, raw_type)
+    if mapped not in SUPPORTED_PROXY_TYPES:
+        return None
+    server = item.get("server") or item.get("address")
+    port = item.get("server_port") or item.get("port")
+    if not server or not port:
+        return None
+    proxy: dict[str, Any] = {
+        "name": str(item.get("tag") or item.get("name") or "singbox"),
+        "type": mapped,
+        "server": str(server),
+        "port": int(port),
+    }
+    if mapped == "ss":
+        method = item.get("method") or item.get("cipher")
+        password = item.get("password")
+        if method:
+            proxy["cipher"] = method
+        if password:
+            proxy["password"] = password
+    elif mapped in {"vmess", "vless"}:
+        uuid = item.get("uuid") or item.get("id")
+        if uuid:
+            proxy["uuid"] = uuid
+        if mapped == "vmess":
+            proxy["alterId"] = int(item.get("alter_id") or item.get("alterId") or 0)
+            proxy["cipher"] = item.get("security") or "auto"
+        if mapped == "vless":
+            proxy["encryption"] = item.get("encryption") or "none"
+            flow = item.get("flow")
+            if flow:
+                proxy["flow"] = flow
+    elif mapped in {"trojan", "hysteria", "hysteria2", "tuic"}:
+        password = item.get("password") or item.get("uuid")
+        if password:
+            proxy["password"] = password
+        if mapped == "hysteria2" and item.get("obfs"):
+            obfs = item["obfs"]
+            if isinstance(obfs, dict):
+                proxy["obfs"] = obfs.get("type") or "salamander"
+                if obfs.get("password"):
+                    proxy["obfs-password"] = obfs.get("password")
+        if mapped == "tuic":
+            if item.get("uuid"):
+                proxy["uuid"] = item.get("uuid")
+            if item.get("congestion_control"):
+                proxy["congestion-controller"] = item.get("congestion_control")
+    elif mapped == "wireguard":
+        proxy["private-key"] = item.get("private_key") or item.get("private-key") or ""
+        peers = item.get("peers") if isinstance(item.get("peers"), list) else []
+        peer = peers[0] if peers and isinstance(peers[0], dict) else item
+        proxy["public-key"] = peer.get("public_key") or peer.get("public-key") or ""
+        if peer.get("allowed_ips"):
+            proxy["allowed-ips"] = peer.get("allowed_ips")
+        if peer.get("reserved"):
+            proxy["reserved"] = peer.get("reserved")
+    elif mapped == "socks5":
+        if item.get("username"):
+            proxy["username"] = item.get("username")
+        if item.get("password"):
+            proxy["password"] = item.get("password")
+    _singbox_tls(proxy, item.get("tls"))
+    _singbox_transport(proxy, item.get("transport"))
+    return proxy
+
+
+def extract_singbox_proxies(text: str) -> list[dict[str, Any]]:
+    stripped = text.strip()
+    if not stripped.startswith("{") or "outbounds" not in stripped:
+        return []
+    try:
+        data = json.loads(stripped)
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    outbounds = data.get("outbounds")
+    if not isinstance(outbounds, list):
+        return []
+    found: list[dict[str, Any]] = []
+    for item in outbounds:
+        if not isinstance(item, dict):
+            continue
+        proxy = convert_singbox_outbound(item)
+        if proxy:
+            found.append(proxy)
+    return found
+
+
+def _split_host_port(server: str, default_port: int = 443) -> tuple[str, int] | None:
+    text = str(server or "").strip()
+    if not text:
+        return None
+    if text.startswith("["):
+        host, _, rest = text[1:].partition("]")
+        port = rest[1:] if rest.startswith(":") else str(default_port)
+        return host, int(port or default_port)
+    if text.count(":") == 1:
+        host, port = text.rsplit(":", 1)
+        return host, int(port or default_port)
+    return text, default_port
+
+
+def extract_hysteria_client(data: dict[str, Any]) -> list[dict[str, Any]]:
+    if "auth_str" not in data or "server" not in data:
+        return []
+    hp = _split_host_port(str(data.get("server") or ""))
+    if not hp:
+        return []
+    host, port = hp
+    proxy: dict[str, Any] = {
+        "name": "hysteria",
+        "type": "hysteria",
+        "server": host,
+        "port": port,
+        "auth-str": data.get("auth_str") or "",
+        "protocol": data.get("protocol") or "udp",
+        "up": data.get("up_mbps") or data.get("up"),
+        "down": data.get("down_mbps") or data.get("down"),
+    }
+    if data.get("server_name"):
+        proxy["sni"] = data.get("server_name")
+    if data.get("insecure") is True:
+        proxy["skip-cert-verify"] = True
+    if data.get("alpn"):
+        proxy["alpn"] = [data.get("alpn")] if isinstance(data.get("alpn"), str) else data.get("alpn")
+    if data.get("obfs"):
+        proxy["obfs"] = data.get("obfs")
+    return [proxy]
+
+
+def extract_hysteria2_client(data: dict[str, Any]) -> list[dict[str, Any]]:
+    if "outbounds" in data or "auth_str" in data:
+        return []
+    if "auth" not in data or "server" not in data:
+        return []
+    hp = _split_host_port(str(data.get("server") or ""))
+    if not hp:
+        return []
+    host, port = hp
+    tls = data.get("tls") if isinstance(data.get("tls"), dict) else {}
+    bw = data.get("bandwidth") if isinstance(data.get("bandwidth"), dict) else {}
+    proxy: dict[str, Any] = {
+        "name": "hysteria2",
+        "type": "hysteria2",
+        "server": host,
+        "port": port,
+        "password": data.get("auth") or "",
+    }
+    if tls.get("sni"):
+        proxy["sni"] = tls.get("sni")
+    if tls.get("insecure") is True:
+        proxy["skip-cert-verify"] = True
+    if bw.get("up"):
+        proxy["up"] = bw.get("up")
+    if bw.get("down"):
+        proxy["down"] = bw.get("down")
+    return [proxy]
+
+
+def extract_juicity_client(data: dict[str, Any]) -> list[dict[str, Any]]:
+    if not data.get("uuid") or not data.get("server"):
+        return []
+    if "profiles" in data or "outbounds" in data:
+        return []
+    hp = _split_host_port(str(data.get("server") or ""))
+    if not hp:
+        return []
+    host, port = hp
+    proxy: dict[str, Any] = {
+        "name": "juicity",
+        "type": "juicity",
+        "server": host,
+        "port": port,
+        "uuid": data.get("uuid"),
+        "password": data.get("password") or "",
+    }
+    if data.get("sni"):
+        proxy["sni"] = data.get("sni")
+    if data.get("allow_insecure") is True:
+        proxy["skip-cert-verify"] = True
+    if data.get("congestion_control"):
+        proxy["congestion-controller"] = data.get("congestion_control")
+    return [proxy]
+
+
+def extract_naive_client(data: dict[str, Any]) -> list[dict[str, Any]]:
+    proxy_url = str(data.get("proxy") or "")
+    if "://" not in proxy_url:
+        return []
+    parsed = urlparse(proxy_url)
+    if not parsed.hostname:
+        return []
+    return [{
+        "name": "naive",
+        "type": "naive",
+        "server": parsed.hostname,
+        "port": int(parsed.port or 443),
+        "username": unquote(parsed.username or ""),
+        "password": unquote(parsed.password or ""),
+    }]
+
+
+def extract_mieru_client(data: dict[str, Any]) -> list[dict[str, Any]]:
+    profiles = data.get("profiles")
+    if not isinstance(profiles, list):
+        return []
+    found: list[dict[str, Any]] = []
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        user = profile.get("user") if isinstance(profile.get("user"), dict) else {}
+        servers = profile.get("servers") if isinstance(profile.get("servers"), list) else []
+        for server in servers:
+            if not isinstance(server, dict):
+                continue
+            host = server.get("ipAddress") or server.get("domainName") or server.get("ip")
+            port = server.get("port") or server.get("portRange")
+            if not host or not port:
+                continue
+            port_text = str(port).split("-")[0]
+            found.append({
+                "name": str(profile.get("profileName") or "mieru"),
+                "type": "socks5",
+                "server": str(host),
+                "port": int(port_text),
+                "username": user.get("name") or "",
+                "password": user.get("password") or "",
+            })
+    return found
+
+
+def extract_xray_proxies(data: dict[str, Any]) -> list[dict[str, Any]]:
+    outbounds = data.get("outbounds")
+    if not isinstance(outbounds, list):
+        return []
+    found: list[dict[str, Any]] = []
+    for item in outbounds:
+        if not isinstance(item, dict):
+            continue
+        protocol = str(item.get("protocol") or item.get("type") or "").lower()
+        if protocol in {"freedom", "blackhole", "dns", "direct", "block"}:
+            continue
+        settings = item.get("settings") if isinstance(item.get("settings"), dict) else {}
+        stream = item.get("streamSettings") if isinstance(item.get("streamSettings"), dict) else {}
+        server = ""
+        port = 0
+        uuid = ""
+        password = ""
+        method = ""
+        vnext = settings.get("vnext") if isinstance(settings.get("vnext"), list) else []
+        servers = settings.get("servers") if isinstance(settings.get("servers"), list) else []
+        if vnext and isinstance(vnext[0], dict):
+            node = vnext[0]
+            server = str(node.get("address") or "")
+            port = int(node.get("port") or 0)
+            users = node.get("users") if isinstance(node.get("users"), list) else []
+            if users and isinstance(users[0], dict):
+                uuid = str(users[0].get("id") or "")
+                password = str(users[0].get("password") or "")
+                method = str(users[0].get("encryption") or users[0].get("security") or "")
+        elif servers and isinstance(servers[0], dict):
+            node = servers[0]
+            server = str(node.get("address") or "")
+            port = int(node.get("port") or 0)
+            uuid = str(node.get("id") or "")
+            password = str(node.get("password") or "")
+            method = str(node.get("method") or "")
+        if not server or not port:
+            continue
+        mapped = {"shadowsocks": "ss", "socks": "socks5"}.get(protocol, protocol)
+        if mapped not in SUPPORTED_PROXY_TYPES:
+            continue
+        proxy: dict[str, Any] = {
+            "name": str(item.get("tag") or mapped),
+            "type": mapped,
+            "server": server,
+            "port": port,
+        }
+        if mapped in {"vmess", "vless"} and uuid:
+            proxy["uuid"] = uuid
+            if mapped == "vless":
+                proxy["encryption"] = method or "none"
+            if mapped == "vmess":
+                proxy["alterId"] = 0
+                proxy["cipher"] = method or "auto"
+        elif mapped in {"trojan", "ss"} and (password or uuid):
+            proxy["password"] = password or uuid
+            if mapped == "ss" and method:
+                proxy["cipher"] = method
+        net = str(stream.get("network") or "tcp").lower()
+        if net in {"ws", "grpc", "http", "h2"}:
+            proxy["network"] = "http" if net == "h2" else net
+            if net == "ws":
+                ws = stream.get("wsSettings") if isinstance(stream.get("wsSettings"), dict) else {}
+                headers = ws.get("headers") if isinstance(ws.get("headers"), dict) else {}
+                proxy["ws-opts"] = {"path": ws.get("path") or "/", "headers": {"Host": headers.get("Host") or ""}}
+            if net == "grpc":
+                grpc = stream.get("grpcSettings") if isinstance(stream.get("grpcSettings"), dict) else {}
+                proxy["grpc-opts"] = {"grpc-service-name": grpc.get("serviceName") or ""}
+        security = str(stream.get("security") or "").lower()
+        if security in {"tls", "reality"}:
+            proxy["tls"] = True
+            tls = stream.get("tlsSettings") if isinstance(stream.get("tlsSettings"), dict) else {}
+            reality = stream.get("realitySettings") if isinstance(stream.get("realitySettings"), dict) else {}
+            sni = tls.get("serverName") or reality.get("serverName")
+            if sni:
+                proxy["sni"] = sni
+            if tls.get("allowInsecure") is True:
+                proxy["skip-cert-verify"] = True
+            if security == "reality":
+                proxy["reality-opts"] = {
+                    "public-key": reality.get("publicKey") or "",
+                    "short-id": (reality.get("shortId") or ""),
+                }
+        found.append(proxy)
+    return found
+
+
+def extract_client_json_proxies(text: str) -> list[dict[str, Any]]:
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    for found in (
+        extract_singbox_proxies(text),
+        extract_xray_proxies(data),
+        extract_hysteria_client(data),
+        extract_hysteria2_client(data),
+    ):
+        if found:
+            return found
+    return []
+
+
 def extract_proxies(text: str) -> list[dict[str, Any]]:
     decoded = maybe_base64_decode(text)
+    stripped = decoded.strip()
+    if stripped.startswith("{") or stripped.startswith("["):
+        return extract_client_json_proxies(decoded)
     share_uris = extract_share_uris(decoded)
     if share_uris and "proxies:" not in decoded:
         clean = []
@@ -883,6 +1293,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
             if source_found:
                 break
             url, prefer, exclude = item_spec(item, source)
+            merge_all = False
             if url.startswith("discover:rss:"):
                 candidates = discover_rss(url[len("discover:rss:"):], prefer=prefer)
             elif url.startswith("discover:url:"):
@@ -891,9 +1302,19 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                     prefer=prefer,
                     exclude=exclude,
                 )
+            elif url.startswith("discover:toolkit:"):
+                candidates = discover_toolkit(url[len("discover:toolkit:"):], prefer=prefer)
+                merge_all = True
             else:
                 candidates = [url]
+            filled_slots: set[str] = set()
+            toolkit_hits: list[tuple[str, int]] = []
             for url in unique_ordered(candidates):
+                slot = "/".join(
+                    [p for p in urlparse(url).path.lower().rstrip("/").split("/") if p][-4:]
+                )
+                if merge_all and slot in filled_slots:
+                    continue
                 try:
                     text = fetch_text(
                         url,
@@ -909,15 +1330,24 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                                     p["name"] = prefix + str(p.get("name", "")).strip()
                         source_found.extend(found)
                         used_url = url
+                        if merge_all:
+                            filled_slots.add(slot)
+                            toolkit_hits.append((url, len(found)))
+                            continue
                         break
-                    print(f"[WARN] source={source['name']} empty url={url}")
+                    if not merge_all:
+                        print(f"[WARN] source={source['name']} empty url={url}")
                 except Exception as exc:
-                    print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
-                if source_found:
+                    if not merge_all:
+                        print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
+                if source_found and not merge_all:
                     break
         if not source_found:
             print(f"[WARN] source={source['name']} no proxies")
             source_found = load_previous_source_proxies(source)
+        elif merge_all:
+            _print_toolkit_groups(toolkit_hits)
+            print(f"[OK] proxies={len(source_found)} source={source['name']}")
         elif used_url:
             print(f"[OK] proxies={len(source_found)} source={source['name']} url={used_url}")
         collected.extend(source_found)
@@ -1115,6 +1545,252 @@ def _page_stamp(text: str) -> str:
     if match:
         return f"{match.group(1)}{int(match.group(2)):02d}{int(match.group(3)):02d}"
     return "00000000"
+
+
+_ARCHIVE_EXT_RE = re.compile(
+    r"\.(?:7z|zip|rar|tar\.gz|tgz|tar)(?:$|[?#).,;\"'])",
+    re.I,
+)
+_TOOLKIT_SKIP_HOST_RE = re.compile(
+    r"7-zip\.org|sourceforge\.net/projects/sevenzip|microsoft\.com|aka\.ms",
+    re.I,
+)
+_TOOLKIT_TEXT_EXT = {
+    ".bat", ".cmd", ".txt", ".url", ".yaml", ".yml", ".json", ".md", ".ini", ".conf",
+}
+
+
+def _clean_found_url(link: str, page_url: str) -> str:
+    from urllib.parse import urljoin
+    link = html.unescape(str(link or "")).strip()
+    if link.lower().startswith("href="):
+        return ""
+    if link.startswith("/"):
+        link = urljoin(page_url, link)
+    link = link.split("#")[0].rstrip("\\").rstrip(").,;\"']")
+    if not link.startswith("http"):
+        return ""
+    if _TOOLKIT_SKIP_HOST_RE.search(link):
+        return ""
+    return link
+
+
+def _collect_archive_links(text: str, page_url: str) -> list[str]:
+    text = html.unescape(text or "")
+    found: list[str] = []
+    patterns = (
+        r"\[[^\]]*\]\((https?://[^)\s]+)\)",
+        r"href=[\"']([^\"']+)[\"']",
+        r"https?://[^\s\"'<>]+",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, text, re.I):
+            raw = match.group(1) if match.lastindex else match.group(0)
+            link = _clean_found_url(raw, page_url)
+            if not link:
+                continue
+            if _ARCHIVE_EXT_RE.search(link) or re.search(r"github\.com/.+/releases(?:/|$)", link, re.I):
+                found.append(link)
+    return unique_ordered(found)
+
+
+def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
+    match = re.search(r"github\.com/([^/]+)/([^/]+)/releases", page_url, re.I)
+    if not match:
+        return []
+    owner, repo = match.group(1), match.group(2)
+    api = f"https://api.github.com/repos/{owner}/{repo}/releases?per_page=20"
+    print(f"[INFO] toolkit try release api: {api}")
+    try:
+        data = json.loads(fetch_text(api))
+    except Exception as exc:
+        print(f"[WARN] toolkit release api failed: {exc}")
+        return []
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        return []
+    ranked: list[tuple[int, str]] = []
+    token = (prefer or "").strip().lower()
+    for release in data:
+        if not isinstance(release, dict):
+            continue
+        for item in release.get("assets") or []:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("browser_download_url") or "")
+            name = str(item.get("name") or url)
+            if not url:
+                continue
+            if not (_ARCHIVE_EXT_RE.search(name) or _ARCHIVE_EXT_RE.search(url)):
+                continue
+            blob = f"{name} {url}".lower()
+            score = 3 if token and token in blob else 1
+            ranked.append((score, url))
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return unique_ordered([url for _, url in ranked])
+
+
+def _download_archive(url: str, dest_dir: Path) -> Path | None:
+    from urllib.parse import urlparse, unquote
+    name = unquote(Path(urlparse(url).path).name) or "toolkit.bin"
+    if not _ARCHIVE_EXT_RE.search(name):
+        name = "toolkit.bin"
+    dest = dest_dir / name
+    print(f"[INFO] toolkit try download: {url}")
+    try:
+        session = requests.Session()
+        session.trust_env = False
+        session.verify = False
+        proxy_tries = [PROXIES, {}] if PROXIES else [{}]
+        last_error: Exception | None = None
+        written = 0
+        downloaded = False
+        for proxies in proxy_tries:
+            try:
+                with session.get(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=180,
+                    stream=True,
+                    verify=False,
+                    proxies=proxies,
+                ) as response:
+                    response.raise_for_status()
+                    written = 0
+                    with dest.open("wb") as handle:
+                        for chunk in response.iter_content(chunk_size=1024 * 256):
+                            if not chunk:
+                                continue
+                            handle.write(chunk)
+                            written += len(chunk)
+                            if written > 250 * 1024 * 1024:
+                                raise RuntimeError("archive larger than 250MB")
+                downloaded = True
+                break
+            except Exception as exc:
+                last_error = exc
+                dest.unlink(missing_ok=True)
+        if not downloaded:
+            raise last_error or RuntimeError("download failed")
+        print(f"[OK] toolkit downloaded: {dest.name} bytes={written}")
+        return dest
+    except Exception as exc:
+        print(f"[WARN] toolkit download failed: {url} {exc}")
+        dest.unlink(missing_ok=True)
+        return None
+
+
+def _extract_archive(archive: Path, dest_dir: Path) -> bool:
+    name = archive.name.lower()
+    try:
+        if name.endswith(".zip"):
+            import zipfile
+            with zipfile.ZipFile(archive) as zf:
+                zf.extractall(dest_dir)
+            return True
+        if name.endswith(".tar") or name.endswith(".tar.gz") or name.endswith(".tgz"):
+            import tarfile
+            with tarfile.open(archive) as tf:
+                tf.extractall(dest_dir)
+            return True
+        if name.endswith(".7z"):
+            import py7zr
+            with py7zr.SevenZipFile(archive, "r") as zf:
+                names = [
+                    item for item in zf.getnames()
+                    if Path(item).suffix.lower() in _TOOLKIT_TEXT_EXT
+                ]
+                if names:
+                    zf.extract(path=dest_dir, targets=names)
+                else:
+                    zf.extractall(path=dest_dir)
+            return True
+        if name.endswith(".rar"):
+            import rarfile
+            with rarfile.RarFile(archive) as rf:
+                rf.extractall(dest_dir)
+            return True
+        print(f"[WARN] toolkit unsupported archive: {archive.name}")
+        return False
+    except Exception as exc:
+        print(f"[WARN] toolkit extract failed: {archive.name} {exc}")
+        return False
+
+
+def _collect_toolkit_sub_urls(root: Path) -> list[str]:
+    url_re = re.compile(r"https?://[^\s\"'<>]+", re.I)
+    found: list[str] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if "win7-win8" in path.as_posix():
+            continue
+        if path.suffix.lower() not in _TOOLKIT_TEXT_EXT:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        for raw in url_re.findall(text):
+            link = raw.rstrip("\\").rstrip(").,;]")
+            if not link.startswith("http"):
+                continue
+            if _TOOLKIT_SKIP_HOST_RE.search(link):
+                continue
+            if _ARCHIVE_EXT_RE.search(link):
+                continue
+            if re.search(r"\.(?:yaml|yml|json|txt)(?:$|[?#])", link, re.I) or "/ipp/" in link or "/raw/" in link:
+                found.append(link)
+    return unique_ordered(found)
+
+
+def _toolkit_url_pattern(url: str) -> str:
+    path = urlparse(url).path
+    path = re.sub(r"/\d+(?=/)", "/*", path)
+    path = re.sub(r"/\d+$", "/*", path)
+    return path
+
+
+def _print_toolkit_groups(hits: list[tuple[str, int]]) -> None:
+    groups: dict[str, int] = {}
+    order: list[str] = []
+    for url, count in hits:
+        pat = _toolkit_url_pattern(url)
+        if pat not in groups:
+            groups[pat] = 0
+            order.append(pat)
+        groups[pat] += count
+    for pat in order:
+        print(f"[OK] proxies={groups[pat]} url=*{pat}")
+
+
+def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
+    page_url = page_url.strip()
+    print(f"[INFO] toolkit try release: {page_url}")
+    archives = unique_ordered(_expand_github_release_assets(page_url, prefer=prefer))
+    if not archives:
+        print(f"[WARN] toolkit discovery failed: no archive url")
+        return []
+    work = Path(tempfile.mkdtemp(prefix="toolkit-"))
+    try:
+        for archive_url in archives:
+            archive = _download_archive(archive_url, work)
+            if not archive:
+                continue
+            unpack = work / "unpack"
+            unpack.mkdir(exist_ok=True)
+            if not _extract_archive(archive, unpack):
+                continue
+            urls = _collect_toolkit_sub_urls(unpack)
+            if urls:
+                print(f"[OK] toolkit discovered subs={len(urls)} archive={archive.name}")
+                return urls
+            print(f"[WARN] toolkit empty subs: {archive.name}")
+        print(f"[WARN] toolkit discovery failed: {page_url}")
+        return []
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def discover_rss(feed_url: str, prefer: str = "") -> list[str]:
