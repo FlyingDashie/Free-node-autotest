@@ -1664,8 +1664,6 @@ def _download_archive(url: str, dest_dir: Path) -> Path | None:
                                 continue
                             handle.write(chunk)
                             written += len(chunk)
-                            if written > 250 * 1024 * 1024:
-                                raise RuntimeError("archive larger than 250MB")
                 downloaded = True
                 break
             except Exception as exc:
