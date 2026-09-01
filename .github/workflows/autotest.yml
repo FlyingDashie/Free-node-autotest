@@ -47,7 +47,7 @@ jobs:
           INV=$((999999999999 - 10#$RUN_DATE$RUN_HM))
           echo "RUN_TIME=$RUN_TIME" >> $GITHUB_ENV
           echo "INV=$INV" >> $GITHUB_ENV
-          python generator-github.py 2>&1 | tee "history/"$INV"-run-"$RUN_TIME".log"
+          python generator-github.py 2>&1 | tee "history/"$INV"-log-"$RUN_TIME".log"
           if [ ! -f output/clash.yaml ]; then
             echo "生成失败，output/clash.yaml 不存在"
             exit 1
@@ -72,11 +72,11 @@ jobs:
           import re
 
           hist = Path("history")
-          target_re = re.compile(r"^\d+-(?:run|clash|raw)-\d{4}-20\d{6}\.(?:log|yaml)$")
+          target_re = re.compile(r"^\d+-(?:run|log|clash|raw)-\d{4}-20\d{6}\.(?:log|yaml)$")
           patterns = [
-              re.compile(r"^(?P<inv>\d+)-(?P<date>20\d{6})-(?P<hm>\d{4})-(?P<kind>run|clash|raw)\.(?P<ext>log|yaml)$"),
-              re.compile(r"^(?P<inv>\d+)-(?P<kind>run|clash|raw)-(?P<date>20\d{6})-(?P<hm>\d{4})\.(?P<ext>log|yaml)$"),
-              re.compile(r"^(?P<kind>run|clash|raw)-(?P<date>20\d{6})-(?P<hm>\d{4})\.(?P<ext>log|yaml)$"),
+              re.compile(r"^(?P<inv>\d+)-(?P<date>20\d{6})-(?P<hm>\d{4})-(?P<kind>run|log|clash|raw)\.(?P<ext>log|yaml)$"),
+              re.compile(r"^(?P<inv>\d+)-(?P<kind>run|log|clash|raw)-(?P<date>20\d{6})-(?P<hm>\d{4})\.(?P<ext>log|yaml)$"),
+              re.compile(r"^(?P<kind>run|log|clash|raw)-(?P<date>20\d{6})-(?P<hm>\d{4})\.(?P<ext>log|yaml)$"),
           ]
           if hist.is_dir():
               for p in list(hist.iterdir()):
@@ -113,13 +113,10 @@ jobs:
           removed = []
 
           def history_file_stamp(name):
-              match = re.search(r"-(?:run|clash|raw)-(\d{4})-(20\d{6})\.(?:log|yaml)$", name)
+              match = re.search(r"(\d{4})-(20\d{6})", name)
               if match:
                   return match.group(2) + match.group(1)
-              match = re.search(r"-(?:run|clash|raw)-(20\d{6})-(\d{4})\.(?:log|yaml)$", name)
-              if match:
-                  return match.group(1) + match.group(2)
-              match = re.search(r"-(20\d{6})-(\d{4})-(?:run|clash|raw)\.(?:log|yaml)$", name)
+              match = re.search(r"(20\d{6})-(\d{4})", name)
               if match:
                   return match.group(1) + match.group(2)
               return ""
