@@ -47,7 +47,7 @@ jobs:
           INV=$((999999999999 - 10#$RUN_DATE$RUN_HM))
           echo "RUN_TIME=$RUN_TIME" >> $GITHUB_ENV
           echo "INV=$INV" >> $GITHUB_ENV
-          python generator-github.py 2>&1 | tee "history/"$INV"-log-"$RUN_TIME".log"
+          python -u generator-github.py 2>&1 | tee "history/"$INV"-log-"$RUN_TIME".log"
           if [ ! -f output/clash.yaml ]; then
             echo "生成失败，output/clash.yaml 不存在"
             exit 1
