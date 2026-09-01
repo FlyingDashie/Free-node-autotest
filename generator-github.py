@@ -261,7 +261,7 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点9-2] ",
     },
     {
-"name": "Clashfree",
+        "name": "Clashfree",
         "primary": "discover:url:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
         "fallbacks": [
             {
