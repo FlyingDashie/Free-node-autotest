@@ -264,6 +264,7 @@ SOURCE_GROUPS = [
         "name": "Clashfree",
         "primary": "discover:url:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
         "fallbacks": [
+            "discover:url:https://github.com/free-nodes/v2rayfree",
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         ],
         "prefix": "[Clashfree] ",
