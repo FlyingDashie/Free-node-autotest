@@ -1569,13 +1569,10 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
 
 
 def history_file_stamp(name: str) -> str:
-    match = re.search(r"-(?:run|clash|raw)-(\d{4})-(20\d{6})\.(?:log|yaml)$", name)
+    match = re.search(r"(\d{4})-(20\d{6})", name)
     if match:
-        return match.group(2) + match.group(1)
-    match = re.search(r"-(?:run|clash|raw)-(20\d{6})-(\d{4})\.(?:log|yaml)$", name)
-    if match:
-        return match.group(1) + match.group(2)
-    match = re.search(r"-(20\d{6})-(\d{4})-(?:run|clash|raw)\.(?:log|yaml)$", name)
+       return match.group(2) + match.group(1)
+    match = re.search(r"(20\d{6})-(\d{4})", name)
     if match:
         return match.group(1) + match.group(2)
     return ""
