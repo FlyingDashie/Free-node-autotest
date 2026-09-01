@@ -76,19 +76,19 @@ SOURCE_GROUPS = [
         "prefix": "[大FQ运动-补充] ",
     },
     {
-        "name": "Chromego-工具包",
+        "name": "ChromeGO-工具包",
         "primary": "discover:toolkit:https://github.com/bannedbook/fanqiang/releases",
         "fallbacks": [],
         "prefer": "ChromeGo",
-        "prefix": "[Chromego-工具包] ",
+        "prefix": "[ChromeGO-工具包] ",
     },
     {
-        "name": "Chromego-ShiteThings",
+        "name": "ChromeGO-ShiteThings",
         "primary": "discover:url:https://raw.githubusercontent.com/ShiteThings/extractNodes/refs/heads/main/README.md",
         "fallbacks": [
             "https://chg26.makou.cc.cd/",
         ],
-        "prefix": "[Chromego-ShiteThings] ",
+        "prefix": "[ChromeGO-ShiteThings] ",
     },
     {
         "name": "ChromeGO-Merge",
