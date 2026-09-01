@@ -1789,7 +1789,11 @@ def _toolkit_url_pattern(url: str) -> str:
     path = parsed.path
     path = re.sub(r"/\d+(?=/)", "/*", path)
     path = re.sub(r"/\d+$", "/*", path)
-    return path or "/"
+    host = parsed.netloc
+    scheme = parsed.scheme or "https"
+    if host:
+        return f"{scheme}://{host}{path}"
+    return path or url
 
 
 def _print_toolkit_groups(hits: list[tuple[str, int]]) -> None:
@@ -1805,7 +1809,7 @@ def _print_toolkit_groups(hits: list[tuple[str, int]]) -> None:
         if pat.startswith("embedded:"):
             print(f"[OK] proxies={groups[pat]} embedded=archive-config")
         else:
-            print(f"[OK] proxies={groups[pat]} url=*{pat}")
+            print(f"[OK] proxies={groups[pat]} url={pat}")
 
 
 def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
