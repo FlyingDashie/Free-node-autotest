@@ -267,6 +267,7 @@ SOURCE_GROUPS = [
             "discover:url:https://github.com/free-nodes/v2rayfree",
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         ],
+        "prefer": "订阅地址",
         "prefix": "[Clashfree] ",
     },
     {
