@@ -1737,8 +1737,6 @@ def _collect_toolkit_sub_urls(root: Path) -> list[str]:
     for path in root.rglob("*"):
         if not path.is_file():
             continue
-        if "win7-win8" in path.as_posix():
-            continue
         if path.suffix.lower() not in _TOOLKIT_TEXT_EXT:
             continue
         try:
@@ -1762,8 +1760,6 @@ def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
     for path in root.rglob("*"):
         if not path.is_file():
-            continue
-        if "win7-win8" in path.as_posix():
             continue
         if path.suffix.lower() not in _TOOLKIT_CONFIG_EXT:
             continue
