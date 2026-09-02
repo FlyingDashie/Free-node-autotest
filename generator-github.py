@@ -849,7 +849,6 @@ def _iter_json_values(text: str, nested: bool = False) -> list[Any]:
     values: list[Any] = []
     index = 0
     length = len(stripped)
-    step = 1 if nested else None
     while index < length:
         while index < length and stripped[index] not in "{[":
             index += 1
@@ -905,33 +904,32 @@ def extract_client_json_proxies(text: str) -> list[dict[str, Any]]:
 def extract_proxies(text: str) -> list[dict[str, Any]]:
     decoded = maybe_base64_decode(text)
     stripped = decoded.strip()
+    proxies: list[Any] = []
     if stripped.startswith("{") or stripped.startswith("["):
-        return extract_client_json_proxies(decoded)
-    share_uris = extract_share_uris(decoded)
-    if share_uris and "proxies:" not in decoded:
-        clean = []
-        for uri in share_uris:
-            parsed = parse_share_uri(uri)
-            if parsed:
-                clean.append(parsed)
-        return clean
-
-    document = load_yaml_document(decoded)
-    if isinstance(document, dict):
-        proxies = document.get("proxies", [])
-    elif isinstance(document, list):
-        proxies = document
+        proxies = extract_client_json_proxies(decoded)
     else:
-        proxies = []
-
-    if not proxies:
-        proxies = extract_proxy_block(decoded)
+        share_uris = extract_share_uris(decoded)
+        if share_uris and "proxies:" not in decoded:
+            clean = []
+            for uri in share_uris:
+                parsed = parse_share_uri(uri)
+                if parsed:
+                    clean.append(parsed)
+            return clean
+        document = load_yaml_document(decoded)
+        if isinstance(document, dict):
+            proxies = document.get("proxies", [])
+        elif isinstance(document, list):
+            proxies = document
+        else:
+            proxies = []
+        if not proxies:
+            proxies = extract_proxy_block(decoded)
 
     clean: list[dict[str, Any]] = []
     for proxy in proxies:
         if isinstance(proxy, dict):
             clean.append(dict(proxy))
-
     for uri in extract_share_uris(decoded):
         parsed = parse_share_uri(uri)
         if parsed:
