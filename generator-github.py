@@ -649,16 +649,7 @@ def convert_singbox_outbound(item: dict[str, Any]) -> dict[str, Any] | None:
     return proxy
 
 
-def extract_singbox_proxies(text: str) -> list[dict[str, Any]]:
-    stripped = text.strip()
-    if not stripped.startswith("{") or "outbounds" not in stripped:
-        return []
-    try:
-        data = json.loads(stripped)
-    except Exception:
-        return []
-    if not isinstance(data, dict):
-        return []
+def extract_singbox_from_data(data: dict[str, Any]) -> list[dict[str, Any]]:
     outbounds = data.get("outbounds")
     if not isinstance(outbounds, list):
         return []
@@ -669,6 +660,14 @@ def extract_singbox_proxies(text: str) -> list[dict[str, Any]]:
         proxy = convert_singbox_outbound(item)
         if proxy:
             found.append(proxy)
+    return found
+
+
+def extract_singbox_proxies(text: str) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    for value in _iter_json_values(text):
+        if isinstance(value, dict):
+            found.extend(extract_singbox_from_data(value))
     return found
 
 
@@ -902,22 +901,57 @@ def extract_xray_proxies(data: dict[str, Any]) -> list[dict[str, Any]]:
     return found
 
 
-def extract_client_json_proxies(text: str) -> list[dict[str, Any]]:
-    try:
-        data = json.loads(text)
-    except Exception:
+def _iter_json_values(text: str) -> list[Any]:
+    stripped = str(text or "").strip()
+    if not stripped:
         return []
+    try:
+        return [json.loads(stripped)]
+    except Exception:
+        pass
+    decoder = json.JSONDecoder()
+    values: list[Any] = []
+    index = 0
+    length = len(stripped)
+    while index < length:
+        while index < length and stripped[index] not in "{[":
+            index += 1
+        if index >= length:
+            break
+        try:
+            value, end = decoder.raw_decode(stripped, index)
+        except Exception:
+            index += 1
+            continue
+        values.append(value)
+        index = max(end, index + 1)
+    return values
+
+
+def _proxies_from_json_value(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        found: list[dict[str, Any]] = []
+        for item in data:
+            found.extend(_proxies_from_json_value(item))
+        return found
     if not isinstance(data, dict):
         return []
-    for found in (
-        extract_singbox_proxies(text),
+    for extracted in (
+        extract_singbox_from_data(data),
         extract_xray_proxies(data),
         extract_hysteria_client(data),
         extract_hysteria2_client(data),
     ):
-        if found:
-            return found
+        if extracted:
+            return extracted
     return []
+
+
+def extract_client_json_proxies(text: str) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    for value in _iter_json_values(text):
+        found.extend(_proxies_from_json_value(value))
+    return found
 
 
 def extract_proxies(text: str) -> list[dict[str, Any]]:
