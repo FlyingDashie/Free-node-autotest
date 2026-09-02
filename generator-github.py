@@ -1827,20 +1827,21 @@ def _toolkit_format_group(urls: list[str]) -> str:
         head = parts[: max(0, len(parts) - len(tail))]
         prefixes.append([item.netloc, *head])
     shared: list[str] = []
-    while prefixes and all(item and item[-1] == prefixes[0][-1] for item in prefixes):
-        shared.insert(0, prefixes[0][-1])
-        for item in prefixes:
-            item.pop()
+    if len(prefixes) >= 2:
+        while prefixes and all(len(item) > 1 and item[-1] == prefixes[0][-1] for item in prefixes):
+            shared.insert(0, prefixes[0][-1])
+            for item in prefixes:
+                item.pop()
     unique_prefix = ["/".join(item) for item in prefixes if item]
     unique_prefix = list(dict.fromkeys(unique_prefix))
     if len(unique_prefix) <= 1:
         origin = "https://" + (unique_prefix[0] if unique_prefix else "")
     else:
         origin = "https://{" + "|".join(unique_prefix) + "}"
-    rest = shared + rendered
-    if rest:
-        return origin.rstrip("/") + "/" + "/".join(rest)
-    return origin
+    rest = [part for part in (shared + rendered) if part]
+    if rest and origin:
+        return origin + "/" + "/".join(rest)
+    return origin or "/".join(rest)
 
 
 def _print_toolkit_groups(hits: list[tuple[str, int]]) -> None:
