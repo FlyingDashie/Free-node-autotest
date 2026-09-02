@@ -1309,7 +1309,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                 merge_all = True
             else:
                 candidates = [url]
-            filled_slots: set[str] = set()
             toolkit_hits: list[tuple[str, int]] = []
             if merge_all and _TOOLKIT_EMBEDDED:
                 prefix = source.get("prefix", "")
@@ -1322,11 +1321,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                 source_found.extend(local_nodes)
                 toolkit_hits.append(("embedded://archive-config", len(local_nodes)))
             for url in unique_ordered(candidates):
-                slot = "/".join(
-                    [p for p in urlparse(url).path.lower().rstrip("/").split("/") if p][-4:]
-                )
-                if merge_all and slot in filled_slots:
-                    continue
                 try:
                     text = fetch_text(
                         url,
@@ -1343,7 +1337,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                         source_found.extend(found)
                         used_url = url
                         if merge_all:
-                            filled_slots.add(slot)
                             toolkit_hits.append((url, len(found)))
                             continue
                         break
