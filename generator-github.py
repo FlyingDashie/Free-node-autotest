@@ -2173,8 +2173,10 @@ def select_mihomo_asset() -> tuple[str, str]:
 
     if system == "darwin":
         os_token = "darwin"
-    elif system in {"android", "linux"}:
-        os_token = "android" if system == "android" else "linux"
+    elif system == "android":
+        os_token = "android"
+    elif system == "linux":
+        os_token = "linux"
     elif system == "windows":
         os_token = "windows"
     else:
