@@ -1770,7 +1770,7 @@ def _collect_toolkit_sub_urls(root: Path) -> list[str]:
             if re.search(r"\.(?:yaml|yml|json|txt)(?:$|[?#])", link, re.I):
                 found.append(link)
                 continue
-            if "raw.githubusercontent.com" in host or "/-/raw/" in path or "/raw/" in path:
+            if "raw.githubusercontent.com" in host or "/raw/" in path:
                 found.append(link)
     return unique_ordered(found)
 
