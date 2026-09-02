@@ -1328,6 +1328,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
                         user_agent=str(source.get("user_agent") or ""),
                         referer=str(source.get("Referer") or ""),
                     )
+                    head = str(text).lstrip()[:64].lower()
+                    if merge_all and head.startswith(("<!", "<html", "<head", "<title")):
+                        continue
                     found = extract_proxies(text)
                     if found:
                         prefix = source.get("prefix", "")
@@ -1560,7 +1563,9 @@ _ARCHIVE_EXT_RE = re.compile(
     re.I,
 )
 _TOOLKIT_SKIP_HOST_RE = re.compile(
-    r"7-zip\.org|sourceforge\.net/projects/sevenzip|microsoft\.com|aka\.ms",
+    r"7-zip\.org|sourceforge\.net/projects/sevenzip|microsoft\.com|aka\.ms|"
+    r"apps\.apple\.com|itunes\.apple\.com|"
+    r"(?:^|//)(?:www\.)?(?:t\.me|telegram\.(?:me|org)|youtube\.com|youtu\.be)/",
     re.I,
 )
 _TOOLKIT_TEXT_EXT = {
@@ -1747,7 +1752,21 @@ def _collect_toolkit_sub_urls(root: Path) -> list[str]:
                 continue
             if _ARCHIVE_EXT_RE.search(link):
                 continue
-            if re.search(r"\.(?:yaml|yml|json|txt)(?:$|[?#])", link, re.I) or "/ipp/" in link or "/raw/" in link:
+            parsed = urlparse(link)
+            host = parsed.netloc.lower()
+            path = parsed.path.lower()
+            if host in {"github.com", "www.github.com"} and "/raw/" not in path:
+                continue
+            if re.search(
+                r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|exe|dmg|apk|msi|iso|md)(?:$|[?#])",
+                link,
+                re.I,
+            ):
+                continue
+            if re.search(r"\.(?:yaml|yml|json|txt)(?:$|[?#])", link, re.I):
+                found.append(link)
+                continue
+            if "raw.githubusercontent.com" in host or "/-/raw/" in path or "/raw/" in path:
                 found.append(link)
     return unique_ordered(found)
 
@@ -1780,10 +1799,7 @@ def _toolkit_path_parts(path: str) -> list[str]:
 
 def _toolkit_tail_parts(path: str) -> list[str]:
     parts = _toolkit_path_parts(path)
-    for index, part in enumerate(parts):
-        if part.lower() in ("backup", "img"):
-            return parts[index:]
-    return parts
+    return parts[-6:] if len(parts) > 6 else parts
 
 
 def _toolkit_merge_key(url: str) -> tuple[str, ...]:
@@ -1792,10 +1808,8 @@ def _toolkit_merge_key(url: str) -> tuple[str, ...]:
     key: list[str] = []
     for part in _toolkit_tail_parts(urlparse(url).path):
         lower = part.lower()
-        if part.isdigit():
+        if part.isdigit() or (len(lower) <= 3 and "." not in lower):
             key.append("#")
-        elif lower in ("ip", "ipp"):
-            key.append("IP")
         else:
             key.append(lower)
     return tuple(key)
@@ -1814,8 +1828,8 @@ def _toolkit_format_group(urls: list[str]) -> str:
         unique = list(dict.fromkeys(values))
         if len(unique) == 1:
             rendered.append(unique[0])
-        elif unique and all(item.lower() in ("ip", "ipp") for item in unique):
-            ordered = [name for name in ("ipp", "ip") if any(item.lower() == name for item in unique)]
+        elif unique and all(item.isdigit() or (len(item) <= 3 and "." not in item) for item in unique):
+            ordered = list(dict.fromkeys(unique))
             rendered.append("{" + "|".join(ordered) + "}")
         elif unique and all(item.isdigit() for item in unique):
             rendered.append("{" + "|".join(sorted(unique, key=int)) + "}")
