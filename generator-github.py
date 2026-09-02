@@ -2907,8 +2907,6 @@ def print_source_live_stats(
         b = unique.get(key, 0)
         c = raw_live.get(key, 0)
         d = capped.get(key, 0)
-        if a == 0 and b == 0 and c == 0 and d == 0:
-            continue
         rows.append((key, a, b, c, d))
     if not rows:
         return
