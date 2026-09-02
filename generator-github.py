@@ -1771,34 +1771,88 @@ def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
     return found
 
 
-def _toolkit_url_pattern(url: str) -> str:
+def _toolkit_path_parts(path: str) -> list[str]:
+    return [p for p in str(path or "").split("/") if p]
+
+
+def _toolkit_tail_parts(path: str) -> list[str]:
+    parts = _toolkit_path_parts(path)
+    for index, part in enumerate(parts):
+        if part.lower() in ("backup", "img"):
+            return parts[index:]
+    return parts
+
+
+def _toolkit_merge_key(url: str) -> tuple[str, ...]:
     if str(url).startswith("embedded:"):
-        return "embedded:archive-config"
-    parsed = urlparse(url)
-    path = parsed.path
-    path = re.sub(r"/\d+(?=/)", "/*", path)
-    path = re.sub(r"/\d+$", "/*", path)
-    host = parsed.netloc
-    scheme = parsed.scheme or "https"
-    if host:
-        return f"{scheme}://{host}{path}"
-    return path or url
+        return ("embedded",)
+    key: list[str] = []
+    for part in _toolkit_tail_parts(urlparse(url).path):
+        lower = part.lower()
+        if part.isdigit():
+            key.append("#")
+        elif lower in ("ip", "ipp"):
+            key.append("IP")
+        else:
+            key.append(lower)
+    return tuple(key)
+
+
+def _toolkit_format_group(urls: list[str]) -> str:
+    parsed = [urlparse(item) for item in urls]
+    tails = [_toolkit_tail_parts(item.path) for item in parsed]
+    width = max((len(tail) for tail in tails), default=0)
+    rendered: list[str] = []
+    for index in range(width):
+        values: list[str] = []
+        for tail in tails:
+            if index < len(tail):
+                values.append(tail[index])
+        unique = list(dict.fromkeys(values))
+        if len(unique) == 1:
+            rendered.append(unique[0])
+        elif unique and all(item.lower() in ("ip", "ipp") for item in unique):
+            ordered = [name for name in ("ipp", "ip") if any(item.lower() == name for item in unique)]
+            rendered.append("{" + "|".join(ordered) + "}")
+        elif unique and all(item.isdigit() for item in unique):
+            rendered.append("{" + "|".join(sorted(unique, key=int)) + "}")
+        else:
+            rendered.append("{" + "|".join(unique) + "}")
+    prefixes: list[str] = []
+    for item, tail in zip(parsed, tails):
+        parts = _toolkit_path_parts(item.path)
+        head = parts[: max(0, len(parts) - len(tail))]
+        prefix = item.netloc
+        if head:
+            prefix += "/" + "/".join(head)
+        prefixes.append(prefix)
+    unique_prefix = list(dict.fromkeys(prefixes))
+    if len(unique_prefix) == 1:
+        origin = f"https://{unique_prefix[0]}"
+    else:
+        origin = "https://{" + "|".join(unique_prefix) + "}"
+    if rendered:
+        return origin + "/" + "/".join(rendered)
+    return origin
 
 
 def _print_toolkit_groups(hits: list[tuple[str, int]]) -> None:
-    groups: dict[str, int] = {}
-    order: list[str] = []
+    buckets: dict[tuple[str, ...], list[tuple[str, int]]] = {}
+    order: list[tuple[str, ...]] = []
     for url, count in hits:
-        pat = _toolkit_url_pattern(url)
-        if pat not in groups:
-            groups[pat] = 0
-            order.append(pat)
-        groups[pat] += count
-    for pat in order:
-        if pat.startswith("embedded:"):
-            print(f"[OK] proxies={groups[pat]} embedded=archive-config")
-        else:
-            print(f"[OK] proxies={groups[pat]} url={pat}")
+        key = _toolkit_merge_key(url)
+        if key not in buckets:
+            buckets[key] = []
+            order.append(key)
+        buckets[key].append((url, count))
+    for key in order:
+        rows = buckets[key]
+        total = sum(count for _, count in rows)
+        if key == ("embedded",):
+            print(f"[OK] proxies={total} embedded=archive-config")
+            continue
+        label = _toolkit_format_group([url for url, _ in rows])
+        print(f"[OK] proxies={total} url={label}")
 
 
 def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
