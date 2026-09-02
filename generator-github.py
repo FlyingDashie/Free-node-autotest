@@ -1542,9 +1542,6 @@ def _collect_article_links(text: str, page_url: str) -> list[str]:
     return unique_ordered(found)
 
 
-
-
-
 def _page_stamp(text: str) -> str:
     match = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", text)
     if match:
@@ -1569,9 +1566,16 @@ _TOOLKIT_SKIP_HOST_RE = re.compile(
     re.I,
 )
 _TOOLKIT_TEXT_EXT = {
-    ".bat", ".cmd", ".txt", ".url", ".yaml", ".yml", ".json", ".md", ".ini", ".conf",
+    ".bat", ".cmd", ".ps1", ".psm1",
+    ".sh", ".bash", ".zsh", ".fish", ".command",
+    ".txt", ".url", ".md", ".ini", ".conf", ".cfg", ".config",
+    ".yaml", ".yml", ".json", ".toml", ".xml", ".plist",
+    ".list", ".sub", ".csv",
 }
-_TOOLKIT_CONFIG_EXT = {".yaml", ".yml", ".json", ".txt"}
+_TOOLKIT_CONFIG_EXT = {
+    ".yaml", ".yml", ".json", ".txt", ".md",
+    ".conf", ".cfg", ".list", ".sub",
+}
 _TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
 _YAML_WARN_SILENT = False
 
