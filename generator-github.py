@@ -50,6 +50,7 @@ SOURCE_GROUPS = [
         "name": "大FQ运动",
         "primary": "discover:url:https://end-gfw.com/",
         "fallbacks": [
+            "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
             "discover:url:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
         ],
