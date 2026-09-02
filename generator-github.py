@@ -2173,8 +2173,8 @@ def select_mihomo_asset() -> tuple[str, str]:
 
     if system == "darwin":
         os_token = "darwin"
-    elif system == "linux":
-        os_token = "linux"
+    elif system in {"android", "linux"}:
+        os_token = "android" if system == "android" else "linux"
     elif system == "windows":
         os_token = "windows"
     else:
@@ -2182,8 +2182,10 @@ def select_mihomo_asset() -> tuple[str, str]:
 
     if machine in {"x86_64", "amd64"}:
         arch_tokens = ["amd64"]
-    elif machine in {"arm64", "aarch64"}:
-        arch_tokens = ["arm64"]
+    elif machine in {"arm64", "aarch64", "armv8l", "armv8"}:
+        arch_tokens = ["arm64-v8", "arm64"]
+    elif machine in {"armv7l", "armv7", "arm"}:
+        arch_tokens = ["armv7", "armv6"]
     else:
         raise RuntimeError(f"unsupported architecture for Mihomo download: {machine}")
 
