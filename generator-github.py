@@ -1597,38 +1597,57 @@ def _collect_archive_links(text: str, page_url: str) -> list[str]:
 
 
 def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
-    match = re.search(r"github\.com/([^/]+)/([^/]+)/releases", page_url, re.I)
+    match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
     if not match:
         return []
     owner, repo = match.group(1), match.group(2)
-    api = f"https://api.github.com/repos/{owner}/{repo}/releases?per_page=20"
-    print(f"[INFO] toolkit try release api: {api}")
-    try:
-        data = json.loads(fetch_text(api))
-    except Exception as exc:
-        print(f"[WARN] toolkit release api failed: {exc}")
-        return []
-    if isinstance(data, dict):
-        data = [data]
-    if not isinstance(data, list):
-        return []
-    ranked: list[tuple[int, str]] = []
     token = (prefer or "").strip().lower()
-    for release in data:
-        if not isinstance(release, dict):
+    list_url = f"https://github.com/{owner}/{repo}/releases"
+    print(f"[INFO] toolkit try page: {list_url}")
+    try:
+        listing = fetch_text(list_url)
+    except Exception as exc:
+        print(f"[WARN] toolkit page failed: {list_url} {exc}")
+        listing = ""
+    tags: list[tuple[int, str]] = []
+    seen_tags: set[str] = set()
+    tag_match = re.search(r"/releases/tag/([^/?#\"']+)", page_url, re.I)
+    if tag_match:
+        tags.append((9, unquote(tag_match.group(1))))
+        seen_tags.add(tag_match.group(1))
+    for found in re.finditer(r"/releases/tag/([^/?#\"']+)", listing, re.I):
+        tag = unquote(found.group(1))
+        if tag in seen_tags:
             continue
-        for item in release.get("assets") or []:
-            if not isinstance(item, dict):
+        seen_tags.add(tag)
+        score = 5 if token and token.lower() in tag.lower() else 1
+        tags.append((score, tag))
+    if "latest" not in seen_tags:
+        tags.append((4 if token else 1, "latest"))
+    tags.sort(key=lambda item: item[0], reverse=True)
+    ranked: list[tuple[int, str]] = []
+    seen: set[str] = set()
+    for _, tag in tags:
+        asset_page = f"https://github.com/{owner}/{repo}/releases/expanded_assets/{tag}"
+        print(f"[INFO] toolkit try page: {asset_page}")
+        try:
+            body = fetch_text(asset_page)
+        except Exception as exc:
+            print(f"[WARN] toolkit page failed: {asset_page} {exc}")
+            continue
+        for link in _collect_archive_links(body, asset_page):
+            lower = link.lower()
+            if "/releases/download/" not in lower:
                 continue
-            url = str(item.get("browser_download_url") or "")
-            name = str(item.get("name") or url)
-            if not url:
+            if not _ARCHIVE_EXT_RE.search(link):
                 continue
-            if not (_ARCHIVE_EXT_RE.search(name) or _ARCHIVE_EXT_RE.search(url)):
+            if link in seen:
                 continue
-            blob = f"{name} {url}".lower()
-            score = 3 if token and token in blob else 1
-            ranked.append((score, url))
+            seen.add(link)
+            score = 3 if token and token in lower else 1
+            ranked.append((score, link))
+        if ranked:
+            break
     ranked.sort(key=lambda item: item[0], reverse=True)
     return unique_ordered([url for _, url in ranked])
 
@@ -1695,6 +1714,16 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                 tf.extractall(dest_dir)
             return True
         if name.endswith(".7z"):
+            seven = shutil.which("7z") or shutil.which("7za") or shutil.which("7zz")
+            if seven:
+                result = subprocess.run(
+                    [seven, "x", str(archive), f"-o{dest_dir}", "-y"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    return True
+                raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "7z failed")
             import py7zr
             with py7zr.SevenZipFile(archive, "r") as zf:
                 names = [
