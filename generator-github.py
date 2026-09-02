@@ -616,9 +616,17 @@ def convert_singbox_outbound(item: dict[str, Any]) -> dict[str, Any] | None:
             if flow:
                 proxy["flow"] = flow
     elif mapped in {"trojan", "hysteria", "hysteria2", "tuic"}:
-        password = item.get("password") or item.get("uuid")
+        password = item.get("password") or item.get("uuid") or item.get("auth_str") or item.get("auth")
         if password:
-            proxy["password"] = password
+            if mapped == "hysteria":
+                proxy["auth-str"] = password
+            else:
+                proxy["password"] = password
+        if mapped == "hysteria":
+            if item.get("up_mbps") or item.get("up"):
+                proxy["up"] = item.get("up_mbps") or item.get("up")
+            if item.get("down_mbps") or item.get("down"):
+                proxy["down"] = item.get("down_mbps") or item.get("down")
         if mapped == "hysteria2" and item.get("obfs"):
             obfs = item["obfs"]
             if isinstance(obfs, dict):
@@ -740,78 +748,6 @@ def extract_hysteria2_client(data: dict[str, Any]) -> list[dict[str, Any]]:
     if bw.get("down"):
         proxy["down"] = bw.get("down")
     return [proxy]
-
-
-def extract_juicity_client(data: dict[str, Any]) -> list[dict[str, Any]]:
-    if not data.get("uuid") or not data.get("server"):
-        return []
-    if "profiles" in data or "outbounds" in data:
-        return []
-    hp = _split_host_port(str(data.get("server") or ""))
-    if not hp:
-        return []
-    host, port = hp
-    proxy: dict[str, Any] = {
-        "name": "juicity",
-        "type": "juicity",
-        "server": host,
-        "port": port,
-        "uuid": data.get("uuid"),
-        "password": data.get("password") or "",
-    }
-    if data.get("sni"):
-        proxy["sni"] = data.get("sni")
-    if data.get("allow_insecure") is True:
-        proxy["skip-cert-verify"] = True
-    if data.get("congestion_control"):
-        proxy["congestion-controller"] = data.get("congestion_control")
-    return [proxy]
-
-
-def extract_naive_client(data: dict[str, Any]) -> list[dict[str, Any]]:
-    proxy_url = str(data.get("proxy") or "")
-    if "://" not in proxy_url:
-        return []
-    parsed = urlparse(proxy_url)
-    if not parsed.hostname:
-        return []
-    return [{
-        "name": "naive",
-        "type": "naive",
-        "server": parsed.hostname,
-        "port": int(parsed.port or 443),
-        "username": unquote(parsed.username or ""),
-        "password": unquote(parsed.password or ""),
-    }]
-
-
-def extract_mieru_client(data: dict[str, Any]) -> list[dict[str, Any]]:
-    profiles = data.get("profiles")
-    if not isinstance(profiles, list):
-        return []
-    found: list[dict[str, Any]] = []
-    for profile in profiles:
-        if not isinstance(profile, dict):
-            continue
-        user = profile.get("user") if isinstance(profile.get("user"), dict) else {}
-        servers = profile.get("servers") if isinstance(profile.get("servers"), list) else []
-        for server in servers:
-            if not isinstance(server, dict):
-                continue
-            host = server.get("ipAddress") or server.get("domainName") or server.get("ip")
-            port = server.get("port") or server.get("portRange")
-            if not host or not port:
-                continue
-            port_text = str(port).split("-")[0]
-            found.append({
-                "name": str(profile.get("profileName") or "mieru"),
-                "type": "socks5",
-                "server": str(host),
-                "port": int(port_text),
-                "username": user.get("name") or "",
-                "password": user.get("password") or "",
-            })
-    return found
 
 
 def extract_xray_proxies(data: dict[str, Any]) -> list[dict[str, Any]]:
