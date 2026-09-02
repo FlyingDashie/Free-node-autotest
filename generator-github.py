@@ -1603,7 +1603,8 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
     owner, repo = match.group(1), match.group(2)
     token = (prefer or "").strip().lower()
     list_url = f"https://github.com/{owner}/{repo}/releases"
-    print(f"[INFO] toolkit try page: {list_url}")
+    if list_url.rstrip("/") != page_url.rstrip("/"):
+        print(f"[INFO] toolkit try page: {list_url}")
     try:
         listing = fetch_text(list_url)
     except Exception as exc:
