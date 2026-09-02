@@ -1818,21 +1818,25 @@ def _toolkit_format_group(urls: list[str]) -> str:
             rendered.append("{" + "|".join(sorted(unique, key=int)) + "}")
         else:
             rendered.append("{" + "|".join(unique) + "}")
-    prefixes: list[str] = []
+    prefixes: list[list[str]] = []
     for item, tail in zip(parsed, tails):
         parts = _toolkit_path_parts(item.path)
         head = parts[: max(0, len(parts) - len(tail))]
-        prefix = item.netloc
-        if head:
-            prefix += "/" + "/".join(head)
-        prefixes.append(prefix)
-    unique_prefix = list(dict.fromkeys(prefixes))
-    if len(unique_prefix) == 1:
-        origin = f"https://{unique_prefix[0]}"
+        prefixes.append([item.netloc, *head])
+    shared: list[str] = []
+    while prefixes and all(item and item[-1] == prefixes[0][-1] for item in prefixes):
+        shared.insert(0, prefixes[0][-1])
+        for item in prefixes:
+            item.pop()
+    unique_prefix = ["/".join(item) for item in prefixes if item]
+    unique_prefix = list(dict.fromkeys(unique_prefix))
+    if len(unique_prefix) <= 1:
+        origin = "https://" + (unique_prefix[0] if unique_prefix else "")
     else:
         origin = "https://{" + "|".join(unique_prefix) + "}"
-    if rendered:
-        return origin + "/" + "/".join(rendered)
+    rest = shared + rendered
+    if rest:
+        return origin.rstrip("/") + "/" + "/".join(rest)
     return origin
 
 
