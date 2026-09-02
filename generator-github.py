@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import gzip
 import hashlib
+import html
 import json
 import os
 import platform
@@ -21,8 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-import html
-from urllib.parse import quote, unquote, urlparse, parse_qs
+from urllib.parse import parse_qs, quote, unquote, urlparse
+
 import requests
 import urllib3
 import yaml
@@ -168,8 +169,8 @@ SOURCE_GROUPS = [
         "name": "Bocchi2b-Base64",
         "primary": "https://links.bocchi2b.top/clash",
         "fallbacks": [],
-        "prefix": "[Bocchi2b-Base64] ",
         "user_agent": "Chrome",
+        "prefix": "[Bocchi2b-Base64] ",
     },
     {
         "name": "V2Rayshare-订阅",
@@ -213,7 +214,7 @@ SOURCE_GROUPS = [
         "name": "免费节点4",
         "primary": "discover:url:https://raw.githubusercontent.com/mfuu/FreeProxies/refs/heads/master/README.md",
         "fallbacks": [
-             "https://raw.githubusercontent.com/mfuu/FreeProxies/master/sub.yaml",
+            "https://raw.githubusercontent.com/mfuu/FreeProxies/master/sub.yaml",
         ],
         "prefix": "[免费节点4] ",
     },
@@ -385,6 +386,7 @@ def maybe_base64_decode(text: str) -> str:
 
 
 _YAML_WARN_SEEN: set[str] = set()
+_YAML_WARN_SILENT = False
 
 
 def _yaml_warn(brief: str) -> None:
@@ -936,6 +938,7 @@ def extract_proxies(text: str) -> list[dict[str, Any]]:
             clean.append(parsed)
     return clean
 
+
 def parse_share_uri(uri: str) -> dict[str, Any] | None:
     raw = uri.strip().rstrip(",;")
     scheme = raw.split("://", 1)[0].lower()
@@ -1261,7 +1264,7 @@ def _parse_standard_uri(uri: str, scheme: str) -> dict[str, Any] | None:
     return proxy
 
 
-def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
+def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     global _SEP_JUST_PRINTED
     collected: list[dict[str, Any]] = []
     first = True
@@ -1272,10 +1275,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
         first = False
         source_found: list[dict[str, Any]] = []
         used_url = ""
-        for item in source_queue(source):
+        for item in _source_queue(source):
             if source_found:
                 break
-            url, prefer, exclude = item_spec(item, source)
+            url, prefer, exclude = _item_spec(item, source)
             merge_all = False
             if url.startswith("discover:rss:"):
                 candidates = discover_rss(url[len("discover:rss:"):], prefer=prefer)
@@ -1355,13 +1358,13 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]]]:
     return len(collected), sanitized, collected_counts
 
 
-def source_queue(source: dict[str, Any]) -> list[Any]:
+def _source_queue(source: dict[str, Any]) -> list[Any]:
     items = [source["primary"]]
     items.extend(source.get("fallbacks", []))
     return items
 
 
-def item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
+def _item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
     if isinstance(item, dict):
         url = str(item.get("url") or "")
         prefer = str(item["prefer"]) if "prefer" in item else str(source.get("prefer") or "")
@@ -1557,7 +1560,6 @@ _TOOLKIT_CONFIG_EXT = {
     ".conf", ".cfg", ".list", ".sub",
 }
 _TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
-_YAML_WARN_SILENT = False
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
