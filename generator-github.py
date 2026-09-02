@@ -1443,6 +1443,8 @@ def _score_sub_link(url: str, context: str = "", prefer: str = "", distance: int
             pass
     if filename.endswith(".txt"):
         score += 500
+    if filename.endswith(".json"):
+        score += 340
     if filename.endswith((".yaml", ".yml")):
         score += 300
     if "mihomo" in filename or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
@@ -1458,7 +1460,7 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
     text = html.unescape(text or "")
     files: list[tuple[int, str]] = []
     bare: list[tuple[int, str]] = []
-    file_re = re.compile(r"\.(?:yaml|yml|txt)(?:$|[?#])", re.I)
+    file_re = re.compile(r"\.(?:yaml|yml|txt|json)(?:$|[?#])", re.I)
     skip_re = re.compile(
         r"(github\.com|youtube\.com|youtu\.be|karing\.app|"
         r"t\.me/|telegram\.(?:me|org)|api\.w\.org|clarity\.ms|v2ray\.com|"
@@ -1529,7 +1531,7 @@ def _collect_article_links(text: str, page_url: str) -> list[str]:
             link = urljoin(page_url, link)
         if not link.startswith("http"):
             continue
-        if re.search(r"\.(?:yaml|yml|txt|apk|exe|dmg|zip|png|jpe?g|gif|svg|webp|js|css)(?:$|[?#])", link, re.I):
+        if re.search(r"\.(?:yaml|yml|txt|json|apk|exe|dmg|zip|png|jpe?g|gif|svg|webp|js|css)(?:$|[?#])", link, re.I):
             continue
         if re.search(r"/fn/\d{8}|/post/|/p/\d+", link) or link.endswith(".html"):
             found.append(link)
