@@ -659,10 +659,9 @@ def convert_singbox_outbound(item: dict[str, Any]) -> dict[str, Any] | None:
 
 def extract_singbox_from_data(data: dict[str, Any]) -> list[dict[str, Any]]:
     outbounds = data.get("outbounds")
-    if not isinstance(outbounds, list):
-        return []
+    items = outbounds if isinstance(outbounds, list) else [data]
     found: list[dict[str, Any]] = []
-    for item in outbounds:
+    for item in items:
         if not isinstance(item, dict):
             continue
         proxy = convert_singbox_outbound(item)
@@ -837,18 +836,20 @@ def extract_xray_proxies(data: dict[str, Any]) -> list[dict[str, Any]]:
     return found
 
 
-def _iter_json_values(text: str) -> list[Any]:
+def _iter_json_values(text: str, nested: bool = False) -> list[Any]:
     stripped = str(text or "").strip()
     if not stripped:
         return []
-    try:
-        return [json.loads(stripped)]
-    except Exception:
-        pass
+    if not nested:
+        try:
+            return [json.loads(stripped)]
+        except Exception:
+            pass
     decoder = json.JSONDecoder()
     values: list[Any] = []
     index = 0
     length = len(stripped)
+    step = 1 if nested else None
     while index < length:
         while index < length and stripped[index] not in "{[":
             index += 1
@@ -860,7 +861,7 @@ def _iter_json_values(text: str) -> list[Any]:
             index += 1
             continue
         values.append(value)
-        index = max(end, index + 1)
+        index = (index + 1) if nested else max(end, index + 1)
     return values
 
 
@@ -872,6 +873,13 @@ def _proxies_from_json_value(data: Any) -> list[dict[str, Any]]:
         return found
     if not isinstance(data, dict):
         return []
+    proxies = data.get("proxies")
+    if isinstance(proxies, list) and proxies:
+        return [item for item in proxies if isinstance(item, dict)]
+    if data.get("protocol") and isinstance(data.get("settings"), dict):
+        from_xray = extract_xray_proxies({"outbounds": [data]})
+        if from_xray:
+            return from_xray
     for extracted in (
         extract_singbox_from_data(data),
         extract_xray_proxies(data),
@@ -886,6 +894,10 @@ def _proxies_from_json_value(data: Any) -> list[dict[str, Any]]:
 def extract_client_json_proxies(text: str) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
     for value in _iter_json_values(text):
+        found.extend(_proxies_from_json_value(value))
+    if found:
+        return found
+    for value in _iter_json_values(text, nested=True):
         found.extend(_proxies_from_json_value(value))
     return found
 
