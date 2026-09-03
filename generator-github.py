@@ -108,10 +108,10 @@ SOURCE_GROUPS = [
         "prefix": "[Freesocks] ",
     },
     {
-        "name": "NEKOWARP",
+        "name": "NekoWarp",
         "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
         "fallbacks": [],
-        "prefix": "[NEKOWARP] ",
+        "prefix": "[NekoWarp] ",
     },
     {
         "name": "V2Rayshare-RSS",
