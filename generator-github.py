@@ -2333,13 +2333,13 @@ def _special_scan_apk(root: Path) -> tuple[list[str], list[str], list[bytes], li
                 bonus += 5
             scored.append((bonus, item))
         scored.sort(key=lambda item: item[0], reverse=True)
-        keys = [
-            item
-            for _score, item in scored
-            if any(65 <= b <= 90 for b in item)
-            and any(97 <= b <= 122 for b in item)
-            and any(48 <= b <= 57 for b in item)
-        ]
+        for _score, item in scored:
+            if (
+                any(65 <= b <= 90 for b in item)
+                and any(97 <= b <= 122 for b in item)
+                and any(48 <= b <= 57 for b in item)
+            ):
+                keys.append(item)
     uniq_keys: list[bytes] = []
     seen: set[bytes] = set()
     for key in keys:
