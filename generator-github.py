@@ -49,11 +49,11 @@ MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "4
 SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
-        "primary": "discover:url:https://end-gfw.com/",
+        "primary": "discover:sublink:https://end-gfw.com/",
         "fallbacks": [
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
-            "discover:url:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
+            "discover:sublink:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
         ],
         "prefix": "[大FQ运动] ",
     },
@@ -69,7 +69,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "大FQ运动-补充",
-        "primary": "discover:url:https://github.com/hello-world-1989/cn-news/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/hello-world-1989/cn-news/raw/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/hello-world-1989/v2-sub/main/end-gfw-together-af3e13",
         ],
@@ -86,7 +86,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "ChromeGO-ShiteThings",
-        "primary": "discover:url:https://raw.githubusercontent.com/ShiteThings/extractNodes/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/ShiteThings/extractNodes/refs/heads/main/README.md",
         "fallbacks": [
             "https://chg26.makou.cc.cd/",
         ],
@@ -94,7 +94,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "ChromeGO-Merge",
-        "primary": "discover:url:https://github.com/Misaka-blog/chromego_merge/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/Misaka-blog/chromego_merge/raw/refs/heads/main/README.md",
         "fallbacks": [
             "https://chromego-sub.netlify.app/sub/merged_proxies_new.yaml",
             "https://chromego-sub.netlify.app/sub/base64.txt",
@@ -115,13 +115,13 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2Rayshare-RSS",
-        "primary": "discover:rss:https://v2rayshare.com/feed",
+        "primary": "discover:article:https://v2rayshare.com/feed",
         "fallbacks": [],
         "prefix": "[V2Rayshare-RSS] ",
     },
     {
         "name": "OpenRunner-RSS",
-        "primary": "discover:rss:https://free.datiya.com/index.xml",
+        "primary": "discover:article:https://free.datiya.com/index.xml",
         "fallbacks": [
             "https://raw.githubusercontent.com/openRunner/clash-freenode/main/sub.yaml",
             "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
@@ -131,19 +131,19 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Mibei77-RSS",
-        "primary": "discover:rss:https://www.mibei77.com/feed",
+        "primary": "discover:article:https://www.mibei77.com/feed",
         "fallbacks": [],
         "prefix": "[Mibei77-RSS] ",
     },
     {
         "name": "Yoyapai-RSS",
-        "primary": "discover:rss:https://yoyapai.com/feed",
+        "primary": "discover:article:https://yoyapai.com/feed",
         "fallbacks": [],
         "prefix": "[Yoyapai-RSS] ",
     },
     {
         "name": "Free-clash-v2ray",
-        "primary": "discover:url:https://raw.githubusercontent.com/free-clash-v2ray/free-clash-v2ray.github.io/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/free-clash-v2ray/free-clash-v2ray.github.io/main/README.md",
         "fallbacks": [
             "https://free-clash-v2ray.github.io/uploads/latest.yaml",
         ],
@@ -174,7 +174,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2Rayshare-订阅",
-        "primary": "discover:url:https://github.com/firefoxmmx2/v2rayshare_subcription/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription/raw/refs/heads/main/README.md",
         "fallbacks": [
             "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
         ],
@@ -182,7 +182,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点1",
-        "primary": "discover:url:https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml",
         ],
@@ -196,7 +196,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点2",
-        "primary": "discover:url:https://github.com/ermaozi/get_subscribe/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/ermaozi/get_subscribe/raw/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml",
         ],
@@ -204,7 +204,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点3",
-        "primary": "discover:url:https://raw.githubusercontent.com/sunmiao4458/free-proxy-airport/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/sunmiao4458/free-proxy-airport/refs/heads/main/README.md",
         "fallbacks": [
             "https://sunmiao4458.github.io/free-proxy-airport/clash.yaml",
         ],
@@ -212,7 +212,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点4",
-        "primary": "discover:url:https://raw.githubusercontent.com/mfuu/FreeProxies/refs/heads/master/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/mfuu/FreeProxies/refs/heads/master/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/mfuu/FreeProxies/master/sub.yaml",
         ],
@@ -220,7 +220,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点5",
-        "primary": "discover:url:https://github.com/vxiaov/free_proxies/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/vxiaov/free_proxies/raw/refs/heads/main/README.md",
         "fallbacks": [
             "https://cdn.jsdelivr.net/gh/vxiaov/free_proxies@main/clash/clash.provider.yaml",
             "https://raw.githubusercontent.com/vxiaov/free_proxies/main/clash/clash.provider.yaml",
@@ -229,7 +229,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点6",
-        "primary": "discover:url:https://github.com/anaer/Sub/raw/refs/heads/main/README.MD",
+        "primary": "discover:sublink:https://github.com/anaer/Sub/raw/refs/heads/main/README.MD",
         "fallbacks": [
             "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
             "https://anaer.github.io/Sub/clash.yaml",
@@ -238,7 +238,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点7",
-        "primary": "discover:url:https://github.com/snakem982/proxypool/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/snakem982/proxypool/raw/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta-2.yaml",
         ],
@@ -246,7 +246,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点8",
-        "primary": "discover:url:https://raw.githubusercontent.com/mahdibland/V2RayAggregator/refs/heads/master/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/mahdibland/V2RayAggregator/refs/heads/master/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml",
         ],
@@ -255,7 +255,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点9-1",
-        "primary": "discover:url:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
@@ -270,7 +270,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点10",
-        "primary": "discover:url:https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/proxies.yaml",
         ],
@@ -279,7 +279,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点11-1",
-        "primary": "discover:url:https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/base64.txt",
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/all.yaml",
@@ -302,10 +302,10 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Clashfree",
-        "primary": "discover:url:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
         "fallbacks": [
             {
-                "url": "discover:url:https://raw.githubusercontent.com/free-nodes/v2rayfree/refs/heads/main/README.md",
+                "url": "discover:sublink:https://raw.githubusercontent.com/free-nodes/v2rayfree/refs/heads/main/README.md",
                 "prefer": "订阅地址",
             },
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
@@ -314,7 +314,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Epodonios-v2ray-configs",
-        "primary": "discover:url:https://github.com/Epodonios/v2ray-configs/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs/raw/refs/heads/main/README.md",
         "fallbacks": [
             "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
         ],
@@ -323,7 +323,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2rayclashfree-RSS",
-        "primary": "discover:rss:https://v2rayclashfree.com/",
+        "primary": "discover:article:https://v2rayclashfree.com/",
         "fallbacks": [],
         "prefix": "[V2rayclashfree-RSS] ",
     },
@@ -373,6 +373,11 @@ UA_PRESETS = {
 }
 
 
+def resolve_ua(name: str = "") -> str:
+    key = (name or "ClashMeta").strip()
+    return UA_PRESETS.get(key, key)
+
+
 def _writable_dir(name: str) -> Path:
     bases = []
     try:
@@ -406,11 +411,16 @@ def _bind_dirs() -> None:
     HISTORY_DIR = _writable_dir("history")
 
 
-def fetch_text(url: str, retries: int = MAX_RETRIES, user_agent: str = "", referer: str = "") -> str:
-    ua_key = (user_agent or "ClashMeta").strip()
+def fetch_text(
+    url: str,
+    retries: int = MAX_RETRIES,
+    user_agent: str = "",
+    referer: str = "",
+    accept: str = "",
+) -> str:
     headers = {
-        "User-Agent": UA_PRESETS.get(ua_key, ua_key),
-        "Accept": "text/plain, text/yaml, application/yaml, */*",
+        "User-Agent": resolve_ua(user_agent),
+        "Accept": accept or "text/plain, text/yaml, application/yaml, */*",
     }
     if referer:
         headers["Referer"] = referer
@@ -1345,11 +1355,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 break
             url, prefer, exclude = _item_spec(item, source)
             merge_all = False
-            if url.startswith("discover:rss:"):
-                candidates = discover_rss(url[len("discover:rss:"):], prefer=prefer)
-            elif url.startswith("discover:url:"):
-                candidates = discover_url(
-                    url[len("discover:url:"):],
+            if url.startswith("discover:article:"):
+                candidates = discover_article(url[len("discover:article:"):], prefer=prefer)
+            elif url.startswith("discover:sublink:"):
+                candidates = discover_sublink(
+                    url[len("discover:sublink:"):],
                     prefer=prefer,
                     exclude=exclude,
                 )
@@ -1555,19 +1565,19 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
     return unique_ordered([url for _, url in chosen])
 
 
-def discover_url(page_url: str, prefer: str = "", exclude: str = "") -> list[str]:
+def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list[str]:
     page_url = _blob_to_raw(page_url.strip())
-    print(f"[INFO] url try page: {page_url}")
+    print(f"[INFO] sublink try page: {page_url}")
     try:
         body = fetch_text(page_url)
     except Exception as exc:
-        print(f"[WARN] url page failed: {page_url} {exc}")
+        print(f"[WARN] sublink page failed: {page_url} {exc}")
         return []
     candidate_links = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
     for link in candidate_links:
-        if _probe_sub_file("url", link):
+        if _probe_sub_file("sublink", link):
             return [link]
-    print(f"[WARN] url discovery failed: {page_url}")
+    print(f"[WARN] sublink discovery failed: {page_url}")
     return []
 
 
@@ -1605,6 +1615,19 @@ def _page_stamp(text: str) -> str:
 
 _ARCHIVE_EXT_RE = re.compile(
     r"\.(?:7z|zip|rar|tar\.gz|tgz|tar)(?:$|[?#).,;\"'])",
+    re.I,
+)
+_ANDROID_PKG_RE = re.compile(
+    r"\.(?:apk|xapk|apks|aab)(?:$|[?#).,;\"'])",
+    re.I,
+)
+_BROWSER_PKG_RE = re.compile(
+    r"\.(?:crx|xpi|nex)(?:$|[?#).,;\"'])",
+    re.I,
+)
+_INSTALLER_EXT_RE = re.compile(
+    r"\.(?:apk|xapk|apks|aab|crx|xpi|nex|exe|msi|msix|appx|"
+    r"dmg|pkg|deb|rpm|ipa|cab)(?:$|[?#).,;\"'])",
     re.I,
 )
 _TOOLKIT_SKIP_HOST_RE = re.compile(
@@ -1656,9 +1679,149 @@ def _collect_archive_links(text: str, page_url: str) -> list[str]:
             link = _clean_found_url(raw, page_url)
             if not link:
                 continue
-            if _ARCHIVE_EXT_RE.search(link) or re.search(r"github\.com/.+/releases(?:/|$)", link, re.I):
+            if (
+                _ARCHIVE_EXT_RE.search(link)
+                or _INSTALLER_EXT_RE.search(link)
+                or re.search(r"github\.com/.+/releases(?:/|$)", link, re.I)
+            ):
                 found.append(link)
     return unique_ordered(found)
+
+
+def _package_score(link: str, prefer: str = "") -> int:
+    lower = str(link or "").lower()
+    score = 0
+    if _ARCHIVE_EXT_RE.search(lower):
+        score = 80
+    elif _ANDROID_PKG_RE.search(lower):
+        score = 70
+    elif _BROWSER_PKG_RE.search(lower):
+        score = 65
+    elif _INSTALLER_EXT_RE.search(lower):
+        score = 25
+    elif re.search(r"github\.com/.+/releases(?:/|$)", lower):
+        score = 40
+    if not score:
+        return 0
+    token = (prefer or "").strip().lower()
+    if token and token in lower:
+        score += 20
+    return score
+
+
+def _rank_package_links(links: list[str], prefer: str = "") -> list[str]:
+    ranked = [( _package_score(link, prefer), link) for link in links]
+    ranked = [item for item in ranked if item[0] > 0]
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return unique_ordered([url for _, url in ranked])
+
+
+def _toolkit_kind(url: str) -> str:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    path = parsed.path.lower()
+    if "chromewebstore.google.com" in host or "chrome.google.com" in host:
+        return "chrome"
+    if "microsoftedge.microsoft.com" in host:
+        return "edge"
+    if "addons.mozilla.org" in host:
+        return "firefox"
+    if re.search(r"github\.com/[^/]+/[^/]+", url, re.I) and "/releases" in path and "/releases/download/" not in path:
+        return "release"
+    return "probe"
+
+
+def _payload_is_binary(sample: bytes, content_type: str) -> bool:
+    ct = (content_type or "").lower()
+    head = sample.lstrip()[:256].lower()
+    if any(token in ct for token in ("text/", "html", "xml", "json", "javascript")):
+        return False
+    if head.startswith((b"<!doctype", b"<html", b"<?xml", b"<rss", b"<feed", b"{", b"[")):
+        return False
+    if sample.startswith((b"PK\x03\x04", b"7z\xbc\xaf", b"Rar!", b"Cr24", b"\x1f\x8b")):
+        return True
+    if "octet-stream" in ct or "zip" in ct or "7z" in ct or "compressed" in ct:
+        return True
+    if b"\x00" in sample[:512]:
+        return True
+    return False
+
+
+def _probe_payload(url: str) -> str:
+    session = requests.Session()
+    session.trust_env = False
+    session.verify = False
+    proxy_tries = [PROXIES, {}] if PROXIES else [{}]
+    for proxies in proxy_tries:
+        try:
+            with session.get(
+                url,
+                headers={"User-Agent": resolve_ua("Chrome")},
+                timeout=SOURCE_TIMEOUT,
+                stream=True,
+                verify=False,
+                proxies=proxies,
+            ) as response:
+                response.raise_for_status()
+                sample = next(response.iter_content(chunk_size=4096), b"") or b""
+                if _payload_is_binary(sample, response.headers.get("Content-Type", "")):
+                    return "direct"
+                return "page"
+        except Exception:
+            continue
+    return "page"
+
+
+def _chrome_ext_id(url: str) -> str:
+    match = re.search(
+        r"(?:chromewebstore\.google\.com|chrome\.google\.com/webstore)/detail(?:/[^/]+)?/([a-p]{32})",
+        url,
+        re.I,
+    )
+    return match.group(1) if match else ""
+
+
+def _edge_ext_id(url: str) -> str:
+    match = re.search(r"microsoftedge\.microsoft\.com/addons/detail(?:/[^/]+)?/([a-z0-9]+)", url, re.I)
+    return match.group(1) if match else ""
+
+
+def _firefox_slug(url: str) -> str:
+    match = re.search(r"addons\.mozilla\.org/[^/]+/firefox/addon/([^/?#]+)", url, re.I)
+    return unquote(match.group(1)).strip("/") if match else ""
+
+
+def _store_package_urls(kind: str, page_url: str) -> list[str]:
+    if kind == "chrome":
+        ext_id = _chrome_ext_id(page_url)
+        if not ext_id:
+            return []
+        return [
+            (
+                "https://clients2.google.com/service/update2/crx"
+                "?response=redirect&prodversion=131.0.6778.0"
+                f"&acceptformat=crx2,crx3&x=id%3d{ext_id}%26uc"
+            )
+        ]
+    if kind == "edge":
+        ext_id = _edge_ext_id(page_url)
+        if not ext_id:
+            return []
+        return [
+            (
+                "https://edge.microsoft.com/extensionwebstorebase/v1/crx"
+                f"?response=redirect&x=id%3d{ext_id}%26installsource%3dondemand%26uc"
+            )
+        ]
+    if kind == "firefox":
+        slug = _firefox_slug(page_url)
+        if not slug:
+            return []
+        return [
+            f"https://addons.mozilla.org/firefox/downloads/latest/{slug}/addon-{slug}-latest.xpi",
+            f"https://addons.mozilla.org/firefox/downloads/file/latest/{slug}.xpi",
+        ]
+    return []
 
 
 def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
@@ -1705,7 +1868,7 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
             lower = link.lower()
             if "/releases/download/" not in lower:
                 continue
-            if not _ARCHIVE_EXT_RE.search(link):
+            if not (_ARCHIVE_EXT_RE.search(link) or _INSTALLER_EXT_RE.search(link)):
                 continue
             if link in seen:
                 continue
@@ -1721,7 +1884,7 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
 def _download_archive(url: str, dest_dir: Path) -> Path | None:
     from urllib.parse import urlparse, unquote
     name = unquote(Path(urlparse(url).path).name) or "toolkit.bin"
-    if not _ARCHIVE_EXT_RE.search(name):
+    if not (_ARCHIVE_EXT_RE.search(name) or _INSTALLER_EXT_RE.search(name)):
         name = "toolkit.bin"
     dest = dest_dir / name
     print(f"[INFO] toolkit try download: {url}")
@@ -1737,7 +1900,7 @@ def _download_archive(url: str, dest_dir: Path) -> Path | None:
             try:
                 with session.get(
                     url,
-                    headers={"User-Agent": "Mozilla/5.0"},
+                    headers={"User-Agent": resolve_ua("Chrome")},
                     timeout=180,
                     stream=True,
                     verify=False,
@@ -1766,10 +1929,23 @@ def _download_archive(url: str, dest_dir: Path) -> Path | None:
         return None
 
 
+def _unwrap_crx(archive: Path) -> Path:
+    data = archive.read_bytes()
+    marker = data.find(b"PK\x03\x04")
+    if marker <= 0:
+        return archive
+    dest = archive.with_name(archive.stem + ".zip")
+    dest.write_bytes(data[marker:])
+    return dest
+
+
 def _extract_archive(archive: Path, dest_dir: Path) -> bool:
     name = archive.name.lower()
     try:
-        if name.endswith(".zip"):
+        if name.endswith(".crx"):
+            archive = _unwrap_crx(archive)
+            name = archive.name.lower()
+        if name.endswith((".zip", ".apk", ".xapk", ".apks", ".xpi", ".crx")):
             import zipfile
             with zipfile.ZipFile(archive) as zf:
                 zf.extractall(dest_dir)
@@ -1806,6 +1982,15 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
             with rarfile.RarFile(archive) as rf:
                 rf.extractall(dest_dir)
             return True
+        seven = shutil.which("7z") or shutil.which("7za") or shutil.which("7zz")
+        if seven:
+            result = subprocess.run(
+                [seven, "x", str(archive), f"-o{dest_dir}", "-y"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return True
         print(f"[WARN] toolkit unsupported archive: {archive.name}")
         return False
     except Exception as exc:
@@ -1958,14 +2143,33 @@ def _print_toolkit_groups(hits: list[tuple[str, int]]) -> None:
         print(f"[OK] proxies={total} url={label}")
 
 
+def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
+    kind = _toolkit_kind(page_url)
+    if kind == "probe":
+        kind = _probe_payload(page_url)
+    print(f"[INFO] toolkit try {kind}: {page_url}")
+    if kind in {"chrome", "edge", "firefox"}:
+        return _store_package_urls(kind, page_url)
+    if kind == "direct":
+        return [page_url]
+    if kind == "release":
+        return _expand_github_release_assets(page_url, prefer=prefer)
+    body = ""
+    try:
+        body = fetch_text(page_url)
+    except Exception:
+        body = ""
+    links = _collect_archive_links(body, page_url)
+    return _rank_package_links(links, prefer=prefer)
+
+
 def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
     global _TOOLKIT_EMBEDDED
     _TOOLKIT_EMBEDDED = []
     page_url = page_url.strip()
-    print(f"[INFO] toolkit try release: {page_url}")
-    archives = unique_ordered(_expand_github_release_assets(page_url, prefer=prefer))
+    archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))
     if not archives:
-        print(f"[WARN] toolkit discovery failed: no archive url")
+        print(f"[WARN] toolkit discovery failed: {page_url}")
         return []
     work = Path(tempfile.mkdtemp(prefix="toolkit-"))
     try:
@@ -1993,27 +2197,29 @@ def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def discover_rss(feed_url: str, prefer: str = "") -> list[str]:
-    print(f"[INFO] rss try feed: {feed_url}")
+def discover_article(feed_url: str, prefer: str = "") -> list[str]:
     body = ""
     try:
         body = fetch_text(feed_url)
-    except Exception as exc:
-        print(f"[WARN] rss feed failed: {feed_url} {exc}")
-        return []
+    except Exception:
+        body = ""
 
     pages: list[str] = []
+    via_feed = False
+    parsed = None
     try:
         import feedparser
-        parsed = feedparser.parse(body)
-    except Exception as exc:
-        print(f"[WARN] rss feed failed: {feed_url} {exc}")
+        parsed = feedparser.parse(body) if body else None
+    except ImportError as exc:
+        print(f"[WARN] article feedparser missing: {exc}")
+        parsed = None
+    except Exception:
         parsed = None
     if parsed and parsed.entries:
         def entry_stamp(entry: Any) -> str:
             title = str(getattr(entry, "title", "") or "")
             link = str(getattr(entry, "link", "") or "")
-            stamp = _page_stamp(title) 
+            stamp = _page_stamp(title)
             if stamp != "00000000":
                 return stamp
             stamp = _page_stamp(link)
@@ -2027,18 +2233,20 @@ def discover_rss(feed_url: str, prefer: str = "") -> list[str]:
         ranked = sorted(parsed.entries[:20], key=entry_stamp, reverse=True)[:10]
         pages = [str(getattr(entry, "link", "") or "") for entry in ranked]
         pages = [page for page in pages if page]
-    else:
-        print(f"[WARN] rss empty feed: {feed_url}")
+        if pages:
+            via_feed = True
+            print(f"[INFO] article try feed: {feed_url}")
+    if not pages and body:
         pages = _collect_article_links(body, feed_url)
         pages = sorted(pages, key=_page_stamp, reverse=True)[:10]
         if pages:
-            print(f"[INFO] rss try page: {feed_url}")
+            print(f"[INFO] article try page: {feed_url}")
 
     for page in unique_ordered(pages):
-        found = discover_url(page, prefer=prefer)
+        found = discover_sublink(page, prefer=prefer)
         if found:
             return found
-    print(f"[WARN] rss discovery failed: {feed_url}")
+    print(f"[WARN] article discovery failed: {feed_url}")
     return []
 
 
@@ -2229,7 +2437,7 @@ def _asset_sha256(asset: dict[str, Any]) -> str:
 def _fetch_checksum_text(url: str) -> str:
     response = requests.get(
         url,
-        headers={"User-Agent": "ClashMeta/1.19.30"},
+        headers={"User-Agent": resolve_ua("ClashMeta")},
         timeout=SOURCE_TIMEOUT,
         verify=False,
         proxies=PROXIES,
@@ -2259,7 +2467,7 @@ def select_mihomo_asset() -> tuple[str, str]:
     api_url = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
     data = requests.get(
         api_url,
-        headers={"User-Agent": "ClashMeta/1.19.30"},
+        headers={"User-Agent": resolve_ua("ClashMeta")},
         timeout=SOURCE_TIMEOUT,
         verify=False,
         proxies=PROXIES,
