@@ -151,7 +151,7 @@ SOURCE_GROUPS = [
         "prefix": "[Free-clash-v2ray] ",
     },
     {
-        "name": "Pawdroid",
+        "name": "Pawdroid-Base64",
         "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
@@ -269,6 +269,38 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点9-2] ",
     },
     {
+        "name": "免费节点10",
+        "primary": "discover:url:https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/proxies.yaml",
+        ],
+        "prefer": "订阅地址",
+        "prefix": "[免费节点10] ",
+    },
+    {
+        "name": "免费节点11-1",
+        "primary": "discover:url:https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/README.md",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/base64.txt",
+            "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/all.yaml",
+            "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/mihomo.yaml",
+        ],
+        "prefer": "订阅链接",
+        "prefix": "[免费节点11-1] ",
+    },
+    {
+        "name": "免费节点11-2",
+        "primary": "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/byxiaoxi.txt",
+        "fallbacks": [],
+        "prefix": "[免费节点11-2] ",
+    },
+    {
+        "name": "免费节点11-3",
+        "primary": "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/kooker.jp.txt",
+        "fallbacks": [],
+        "prefix": "[免费节点11-3] ",
+    },
+    {
         "name": "Clashfree",
         "primary": "discover:url:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
         "fallbacks": [
@@ -339,6 +371,39 @@ UA_PRESETS = {
         "Chrome/120.0.0.0 Safari/537.36"
     ),
 }
+
+
+def _writable_dir(name: str) -> Path:
+    bases = []
+    try:
+        bases.append(Path(__file__).resolve().parent)
+    except Exception:
+        pass
+    try:
+        bases.append(Path(os.getcwd()))
+    except OSError:
+        pass
+    bases.append(Path.home())
+    last_exc: Exception | None = None
+    for base in bases:
+        target = base / name
+        try:
+            os.makedirs(str(target), exist_ok=True)
+            probe = target / ".write_probe"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            return target
+        except OSError as exc:
+            last_exc = exc
+    raise RuntimeError(f"cannot create {name} directory: {last_exc}")
+
+
+def _bind_dirs() -> None:
+    global OUTPUT_PATH, RAW_PATH, HISTORY_DIR
+    output_dir = _writable_dir("output")
+    OUTPUT_PATH = output_dir / "clash.yaml"
+    RAW_PATH = output_dir / "raw.yaml"
+    HISTORY_DIR = _writable_dir("history")
 
 
 def fetch_text(url: str, retries: int = MAX_RETRIES, user_agent: str = "", referer: str = "") -> str:
@@ -1909,7 +1974,7 @@ def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
             if not archive:
                 continue
             unpack = work / "unpack"
-            unpack.mkdir(exist_ok=True)
+            os.makedirs(str(unpack), exist_ok=True)
             if not _extract_archive(archive, unpack):
                 continue
             embedded = _collect_toolkit_embedded_proxies(unpack)
@@ -2136,7 +2201,7 @@ def find_or_install_mihomo() -> Path:
             return Path(found)
 
     install_dir = Path(tempfile.gettempdir()) / "free-node-autotest-mihomo"
-    install_dir.mkdir(parents=True, exist_ok=True)
+    os.makedirs(str(install_dir), exist_ok=True)
     binary = install_dir / ("mihomo.exe" if os.name == "nt" else "mihomo")
     if binary.exists():
         print(f"[OK] using cached proxy engine: {binary}")
@@ -2362,7 +2427,7 @@ def dump_yaml(data: Any) -> str:
 
 
 def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
-    RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
+    os.makedirs(str(RAW_PATH.parent), exist_ok=True)
     nodes = [dict(item) for item in proxies if isinstance(item, dict)]
     names = [str(item.get("name") or "") for item in nodes]
     payload = {
@@ -2836,7 +2901,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
 
 
 def write_config(config: dict[str, Any]) -> None:
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    os.makedirs(str(OUTPUT_PATH.parent), exist_ok=True)
     OUTPUT_PATH.write_text(dump_yaml(config), encoding="utf-8")
 
 
@@ -3013,6 +3078,7 @@ def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric])
 
 
 def main() -> None:
+    _bind_dirs()
     total_nodes, candidates, collected_counts = collect_proxies()
     metrics: list[ProxyMetric] = []
 
