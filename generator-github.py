@@ -1414,7 +1414,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             source_found = load_previous_source_proxies(source)
         elif merge_all:
             _print_toolkit_groups(toolkit_hits)
-            print(f"[OK] proxies={len(source_found)} source={source['name']}")
+            extra = f" url={_TOOLKIT_ARCHIVE_URL}" if _TOOLKIT_ARCHIVE_URL else ""
+            print(f"[OK] proxies={len(source_found)} source={source['name']}{extra}")
         elif used_url:
             print(f"[OK] proxies={len(source_found)} source={source['name']} url={used_url}")
         collected.extend(source_found)
@@ -1648,6 +1649,7 @@ _TOOLKIT_CONFIG_EXT = {
     ".conf", ".cfg", ".list", ".sub",
 }
 _TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
+_TOOLKIT_ARCHIVE_URL = ""
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
@@ -2164,8 +2166,9 @@ def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
 
 
 def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
-    global _TOOLKIT_EMBEDDED
+    global _TOOLKIT_EMBEDDED, _TOOLKIT_ARCHIVE_URL
     _TOOLKIT_EMBEDDED = []
+    _TOOLKIT_ARCHIVE_URL = ""
     page_url = page_url.strip()
     archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))
     if not archives:
@@ -2189,6 +2192,7 @@ def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
             if urls:
                 print(f"[OK] toolkit discovered subs={len(urls)} archive={archive.name}")
             if embedded or urls:
+                _TOOLKIT_ARCHIVE_URL = archive_url
                 return urls
             print(f"[WARN] toolkit empty bundle: {archive.name}")
         print(f"[WARN] toolkit discovery failed: {page_url}")
