@@ -24,9 +24,27 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-import requests
-import urllib3
-import yaml
+_missing_required: list[str] = []
+try:
+    import requests
+except ImportError:
+    _missing_required.append("requests")
+try:
+    import urllib3
+except ImportError:
+    _missing_required.append("urllib3")
+try:
+    import yaml
+except ImportError:
+    _missing_required.append("PyYAML")
+if _missing_required:
+    print(
+        "[WARN] required packages missing: " + ", ".join(_missing_required)
+    )
+    print(
+        "[WARN] install with: pip install " + " ".join(_missing_required)
+    )
+    raise SystemExit(1)
 
 # 代理设置（Clash 的 HTTP 端口）
 PROXIES = None
@@ -1968,7 +1986,11 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                 if result.returncode == 0:
                     return True
                 raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "7z failed")
-            import py7zr
+            try:
+                import py7zr
+            except ImportError as exc:
+                print(f"[WARN] toolkit py7zr missing: {exc}")
+                return False
             with py7zr.SevenZipFile(archive, "r") as zf:
                 names = [
                     item for item in zf.getnames()
@@ -1980,7 +2002,11 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                     zf.extractall(path=dest_dir)
             return True
         if name.endswith(".rar"):
-            import rarfile
+            try:
+                import rarfile
+            except ImportError as exc:
+                print(f"[WARN] toolkit rarfile missing: {exc}")
+                return False
             with rarfile.RarFile(archive) as rf:
                 rf.extractall(dest_dir)
             return True
