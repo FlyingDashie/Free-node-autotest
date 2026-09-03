@@ -191,7 +191,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Pawdroid-sr-apk",
-        "primary": "discover:special:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
+        "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
         "fallbacks": [],
         "user_agent": "v2rayNG",
         "prefer": "apk",
@@ -1394,17 +1394,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 break
             url, prefer, exclude = _item_spec(item, source)
             merge_all = False
-            if url.startswith("discover:special:"):
-                special_found, special_url = discover_special(url[len("discover:special:"):], source)
-                if special_found:
-                    prefix = source.get("prefix", "")
-                    for proxy in special_found:
-                        item_proxy = dict(proxy)
-                        if prefix:
-                            item_proxy["name"] = prefix + str(item_proxy.get("name", "")).strip()
-                        source_found.append(item_proxy)
-                    used_url = special_url or url
-                continue
             if url.startswith("discover:article:"):
                 candidates = discover_article(url[len("discover:article:"):], prefer=prefer)
             elif url.startswith("discover:sublink:"):
@@ -1414,7 +1403,21 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     exclude=exclude,
                 )
             elif url.startswith("discover:toolkit:"):
-                candidates = discover_toolkit(url[len("discover:toolkit:"):], prefer=prefer)
+                toolkit_spec = url[len("discover:toolkit:"):]
+                if toolkit_spec.lower().startswith("sr-apk:"):
+                    special_found, special_url = _discover_toolkit_sr_apk(
+                        source, toolkit_spec[len("sr-apk:"):]
+                    )
+                    if special_found:
+                        prefix = source.get("prefix", "")
+                        for proxy in special_found:
+                            item_proxy = dict(proxy)
+                            if prefix:
+                                item_proxy["name"] = prefix + str(item_proxy.get("name", "")).strip()
+                            source_found.append(item_proxy)
+                        used_url = special_url or url
+                    continue
+                candidates = discover_toolkit(toolkit_spec, prefer=prefer)
                 merge_all = True
             else:
                 candidates = [url]
@@ -2387,17 +2390,17 @@ def _special_decrypt_body(body: str, keys: list[bytes]) -> str:
     raise RuntimeError(last_error)
 
 
-def _discover_special_sr_apk(source: dict[str, Any], page_url: str) -> tuple[list[dict[str, Any]], str]:
+def _discover_toolkit_sr_apk(source: dict[str, Any], page_url: str) -> tuple[list[dict[str, Any]], str]:
     page_url = page_url.strip()
     if not page_url:
-        print("[WARN] special sr-apk missing release url")
+        print("[WARN] toolkit sr-apk missing release url")
         return [], ""
     prefer = str(source.get("prefer") or "apk")
     ua = str(source.get("user_agent") or "v2rayNG")
     referer = str(source.get("referer") or "")
     archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))[:1]
     if not archives:
-        print(f"[WARN] special sr-apk no archive url page={page_url}")
+        print(f"[WARN] toolkit sr-apk no archive url page={page_url}")
         return [], ""
     work = Path(tempfile.mkdtemp(prefix="special-apk-"))
     try:
@@ -2410,9 +2413,9 @@ def _discover_special_sr_apk(source: dict[str, Any], page_url: str) -> tuple[lis
             if not _extract_archive(archive, unpack):
                 continue
             prefixes, names, keys, tokens = _special_scan_apk(unpack)
-            print(f"[INFO] special sr-apk scanned prefixes={len(prefixes)} files={len(names)} keys={len(keys)} archive={archive.name}")
+            print(f"[INFO] toolkit sr-apk scanned prefixes={len(prefixes)} files={len(names)} keys={len(keys)} archive={archive.name}")
             if not prefixes or not keys:
-                print("[WARN] special sr-apk discovery failed")
+                print("[WARN] toolkit sr-apk discovery failed")
                 return [], ""
             names = sorted(
                 names,
@@ -2430,25 +2433,16 @@ def _discover_special_sr_apk(source: dict[str, Any], page_url: str) -> tuple[lis
                 except Exception:
                     continue
                 if found:
-                    print(f"[OK] special sr-apk decrypted proxies={len(found)} url={url.split('?', 1)[0]}")
+                    print(f"[OK] toolkit sr-apk decrypted proxies={len(found)} url={url.split('?', 1)[0]}")
                     return found, url.split("?", 1)[0]
                     return found, url.split("?", 1)[0]
-        print("[WARN] special sr-apk discovery failed")
-        print("[WARN] special sr-apk discovery failed")
+        print("[WARN] toolkit sr-apk discovery failed")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def discover_special(kind: str, source: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], str]:
-    raw = str(kind or "").strip()
-    name, _sep, rest = raw.partition(":")
-    name = name.strip().lower()
-    source = source or {}
-    if name == "sr-apk":
-        return _discover_special_sr_apk(source, rest.strip())
-    print(f"[WARN] special discovery unknown kind={kind}")
-    return [], ""
+
 
 
 def discover_article(feed_url: str, prefer: str = "") -> list[str]:
