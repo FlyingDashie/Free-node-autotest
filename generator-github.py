@@ -4,6 +4,7 @@ import base64
 import gzip
 import hashlib
 import html
+import importlib.util
 import json
 import os
 import platform
@@ -24,27 +25,37 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-_missing_required: list[str] = []
-try:
-    import requests
-except ImportError:
-    _missing_required.append("requests")
-try:
-    import urllib3
-except ImportError:
-    _missing_required.append("urllib3")
-try:
-    import yaml
-except ImportError:
-    _missing_required.append("PyYAML")
+_REQUIRED_PACKAGES = {
+    "requests": "requests",
+    "urllib3": "urllib3",
+    "yaml": "PyYAML",
+}
+_OPTIONAL_PACKAGES = {
+    "feedparser": "feedparser",
+    "py7zr": "py7zr",
+    "rarfile": "rarfile",
+}
+
+def _pkg_missing(mod: str) -> bool:
+    return importlib.util.find_spec(mod) is None
+
+_missing_required = [pip for mod, pip in _REQUIRED_PACKAGES.items() if _pkg_missing(mod)]
+_missing_optional = [pip for mod, pip in _OPTIONAL_PACKAGES.items() if _pkg_missing(mod)]
+if _missing_required or _missing_optional:
+    if _missing_required:
+        print("[WARN] required packages missing: " + ", ".join(_missing_required))
+    if _missing_optional:
+        print("[WARN] optional packages missing: " + ", ".join(_missing_optional))
+    print(
+        "[WARN] install with: pip install "
+        + " ".join(_missing_required + _missing_optional)
+    )
 if _missing_required:
-    print(
-        "[WARN] required packages missing: " + ", ".join(_missing_required)
-    )
-    print(
-        "[WARN] install with: pip install " + " ".join(_missing_required)
-    )
     raise SystemExit(1)
+
+import requests
+import urllib3
+import yaml
 
 # 代理设置（Clash 的 HTTP 端口）
 PROXIES = None
