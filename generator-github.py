@@ -64,7 +64,7 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together-ss",
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
         ],
-        "Referer": "https://end-gfw.com/",
+        "referer": "https://end-gfw.com/",
         "prefix": "[大FQ运动-SS密钥] ",
     },
     {
@@ -1374,7 +1374,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     text = fetch_text(
                         url,
                         user_agent=str(source.get("user_agent") or ""),
-                        referer=str(source.get("Referer") or ""),
+                        referer=str(source.get("referer") or ""),
                     )
                     head = str(text).lstrip()[:64].lower()
                     if merge_all and head.startswith(("<!", "<html", "<head", "<title")):
