@@ -34,6 +34,7 @@ _OPTIONAL_PACKAGES = {
     "feedparser": "feedparser",
     "py7zr": "py7zr",
     "rarfile": "rarfile",
+    "Crypto": "pycryptodome",
 }
 
 def _pkg_missing(mod: str) -> bool:
@@ -180,13 +181,21 @@ SOURCE_GROUPS = [
         "prefix": "[Free-clash-v2ray] ",
     },
     {
-        "name": "Pawdroid-Base64",
+        "name": "Pawdroid",
         "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
             "https://mirror.v2gh.com/https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
         ],
-        "prefix": "[Pawdroid-Base64] ",
+        "prefix": "[Pawdroid] ",
+    },
+    {
+        "name": "Pawdroid-sr-apk",
+        "primary": "discover:special:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
+        "fallbacks": [],
+        "user_agent": "v2rayNG",
+        "prefer": "apk",
+        "prefix": "[Pawdroid-sr-apk] ",
     },
     {
         "name": "FreeV2-Base64",
@@ -394,6 +403,7 @@ class ProxyMetric:
 
 UA_PRESETS = {
     "ClashMeta": "ClashMeta/1.19.30",
+    "v2rayNG": "v2rayNG/10.10.5",
     "Chrome": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -1384,6 +1394,17 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 break
             url, prefer, exclude = _item_spec(item, source)
             merge_all = False
+            if url.startswith("discover:special:"):
+                special_found, special_url = discover_special(url[len("discover:special:"):], source)
+                if special_found:
+                    prefix = source.get("prefix", "")
+                    for proxy in special_found:
+                        item_proxy = dict(proxy)
+                        if prefix:
+                            item_proxy["name"] = prefix + str(item_proxy.get("name", "")).strip()
+                        source_found.append(item_proxy)
+                    used_url = special_url or url
+                continue
             if url.startswith("discover:article:"):
                 candidates = discover_article(url[len("discover:article:"):], prefer=prefer)
             elif url.startswith("discover:sublink:"):
@@ -1862,12 +1883,12 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
     owner, repo = match.group(1), match.group(2)
     token = (prefer or "").strip().lower()
     list_url = f"https://github.com/{owner}/{repo}/releases"
-    if list_url.rstrip("/") != page_url.rstrip("/"):
-        print(f"[INFO] toolkit try page: {list_url}")
+    listing = ""
     try:
         listing = fetch_text(list_url)
-    except Exception as exc:
-        print(f"[WARN] toolkit page failed: {list_url} {exc}")
+        if list_url.rstrip("/") != page_url.rstrip("/"):
+            print(f"[INFO] toolkit try page: {list_url}")
+    except Exception:
         listing = ""
     tags: list[tuple[int, str]] = []
     seen_tags: set[str] = set()
@@ -1882,19 +1903,18 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
         seen_tags.add(tag)
         score = 5 if token and token.lower() in tag.lower() else 1
         tags.append((score, tag))
-    if "latest" not in seen_tags:
-        tags.append((4 if token else 1, "latest"))
+    if "latest" not in seen_tags and not token:
+        tags.append((1, "latest"))
     tags.sort(key=lambda item: item[0], reverse=True)
     ranked: list[tuple[int, str]] = []
     seen: set[str] = set()
     for _, tag in tags:
         asset_page = f"https://github.com/{owner}/{repo}/releases/expanded_assets/{tag}"
-        print(f"[INFO] toolkit try page: {asset_page}")
         try:
             body = fetch_text(asset_page)
-        except Exception as exc:
-            print(f"[WARN] toolkit page failed: {asset_page} {exc}")
+        except Exception:
             continue
+        print(f"[INFO] toolkit try page: {asset_page}")
         for link in _collect_archive_links(body, asset_page):
             lower = link.lower()
             if "/releases/download/" not in lower:
@@ -2236,6 +2256,199 @@ def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
         return []
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def _aes128_cbc_zero_iv(key: bytes, data: bytes) -> bytes:
+    blob = data[: len(data) - (len(data) % 16)]
+    if len(blob) < 32:
+        raise RuntimeError("ciphertext too short")
+    try:
+        from Crypto.Cipher import AES
+
+        return AES.new(key, AES.MODE_CBC, b"\x00" * 16).decrypt(blob)
+    except Exception:
+        pass
+    proc = subprocess.run(
+        [
+            "openssl",
+            "enc",
+            "-aes-128-cbc",
+            "-d",
+            "-K",
+            key.hex(),
+            "-iv",
+            "00" * 16,
+            "-nopad",
+        ],
+        input=blob,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode == 0 and proc.stdout:
+        return proc.stdout
+    raise RuntimeError("AES decrypt unavailable (install pycryptodome or openssl)")
+
+
+def _special_scan_apk(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
+    prefixes: list[str] = []
+    names: list[str] = []
+    tokens: list[str] = []
+    keys: list[bytes] = []
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix.lower() != ".dex":
+            continue
+        if path.stat().st_size > 20 * 1024 * 1024:
+            continue
+        try:
+            blob = path.read_bytes()
+        except Exception:
+            continue
+        for match in re.finditer(rb"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+", blob):
+            url = match.group(0).decode("ascii", "ignore").rstrip("\\").rstrip()
+            low = url.lower()
+            if any(mark in low for mark in ("/config/", "/raw/data/", "gitee.com/api/v5/repos", "foxovpn", "159236")):
+                path = url.split("?", 1)[0]
+                for mark in ("/config", "/data", "/raw/data"):
+                    idx = path.lower().find(mark)
+                    if idx != -1:
+                        prefixes.append(path[: idx + len(mark)])
+                        break
+                else:
+                    prefixes.append(path.rsplit("/", 1)[0])
+        for match in re.finditer(rb"ecfg(?:_[a-z]{2}|\d+)?", blob):
+            names.append(match.group(0).decode("ascii", "ignore"))
+        for match in re.finditer(rb"access_token=([0-9a-f]{32})", blob):
+            tokens.append(match.group(1).decode("ascii"))
+        scored: list[tuple[int, bytes]] = []
+        for match in re.finditer(rb"\x10([A-Za-z0-9]{16})\x00", blob):
+            scored.append((1, match.group(1)))
+        for match in re.finditer(rb"(?:[A-Za-z0-9]\x00){16}", blob):
+            item = match.group(0)[::2]
+            window = blob[max(0, match.start() - 80) : match.end() + 80].lower()
+            bonus = 3
+            if b"aes" in window or b"ecfg" in window or b"secret" in window:
+                bonus += 5
+            scored.append((bonus, item))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        keys = [
+            item
+            for _score, item in scored
+            if any(65 <= b <= 90 for b in item)
+            and any(97 <= b <= 122 for b in item)
+            and any(48 <= b <= 57 for b in item)
+        ]
+    uniq_keys: list[bytes] = []
+    seen: set[bytes] = set()
+    for key in keys:
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq_keys.append(key)
+    return unique_ordered(prefixes), unique_ordered(names), uniq_keys[:8], unique_ordered(tokens)[:8]
+
+
+def _special_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[str]) -> list[str]:
+    urls: list[str] = []
+    for prefix in prefixes:
+        base = prefix.rstrip("/")
+        last = base.rsplit("/", 1)[-1]
+        if "." in last or last.lower().startswith("ecfg"):
+            urls.append(base)
+        for name in names:
+            piece = f"{base}/{name}"
+            if "access_token=" in piece.lower():
+                urls.append(piece)
+            elif "gitee.com" in base.lower() and tokens:
+                for token in tokens:
+                    urls.append(f"{piece}?access_token={token}")
+            else:
+                urls.append(piece)
+    return unique_ordered(urls)
+
+
+def _special_decrypt_body(body: str, keys: list[bytes]) -> str:
+    compact = "".join(str(body).split())
+    raw = base64.b64decode(compact)
+    last_error = "no key"
+    for key in keys:
+        if len(key) not in {16, 24, 32}:
+            continue
+        try:
+            plain = _aes128_cbc_zero_iv(key, raw)
+        except Exception as exc:
+            last_error = str(exc)
+            continue
+        text = (plain[16:] if len(plain) > 16 else plain).decode("utf-8", errors="replace").strip()
+        if text and "://" not in text.split("\n", 1)[0]:
+            text = "ss://" + text.lstrip()
+        if "://" in text:
+            return text
+        last_error = "plain has no uri"
+    raise RuntimeError(last_error)
+
+
+def _discover_special_sr_apk(source: dict[str, Any], page_url: str) -> tuple[list[dict[str, Any]], str]:
+    page_url = page_url.strip()
+    if not page_url:
+        print("[WARN] special sr-apk missing release url")
+        return [], ""
+    prefer = str(source.get("prefer") or "apk")
+    ua = str(source.get("user_agent") or "v2rayNG")
+    referer = str(source.get("referer") or "")
+    archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))[:1]
+    if not archives:
+        print(f"[WARN] special sr-apk no archive url page={page_url}")
+        return [], ""
+    work = Path(tempfile.mkdtemp(prefix="special-apk-"))
+    try:
+        for archive_url in archives:
+            archive = _download_archive(archive_url, work)
+            if not archive:
+                continue
+            unpack = work / "unpack"
+            os.makedirs(str(unpack), exist_ok=True)
+            if not _extract_archive(archive, unpack):
+                continue
+            prefixes, names, keys, tokens = _special_scan_apk(unpack)
+            print(f"[INFO] special sr-apk scanned prefixes={len(prefixes)} files={len(names)} keys={len(keys)} archive={archive.name}")
+            if not prefixes or not keys:
+                print("[WARN] special sr-apk discovery failed")
+                return [], ""
+            names = sorted(
+                names,
+                key=lambda item: (
+                    0 if str(item).lower().endswith("_zh") else 1,
+                    0 if re.search(r"\d+$", str(item)) else 1,
+                    -len(str(item)),
+                ),
+            )
+            for url in _special_build_cfg_urls(prefixes, names, tokens):
+                try:
+                    body = fetch_text(url, user_agent=ua, referer=referer)
+                    plain = _special_decrypt_body(body, keys)
+                    found = extract_proxies(plain)
+                except Exception:
+                    continue
+                if found:
+                    print(f"[OK] special sr-apk decrypted proxies={len(found)} url={url.split('?', 1)[0]}")
+                    return found, url.split("?", 1)[0]
+                    return found, url.split("?", 1)[0]
+        print("[WARN] special sr-apk discovery failed")
+        print("[WARN] special sr-apk discovery failed")
+        return [], ""
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def discover_special(kind: str, source: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], str]:
+    raw = str(kind or "").strip()
+    name, _sep, rest = raw.partition(":")
+    name = name.strip().lower()
+    source = source or {}
+    if name == "sr-apk":
+        return _discover_special_sr_apk(source, rest.strip())
+    print(f"[WARN] special discovery unknown kind={kind}")
+    return [], ""
 
 
 def discover_article(feed_url: str, prefer: str = "") -> list[str]:
