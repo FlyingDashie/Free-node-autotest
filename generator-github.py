@@ -1416,30 +1416,30 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             elif url.startswith("discover:toolkit:"):
                 toolkit_spec = url[len("discover:toolkit:"):]
                 if toolkit_spec.lower().startswith("ss-apk:"):
-                    special_found, special_url = _discover_toolkit_ss_apk(
+                    apk_found, apk_url = _discover_toolkit_ss_apk(
                         source, toolkit_spec[len("ss-apk:"):]
                     )
-                    if special_found:
+                    if apk_found:
                         prefix = source.get("prefix", "")
-                        for proxy in special_found:
+                        for proxy in apk_found:
                             item_proxy = dict(proxy)
                             if prefix:
                                 item_proxy["name"] = prefix + str(item_proxy.get("name", "")).strip()
                             source_found.append(item_proxy)
-                        used_url = special_url or url
+                        used_url = apk_url or url
                     continue
                 if toolkit_spec.lower().startswith("sr-apk:"):
-                    special_found, special_url = _discover_toolkit_sr_apk(
+                    apk_found, apk_url = _discover_toolkit_sr_apk(
                         source, toolkit_spec[len("sr-apk:"):]
                     )
-                    if special_found:
+                    if apk_found:
                         prefix = source.get("prefix", "")
-                        for proxy in special_found:
+                        for proxy in apk_found:
                             item_proxy = dict(proxy)
                             if prefix:
                                 item_proxy["name"] = prefix + str(item_proxy.get("name", "")).strip()
                             source_found.append(item_proxy)
-                        used_url = special_url or url
+                        used_url = apk_url or url
                     continue
                 candidates = discover_toolkit(toolkit_spec, prefer=prefer)
                 merge_all = True
@@ -2331,7 +2331,7 @@ def _aes128_cbc_zero_iv(key: bytes, data: bytes) -> bytes:
     return _aes128_cbc(key, data, b"\x00" * 16)
 
 
-def _special_scan_apk(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
+def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
     prefixes: list[str] = []
     names: list[str] = []
     tokens: list[str] = []
@@ -2439,7 +2439,7 @@ def _apk_keys_for(source: dict[str, Any], scanned: list[bytes] | None = None) ->
     return merged
 
 
-def _special_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[str]) -> list[str]:
+def _apk_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[str]) -> list[str]:
     urls: list[str] = []
     for prefix in prefixes:
         base = prefix.rstrip("/")
@@ -2458,7 +2458,7 @@ def _special_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[
     return unique_ordered(urls)
 
 
-def _special_decrypt_once(
+def _apk_decrypt_once(
     raw: bytes,
     key: bytes,
     iv: bytes,
@@ -2478,7 +2478,7 @@ def _special_decrypt_once(
     return text
 
 
-def _special_decrypt_body(
+def _apk_decrypt_body(
     body: str,
     keys: list[bytes],
     locked: tuple[bytes, bytes, int, bool] | None = None,
@@ -2487,14 +2487,14 @@ def _special_decrypt_body(
     raw = base64.b64decode(compact)
     zero = b"\x00" * 16
     if locked:
-        return _special_decrypt_once(raw, *locked), locked
+        return _apk_decrypt_once(raw, *locked), locked
     last_error = "no key"
     for key in keys:
         if len(key) not in {16, 24, 32}:
             continue
         for iv, skip, do_unpad in ((key, 0, True), (zero, 16, False), (zero, 0, True)):
             try:
-                text = _special_decrypt_once(raw, key, iv, skip, do_unpad)
+                text = _apk_decrypt_once(raw, key, iv, skip, do_unpad)
             except Exception as exc:
                 last_error = str(exc)
                 continue
@@ -2530,7 +2530,7 @@ def _discover_toolkit_encrypted_apk(
             os.makedirs(str(unpack), exist_ok=True)
             if not _extract_archive(archive, unpack):
                 continue
-            prefixes, names, scanned, tokens = _special_scan_apk(unpack)
+            prefixes, names, scanned, tokens = _apk_scan(unpack)
             hard_keys = _apk_keys_for(source, scanned)
             print(
                 f"[INFO] {label} scanned prefixes={len(prefixes)} "
@@ -2547,7 +2547,7 @@ def _discover_toolkit_encrypted_apk(
                 return (1, 99, -len(low))
 
             names = sorted(names, key=_name_rank)
-            urls = _special_build_cfg_urls(prefixes, names, tokens)
+            urls = _apk_build_cfg_urls(prefixes, names, tokens)
             urls.sort(
                 key=lambda item: (
                     0 if "159236" in item.lower() else 1,
@@ -2573,14 +2573,14 @@ def _discover_toolkit_encrypted_apk(
                 except Exception:
                     continue
                 try:
-                    plain, locked = _special_decrypt_body(body, key_pool, locked)
+                    plain, locked = _apk_decrypt_body(body, key_pool, locked)
                 except Exception:
                     if used_scan or not scanned:
                         continue
                     used_scan = True
                     key_pool = _apk_keys_for(source, scanned)
                     try:
-                        plain, locked = _special_decrypt_body(body, key_pool, None)
+                        plain, locked = _apk_decrypt_body(body, key_pool, None)
                     except Exception:
                         continue
                 found = extract_proxies(plain)
