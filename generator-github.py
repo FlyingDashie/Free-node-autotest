@@ -332,6 +332,14 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点11-3] ",
     },
     {
+        "name": "Pawdroid-sr-apk",
+        "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
+        "fallbacks": [],
+        "prefer": "apk",
+        "keys": "8YfiQ8wrkziZ5YFa",
+        "prefix": "[Pawdroid-sr-apk] ",
+    },
+    {
         "name": "Pawdroid-ss-apk",
         "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com/",
         "fallbacks": [
@@ -340,14 +348,6 @@ SOURCE_GROUPS = [
         "prefer": "apk",
         "keys": "8YfiQ8wrkziZ5YFW",
         "prefix": "[Pawdroid-ss-apk] ",
-    },
-    {
-        "name": "Pawdroid-sr-apk",
-        "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
-        "fallbacks": [],
-        "prefer": "apk",
-        "keys": "8YfiQ8wrkziZ5YFa",
-        "prefix": "[Pawdroid-sr-apk] ",
     },
     {
         "name": "Clashfree",
