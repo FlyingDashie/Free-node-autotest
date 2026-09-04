@@ -151,6 +151,14 @@ SOURCE_GROUPS = [
         "prefix": "[V2Rayshare-RSS] ",
     },
     {
+        "name": "V2Rayshare-SUB",
+        "primary": "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription/raw/refs/heads/main/README.md",
+        "fallbacks": [
+            "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
+        ],
+        "prefix": "[V2Rayshare-SUB] ",
+    },
+    {
         "name": "OpenRunner-RSS",
         "primary": "discover:article:https://free.datiya.com/index.xml",
         "fallbacks": [
@@ -202,14 +210,6 @@ SOURCE_GROUPS = [
         "fallbacks": [],
         "user_agent": "Chrome",
         "prefix": "[Bocchi2b-Base64] ",
-    },
-    {
-        "name": "V2Rayshare-订阅",
-        "primary": "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription/raw/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
-        ],
-        "prefix": "[V2Rayshare-订阅] ",
     },
     {
         "name": "免费节点1",
