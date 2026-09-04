@@ -3699,11 +3699,36 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     if len(metrics) <= MAX_LIVE_TOTAL:
         return metrics
     print(
-        f"[INFO] cap live total from {len(metrics)} to {MAX_LIVE_TOTAL} by health_score"
+        f"[INFO] cap live total from {len(metrics)} to {MAX_LIVE_TOTAL} trim large sources first"
     )
     global _SEP_JUST_PRINTED
     _SEP_JUST_PRINTED = False
-    return sorted(metrics, key=lambda item: item.health_score, reverse=True)[:MAX_LIVE_TOTAL]
+    grouped: dict[str, list[ProxyMetric]] = {}
+    order: list[str] = []
+    for item in metrics:
+        key = source_prefix_of(str(item.proxy.get("name") or ""))
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(item)
+    for key in grouped:
+        grouped[key].sort(key=lambda item: item.health_score)
+    need = len(metrics) - MAX_LIVE_TOTAL
+    floor = 5
+    while need > 0:
+        candidates = [key for key in order if len(grouped[key]) > floor]
+        if not candidates:
+            if floor <= 0:
+                break
+            floor -= 1
+            continue
+        key = max(candidates, key=lambda item: len(grouped[item]))
+        grouped[key].pop(0)
+        need -= 1
+    kept: list[ProxyMetric] = []
+    for key in order:
+        kept.extend(grouped[key])
+    return kept
 
 
 _SEP_JUST_PRINTED = False
