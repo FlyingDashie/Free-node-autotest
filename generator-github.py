@@ -76,12 +76,6 @@ MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "24"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "45"))
 
-_APK_FALLBACK_KEYS = {
-    "sr-apk": [b"8YfiQ8wrkziZ5YFa"],
-    "ss-apk": [b"8YfiQ8wrkziZ5YFW"],
-}
-
-
 SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
@@ -342,6 +336,7 @@ SOURCE_GROUPS = [
         "fallbacks": [],
         "user_agent": "v2rayNG",
         "prefer": "apk",
+        "keys": "8YfiQ8wrkziZ5YFa",
         "prefix": "[Pawdroid-sr-apk] ",
     },
     {
@@ -352,6 +347,7 @@ SOURCE_GROUPS = [
         ],
         "user_agent": "v2rayNG",
         "prefer": "apk",
+        "keys": "8YfiQ8wrkziZ5YFW",
         "prefix": "[Pawdroid-ss-apk] ",
     },
     {
@@ -2415,10 +2411,28 @@ def _special_scan_apk(root: Path) -> tuple[list[str], list[str], list[bytes], li
     return unique_ordered(prefixes), unique_ordered(names), ranked, unique_ordered(tokens)[:8]
 
 
-def _apk_keys_for(kind: str, scanned: list[bytes] | None = None) -> list[bytes]:
+def _apk_keys_from_source(source: dict[str, Any]) -> list[bytes]:
+    raw = source.get("keys")
+    if raw is None:
+        return []
+    if isinstance(raw, (bytes, bytearray)):
+        items = [bytes(raw)]
+    elif isinstance(raw, str):
+        items = [raw.encode("utf-8")]
+    else:
+        items = []
+        for item in raw:
+            if isinstance(item, (bytes, bytearray)):
+                items.append(bytes(item))
+            else:
+                items.append(str(item).encode("utf-8"))
+    return items
+
+
+def _apk_keys_for(source: dict[str, Any], scanned: list[bytes] | None = None) -> list[bytes]:
     merged: list[bytes] = []
     seen: set[bytes] = set()
-    for item in list(_APK_FALLBACK_KEYS.get(kind, [])) + list(scanned or []):
+    for item in list(_apk_keys_from_source(source)) + list(scanned or []):
         if item in seen or len(item) not in {16, 24, 32}:
             continue
         seen.add(item)
@@ -2518,7 +2532,7 @@ def _discover_toolkit_encrypted_apk(
             if not _extract_archive(archive, unpack):
                 continue
             prefixes, names, scanned, tokens = _special_scan_apk(unpack)
-            hard_keys = _apk_keys_for(kind)
+            hard_keys = _apk_keys_for(source, scanned)
             print(
                 f"[INFO] {label} scanned prefixes={len(prefixes)} "
                 f"files={len(names)} keys={len(hard_keys)} archive={archive.name}"
