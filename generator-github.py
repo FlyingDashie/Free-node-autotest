@@ -2017,6 +2017,73 @@ def _unwrap_crx(archive: Path) -> Path:
     return dest
 
 
+_NESTED_PKG_SUFFIX = {".apk", ".xapk", ".apks", ".aab", ".xpi", ".crx"}
+
+
+def _looks_like_zip(path: Path) -> bool:
+    try:
+        with path.open("rb") as handle:
+            return handle.read(4) == b"PK\x03\x04"
+    except Exception:
+        return False
+
+
+def _is_nested_package(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    suffix = path.suffix.lower()
+    if suffix in _NESTED_PKG_SUFFIX:
+        return _looks_like_zip(path) or suffix in {".apk", ".xapk", ".apks", ".aab"}
+    if suffix not in {"", ".zip", ".bin"}:
+        return False
+    if not _looks_like_zip(path):
+        return False
+    try:
+        with zipfile.ZipFile(path) as zf:
+            names = [item.filename.lower() for item in zf.infolist()[:80]]
+    except Exception:
+        return False
+    return any(
+        name.endswith("androidmanifest.xml")
+        or name.endswith("libapp.so")
+        or "/libapp.so" in name
+        or name.endswith("classes.dex")
+        or name.endswith(".apk")
+        for name in names
+    )
+
+
+def _nested_apk_paths(dest_dir: Path) -> list[Path]:
+    found: list[Path] = []
+    nested_root = dest_dir / "_nested"
+    for path in dest_dir.rglob("*"):
+        if nested_root in path.parents or path == nested_root:
+            continue
+        if not _is_nested_package(path):
+            continue
+        found.append(path)
+    found.sort(key=lambda item: (item.stat().st_size, item.name.lower()), reverse=True)
+    return found
+
+
+def _extract_nested_packages(dest_dir: Path, depth: int = 0) -> list[str]:
+    if depth >= 3:
+        return []
+    unpacked: list[str] = []
+    nested_root = dest_dir / "_nested"
+    for path in _nested_apk_paths(dest_dir):
+        target = nested_root / f"{depth}-{path.stem}"
+        if target.exists():
+            continue
+        target.mkdir(parents=True, exist_ok=True)
+        if not _extract_archive(path, target):
+            shutil.rmtree(target, ignore_errors=True)
+            continue
+        unpacked.append(path.name)
+        unpacked.extend(_extract_nested_packages(target, depth + 1))
+    return unpacked
+
+
 def _extract_archive(archive: Path, dest_dir: Path) -> bool:
     name = archive.name.lower()
     try:
@@ -2268,6 +2335,9 @@ def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
             os.makedirs(str(unpack), exist_ok=True)
             if not _extract_archive(archive, unpack):
                 continue
+            nested = _extract_nested_packages(unpack)
+            if nested:
+                print(f"[INFO] toolkit nested unpacked={len(nested)}")
             embedded = _collect_toolkit_embedded_proxies(unpack)
             urls = _collect_toolkit_sub_urls(unpack)
             if embedded:
@@ -2530,6 +2600,9 @@ def _discover_toolkit_encrypted_apk(
             os.makedirs(str(unpack), exist_ok=True)
             if not _extract_archive(archive, unpack):
                 continue
+            nested = _extract_nested_packages(unpack)
+            if nested:
+                print(f"[INFO] toolkit nested unpacked={len(nested)}")
             prefixes, names, scanned, tokens = _apk_scan(unpack)
             hard_keys = _apk_keys_for(source, scanned)
             print(
