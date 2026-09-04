@@ -340,7 +340,6 @@ SOURCE_GROUPS = [
         "name": "Pawdroid-sr-apk",
         "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
         "fallbacks": [],
-        "user_agent": "v2rayNG",
         "prefer": "apk",
         "prefix": "[Pawdroid-sr-apk] ",
     },
@@ -350,7 +349,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "discover:toolkit:ss-apk:https://github.com/Pawdroid/ShadowShare/releases",
         ],
-        "user_agent": "v2rayNG",
         "prefer": "apk",
         "prefix": "[Pawdroid-ss-apk] ",
     },
