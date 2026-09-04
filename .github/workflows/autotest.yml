@@ -1,12 +1,15 @@
 name: Free Node Autotest
 
 on:
-  # 允许由外部定时平台（如 cron-job.org）触发
   repository_dispatch:
     types: [trigger-clash-generation]
-  
-  # 保留手动触发，方便调试
   workflow_dispatch:
+    inputs:
+      extra_env:
+        description: "额外环境变量，每行一条 KEY=VALUE"
+        required: false
+        default: ""
+        type: string
 
 # touch: re-register schedule
 concurrency:
@@ -41,7 +44,23 @@ jobs:
 
       - name: Run generator and capture log
         id: run
+        env:
+          EXTRA_ENV: ${{ github.event.inputs.extra_env }}
         run: |
+          if [ -n "${EXTRA_ENV:-}" ]; then
+            while IFS= read -r line || [ -n "$line" ]; do
+              line="\( {line#" \){line%%[![:space:]]*}"}"
+              line="\( {line%" \){line##*[![:space:]]}"}"
+              [ -z "$line" ] && continue
+              case "$line" in \#*) continue ;; esac
+              key="${line%%=*}"
+              val="${line#*=}"
+              echo "\( {key}= \){val}" >> "$GITHUB_ENV"
+              export "\( {key}= \){val}"
+            done <<EOF
+          ${EXTRA_ENV}
+          EOF
+          fi
           mkdir -p output history
           RUN_DATE=$(date -u +%Y%m%d)
           RUN_HM=$(date -u +%H%M)
