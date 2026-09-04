@@ -76,6 +76,12 @@ MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "24"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "45"))
 
+_APK_FALLBACK_KEYS = {
+    "sr-apk": [b"8YfiQ8wrkziZ5YFa"],
+    "ss-apk": [b"8YfiQ8wrkziZ5YFW"],
+}
+
+
 SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
@@ -337,6 +343,16 @@ SOURCE_GROUPS = [
         "user_agent": "v2rayNG",
         "prefer": "apk",
         "prefix": "[Pawdroid-sr-apk] ",
+    },
+    {
+        "name": "Pawdroid-ss-apk",
+        "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com/",
+        "fallbacks": [
+            "discover:toolkit:ss-apk:https://github.com/Pawdroid/ShadowShare/releases",
+        ],
+        "user_agent": "v2rayNG",
+        "prefer": "apk",
+        "prefix": "[Pawdroid-ss-apk] ",
     },
     {
         "name": "Clashfree",
@@ -1404,6 +1420,19 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 )
             elif url.startswith("discover:toolkit:"):
                 toolkit_spec = url[len("discover:toolkit:"):]
+                if toolkit_spec.lower().startswith("ss-apk:"):
+                    special_found, special_url = _discover_toolkit_ss_apk(
+                        source, toolkit_spec[len("ss-apk:"):]
+                    )
+                    if special_found:
+                        prefix = source.get("prefix", "")
+                        for proxy in special_found:
+                            item_proxy = dict(proxy)
+                            if prefix:
+                                item_proxy["name"] = prefix + str(item_proxy.get("name", "")).strip()
+                            source_found.append(item_proxy)
+                        used_url = special_url or url
+                    continue
                 if toolkit_spec.lower().startswith("sr-apk:"):
                     special_found, special_url = _discover_toolkit_sr_apk(
                         source, toolkit_spec[len("sr-apk:"):]
@@ -2261,14 +2290,25 @@ def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _aes128_cbc_zero_iv(key: bytes, data: bytes) -> bytes:
+def _pkcs7_unpad(data: bytes) -> bytes:
+    if not data:
+        return data
+    pad = data[-1]
+    if pad < 1 or pad > 16 or data[-pad:] != bytes([pad]) * pad:
+        return data
+    return data[:-pad]
+
+
+def _aes128_cbc(key: bytes, data: bytes, iv: bytes) -> bytes:
     blob = data[: len(data) - (len(data) % 16)]
     if len(blob) < 32:
         raise RuntimeError("ciphertext too short")
+    if len(iv) != 16:
+        iv = (iv + b"\x00" * 16)[:16]
     try:
         from Crypto.Cipher import AES
 
-        return AES.new(key, AES.MODE_CBC, b"\x00" * 16).decrypt(blob)
+        return AES.new(key, AES.MODE_CBC, iv).decrypt(blob)
     except Exception:
         pass
     proc = subprocess.run(
@@ -2280,7 +2320,7 @@ def _aes128_cbc_zero_iv(key: bytes, data: bytes) -> bytes:
             "-K",
             key.hex(),
             "-iv",
-            "00" * 16,
+            iv.hex(),
             "-nopad",
         ],
         input=blob,
@@ -2292,15 +2332,23 @@ def _aes128_cbc_zero_iv(key: bytes, data: bytes) -> bytes:
     raise RuntimeError("AES decrypt unavailable (install pycryptodome or openssl)")
 
 
+def _aes128_cbc_zero_iv(key: bytes, data: bytes) -> bytes:
+    return _aes128_cbc(key, data, b"\x00" * 16)
+
+
 def _special_scan_apk(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
     prefixes: list[str] = []
     names: list[str] = []
     tokens: list[str] = []
-    keys: list[bytes] = []
+    scored: list[tuple[int, bytes]] = []
     for path in root.rglob("*"):
-        if not path.is_file() or path.suffix.lower() != ".dex":
+        if not path.is_file():
             continue
-        if path.stat().st_size > 20 * 1024 * 1024:
+        suffix = path.suffix.lower()
+        low_name = path.name.lower()
+        if suffix not in {".dex", ".so"} and "libapp" not in low_name:
+            continue
+        if path.stat().st_size > 32 * 1024 * 1024:
             continue
         try:
             blob = path.read_bytes()
@@ -2309,45 +2357,73 @@ def _special_scan_apk(root: Path) -> tuple[list[str], list[str], list[bytes], li
         for match in re.finditer(rb"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+", blob):
             url = match.group(0).decode("ascii", "ignore").rstrip("\\").rstrip()
             low = url.lower()
-            if any(mark in low for mark in ("/config/", "/raw/data/", "gitee.com/api/v5/repos", "foxovpn", "159236")):
-                path = url.split("?", 1)[0]
+            if any(mark in low for mark in ("/config/", "/raw/data/", "/data/", "gitee.com/api/v5/repos", "foxovpn", "159236", "ecsfg")):
+                piece = url.split("?", 1)[0]
                 for mark in ("/config", "/data", "/raw/data"):
-                    idx = path.lower().find(mark)
+                    idx = piece.lower().find(mark)
                     if idx != -1:
-                        prefixes.append(path[: idx + len(mark)])
+                        prefixes.append(piece[: idx + len(mark)])
                         break
                 else:
-                    prefixes.append(path.rsplit("/", 1)[0])
-        for match in re.finditer(rb"ecfg(?:_[a-z]{2}|\d+)?", blob):
+                    prefixes.append(piece.rsplit("/", 1)[0])
+        for match in re.finditer(rb"(?:ecfg(?:_[a-z]{2}|\d+)?|sareserver(?:_[a-z]{2})?|socks5)", blob):
             names.append(match.group(0).decode("ascii", "ignore"))
         for match in re.finditer(rb"access_token=([0-9a-f]{32})", blob):
             tokens.append(match.group(1).decode("ascii"))
-        scored: list[tuple[int, bytes]] = []
+        so_bonus = 20 if suffix == ".so" or "libapp" in low_name else 0
         for match in re.finditer(rb"\x10([A-Za-z0-9]{16})\x00", blob):
-            scored.append((1, match.group(1)))
+            item = match.group(1)
+            window = blob[max(0, match.start() - 80): match.end() + 80].lower()
+            bonus = 1 + so_bonus
+            if any(mark in window for mark in (b"aes", b"ecfg", b"sare", b"secret", b"cfg")):
+                bonus += 8
+            scored.append((bonus, item))
         for match in re.finditer(rb"(?:[A-Za-z0-9]\x00){16}", blob):
             item = match.group(0)[::2]
-            window = blob[max(0, match.start() - 80) : match.end() + 80].lower()
-            bonus = 3
-            if b"aes" in window or b"ecfg" in window or b"secret" in window:
-                bonus += 5
+            window = blob[max(0, match.start() - 80): match.end() + 80].lower()
+            bonus = 3 + so_bonus
+            if any(mark in window for mark in (b"aes", b"ecfg", b"sare", b"secret", b"cfg")):
+                bonus += 8
             scored.append((bonus, item))
-        scored.sort(key=lambda item: item[0], reverse=True)
-        for _score, item in scored:
-            if (
+        for match in re.finditer(rb"[A-Za-z0-9]{16}", blob):
+            item = match.group(0)
+            if not (
                 any(65 <= b <= 90 for b in item)
                 and any(97 <= b <= 122 for b in item)
                 and any(48 <= b <= 57 for b in item)
             ):
-                keys.append(item)
-    uniq_keys: list[bytes] = []
+                continue
+            window = blob[max(0, match.start() - 48): match.end() + 48].lower()
+            if not any(mark in window for mark in (b"aes", b"ecfg", b"sare", b"secret", b"cfg", b"key")):
+                continue
+            scored.append((12 + so_bonus, item))
+    ranked: list[bytes] = []
     seen: set[bytes] = set()
-    for key in keys:
-        if key in seen:
+    for _score, item in sorted(scored, key=lambda pair: pair[0], reverse=True):
+        if item in seen or len(item) != 16:
             continue
-        seen.add(key)
-        uniq_keys.append(key)
-    return unique_ordered(prefixes), unique_ordered(names), uniq_keys[:8], unique_ordered(tokens)[:8]
+        if not (
+            any(65 <= b <= 90 for b in item)
+            and any(97 <= b <= 122 for b in item)
+            and any(48 <= b <= 57 for b in item)
+        ):
+            continue
+        seen.add(item)
+        ranked.append(item)
+        if len(ranked) >= 24:
+            break
+    return unique_ordered(prefixes), unique_ordered(names), ranked, unique_ordered(tokens)[:8]
+
+
+def _apk_keys_for(kind: str, scanned: list[bytes] | None = None) -> list[bytes]:
+    merged: list[bytes] = []
+    seen: set[bytes] = set()
+    for item in list(_APK_FALLBACK_KEYS.get(kind, [])) + list(scanned or []):
+        if item in seen or len(item) not in {16, 24, 32}:
+            continue
+        seen.add(item)
+        merged.append(item)
+    return merged
 
 
 def _special_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[str]) -> list[str]:
@@ -2355,7 +2431,7 @@ def _special_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[
     for prefix in prefixes:
         base = prefix.rstrip("/")
         last = base.rsplit("/", 1)[-1]
-        if "." in last or last.lower().startswith("ecfg"):
+        if "." in last or last.lower().startswith(("ecfg", "sare", "socks")):
             urls.append(base)
         for name in names:
             piece = f"{base}/{name}"
@@ -2369,40 +2445,69 @@ def _special_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[
     return unique_ordered(urls)
 
 
-def _special_decrypt_body(body: str, keys: list[bytes]) -> str:
+def _special_decrypt_once(
+    raw: bytes,
+    key: bytes,
+    iv: bytes,
+    skip: int,
+    do_unpad: bool,
+) -> str:
+    plain = _aes128_cbc(key, raw, iv)
+    if skip:
+        plain = plain[skip:] if len(plain) > skip else plain
+    if do_unpad:
+        plain = _pkcs7_unpad(plain)
+    text = plain.decode("utf-8", errors="replace").strip()
+    if text and "://" not in text.split("\n", 1)[0]:
+        text = "ss://" + text.lstrip()
+    if text.count("://") < 3:
+        raise RuntimeError("plain has no uri")
+    return text
+
+
+def _special_decrypt_body(
+    body: str,
+    keys: list[bytes],
+    locked: tuple[bytes, bytes, int, bool] | None = None,
+) -> tuple[str, tuple[bytes, bytes, int, bool]]:
     compact = "".join(str(body).split())
     raw = base64.b64decode(compact)
+    zero = b"\x00" * 16
+    if locked:
+        return _special_decrypt_once(raw, *locked), locked
     last_error = "no key"
     for key in keys:
         if len(key) not in {16, 24, 32}:
             continue
-        try:
-            plain = _aes128_cbc_zero_iv(key, raw)
-        except Exception as exc:
-            last_error = str(exc)
-            continue
-        text = (plain[16:] if len(plain) > 16 else plain).decode("utf-8", errors="replace").strip()
-        if text and "://" not in text.split("\n", 1)[0]:
-            text = "ss://" + text.lstrip()
-        if "://" in text:
-            return text
-        last_error = "plain has no uri"
+        for iv, skip, do_unpad in ((key, 0, True), (zero, 16, False), (zero, 0, True)):
+            try:
+                text = _special_decrypt_once(raw, key, iv, skip, do_unpad)
+            except Exception as exc:
+                last_error = str(exc)
+                continue
+            return text, (key, iv, skip, do_unpad)
     raise RuntimeError(last_error)
 
 
-def _discover_toolkit_sr_apk(source: dict[str, Any], page_url: str) -> tuple[list[dict[str, Any]], str]:
+def _discover_toolkit_encrypted_apk(
+    kind: str,
+    source: dict[str, Any],
+    page_url: str,
+    name_order: list[str],
+) -> tuple[list[dict[str, Any]], str]:
     page_url = page_url.strip()
+    label = f"toolkit {kind}"
     if not page_url:
-        print("[WARN] toolkit sr-apk missing release url")
+        print(f"[WARN] {label} missing url")
         return [], ""
     prefer = str(source.get("prefer") or "apk")
     ua = str(source.get("user_agent") or "v2rayNG")
     referer = str(source.get("referer") or "")
     archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))[:1]
     if not archives:
-        print(f"[WARN] toolkit sr-apk no archive url page={page_url}")
+        print(f"[WARN] {label} no archive url page={page_url}")
         return [], ""
-    work = Path(tempfile.mkdtemp(prefix="special-apk-"))
+    work = Path(tempfile.mkdtemp(prefix=f"{kind}-"))
     try:
         for archive_url in archives:
             archive = _download_archive(archive_url, work)
@@ -2412,37 +2517,106 @@ def _discover_toolkit_sr_apk(source: dict[str, Any], page_url: str) -> tuple[lis
             os.makedirs(str(unpack), exist_ok=True)
             if not _extract_archive(archive, unpack):
                 continue
-            prefixes, names, keys, tokens = _special_scan_apk(unpack)
-            print(f"[INFO] toolkit sr-apk scanned prefixes={len(prefixes)} files={len(names)} keys={len(keys)} archive={archive.name}")
-            if not prefixes or not keys:
-                print("[WARN] toolkit sr-apk discovery failed")
-                return [], ""
-            names = sorted(
-                names,
-                key=lambda item: (
-                    0 if str(item).lower().endswith("_zh") else 1,
-                    0 if re.search(r"\d+$", str(item)) else 1,
-                    -len(str(item)),
-                ),
+            prefixes, names, scanned, tokens = _special_scan_apk(unpack)
+            hard_keys = _apk_keys_for(kind)
+            print(
+                f"[INFO] {label} scanned prefixes={len(prefixes)} "
+                f"files={len(names)} keys={len(hard_keys)} archive={archive.name}"
             )
-            for url in _special_build_cfg_urls(prefixes, names, tokens):
+            if not prefixes:
+                continue
+            wanted = [item.lower() for item in name_order]
+
+            def _name_rank(item: str) -> tuple[int, int, int]:
+                low = str(item).lower()
+                if low in wanted:
+                    return (0, wanted.index(low), -len(low))
+                return (1, 99, -len(low))
+
+            names = sorted(names, key=_name_rank)
+            urls = _special_build_cfg_urls(prefixes, names, tokens)
+            urls.sort(
+                key=lambda item: (
+                    0 if "159236" in item.lower() else 1,
+                    next(
+                        (
+                            wanted.index(item.lower().rsplit("/", 1)[-1].split("?", 1)[0])
+                            for _ in [0]
+                            if item.lower().rsplit("/", 1)[-1].split("?", 1)[0] in wanted
+                        ),
+                        99,
+                    ),
+                )
+            )
+            collected: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            locked = None
+            hit_names: set[str] = set()
+            key_pool = list(hard_keys)
+            used_scan = False
+            for url in urls:
                 try:
                     body = fetch_text(url, user_agent=ua, referer=referer)
-                    plain = _special_decrypt_body(body, keys)
-                    found = extract_proxies(plain)
                 except Exception:
                     continue
-                if found:
-                    print(f"[OK] toolkit sr-apk decrypted proxies={len(found)} url={url.split('?', 1)[0]}")
-                    return found, url.split("?", 1)[0]
-                    return found, url.split("?", 1)[0]
-        print("[WARN] toolkit sr-apk discovery failed")
+                try:
+                    plain, locked = _special_decrypt_body(body, key_pool, locked)
+                except Exception:
+                    if used_scan or not scanned:
+                        continue
+                    used_scan = True
+                    key_pool = _apk_keys_for(kind, scanned)
+                    try:
+                        plain, locked = _special_decrypt_body(body, key_pool, None)
+                    except Exception:
+                        continue
+                found = extract_proxies(plain)
+                if not found:
+                    continue
+                kept: list[dict[str, Any]] = []
+                for proxy in found:
+                    mark = proxy_fingerprint(proxy)
+                    if mark in seen:
+                        continue
+                    seen.add(mark)
+                    kept.append(proxy)
+                if not kept:
+                    continue
+                print(
+                    f"[OK] {label} decrypted proxies={len(found)} "
+                    f"url={url.split('?', 1)[0]}"
+                )
+                collected.extend(kept)
+                hit_names.add(url.lower().rsplit("/", 1)[-1].split("?", 1)[0])
+                if wanted and wanted[0] in hit_names and len(hit_names) >= min(2, len(wanted)):
+                    break
+                if len(collected) >= 20 and "159236" in url.lower() and len(hit_names) >= 1:
+                    # 已拿到主文件，只再给同主机一次机会补小文件
+                    continue
+            if collected:
+                return collected, archive_url
+        print(f"[WARN] {label} discovery failed")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
+def _discover_toolkit_sr_apk(source: dict[str, Any], page_url: str) -> tuple[list[dict[str, Any]], str]:
+    return _discover_toolkit_encrypted_apk(
+        "sr-apk",
+        source,
+        page_url,
+        ["ecfg_zh", "ecfg5", "ecfg"],
+    )
 
+
+def _discover_toolkit_ss_apk(source: dict[str, Any], page_url: str) -> tuple[list[dict[str, Any]], str]:
+    return _discover_toolkit_encrypted_apk(
+        "ss-apk",
+        source,
+        page_url,
+        ["sareserver_en", "sareserver", "socks5"],
+    )
 
 
 def discover_article(feed_url: str, prefer: str = "") -> list[str]:
