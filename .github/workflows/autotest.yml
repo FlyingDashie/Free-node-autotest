@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       extra_env:
-        description: "额外环境变量，每行一条 KEY=VALUE"
+        description: "Extra env vars, one KEY=VALUE per line"
         required: false
         default: ""
         type: string
@@ -42,25 +42,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y p7zip-full unrar || sudo apt-get install -y p7zip-full py7zr
 
-      - name: Run generator and capture log
-        id: run
+      - name: Apply extra env
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.extra_env != ''
         env:
           EXTRA_ENV: ${{ github.event.inputs.extra_env }}
         run: |
-          if [ -n "${EXTRA_ENV:-}" ]; then
-            while IFS= read -r line || [ -n "$line" ]; do
-              line="\( {line#" \){line%%[![:space:]]*}"}"
-              line="\( {line%" \){line##*[![:space:]]}"}"
-              [ -z "$line" ] && continue
-              case "$line" in \#*) continue ;; esac
-              key="${line%%=*}"
-              val="${line#*=}"
-              echo "\( {key}= \){val}" >> "$GITHUB_ENV"
-              export "\( {key}= \){val}"
-            done <<EOF
-          ${EXTRA_ENV}
-          EOF
-          fi
+          python3 - <<'PY'
+          import os
+          text = os.environ.get("EXTRA_ENV") or ""
+          path = os.environ["GITHUB_ENV"]
+          with open(path, "a", encoding="utf-8") as fh:
+              for raw in text.splitlines():
+                  line = raw.strip()
+                  if not line or line.startswith("#") or "=" not in line:
+                      continue
+                  key, _, val = line.partition("=")
+                  key = key.strip()
+                  if not key:
+                      continue
+                  fh.write(f"{key}={val}\n")
+                  print(f"[INFO] extra env {key}")
+          PY
+
+      - name: Run generator and capture log
+        id: run
+        run: |
           mkdir -p output history
           RUN_DATE=$(date -u +%Y%m%d)
           RUN_HM=$(date -u +%H%M)
