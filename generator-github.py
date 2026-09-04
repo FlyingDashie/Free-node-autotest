@@ -72,10 +72,10 @@ TEST_URL = "http://www.gstatic.com/generate_204"
 SOURCE_TIMEOUT = 20
 LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 2
-MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "24"))
+MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
-MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "300"))
+MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "350"))
 
 SOURCE_GROUPS = [
     {
@@ -3314,7 +3314,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
                 continue
             if metric:
                 metrics.append(metric)
-            if completed % 25 == 0 or completed == len(futures):
+            if completed % 100 == 0 or completed == len(futures):
                 print(f"[INFO] tested {completed}/{len(futures)} kept={len(metrics)}")
     return metrics
 
