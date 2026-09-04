@@ -74,7 +74,8 @@ LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 2
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "24"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
-MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "45"))
+MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
+MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "300"))
 
 _APK_FALLBACK_KEYS = {
     "sr-apk": [b"8YfiQ8wrkziZ5YFa"],
@@ -3680,6 +3681,17 @@ def limit_metrics_per_source(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     return limited
 
 
+def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
+    if len(metrics) <= MAX_LIVE_TOTAL:
+        return metrics
+    print(
+        f"[INFO] cap live total from {len(metrics)} to {MAX_LIVE_TOTAL} by health_score"
+    )
+    global _SEP_JUST_PRINTED
+    _SEP_JUST_PRINTED = False
+    return sorted(metrics, key=lambda item: item.health_score, reverse=True)[:MAX_LIVE_TOTAL]
+
+
 _SEP_JUST_PRINTED = False
 
 
@@ -3732,6 +3744,7 @@ def main() -> None:
     raw_live = count_live_by_prefix(metrics)
     metrics = dedupe_metrics_by_core(metrics)
     metrics = limit_metrics_per_source(metrics)
+    metrics = limit_metrics_total(metrics)
     capped_live = count_live_by_prefix(metrics)
     print_source_live_stats(collected_counts, unique_counts, raw_live, capped_live)
     order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
