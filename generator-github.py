@@ -2870,7 +2870,7 @@ def _apk_keys_from_source(source: dict[str, Any]) -> list[bytes]:
 def _apk_keys_for(source: dict[str, Any], scanned: list[bytes] | None = None) -> list[bytes]:
     merged: list[bytes] = []
     seen: set[bytes] = set()
-    for item in list(scanned or []):
+    for item in list(_apk_keys_from_source(source)) + list(scanned or []):
         if item in seen or len(item) not in {16, 24, 32}:
             continue
         seen.add(item)
