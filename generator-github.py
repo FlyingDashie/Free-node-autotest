@@ -73,6 +73,7 @@ SOURCE_TIMEOUT = 20
 CFG_FETCH_TIMEOUT = 8
 CFG_FETCH_WORKERS = 24
 CFG_FETCH_RETRIES = 1
+# Temporary diagnostic prints must use prefix [DEBUG], not [INFO]/[OK]/[WARN].
 LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 2
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
@@ -339,7 +340,6 @@ SOURCE_GROUPS = [
         "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
         "fallbacks": [],
         "prefer": "apk",
-        "keys": "8YfiQ8wrkziZ5YFa",
         "prefix": "[Pawdroid-sr-apk] ",
     },
     {
@@ -349,7 +349,6 @@ SOURCE_GROUPS = [
             "discover:toolkit:ss-apk:https://github.com/Pawdroid/ShadowShare/releases",
         ],
         "prefer": "apk",
-        "keys": "8YfiQ8wrkziZ5YFW",
         "prefix": "[Pawdroid-ss-apk] ",
     },
     {
@@ -1469,36 +1468,64 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     local_nodes.append(item)
                 source_found.extend(local_nodes)
                 toolkit_hits.append(("embedded://archive-config", len(local_nodes)))
-            for url in unique_ordered(candidates):
-                try:
-                    text = fetch_text(
-                        url,
-                        user_agent=str(source.get("user_agent") or ""),
-                        referer=str(source.get("referer") or ""),
-                    )
-                    head = str(text).lstrip()[:64].lower()
-                    if merge_all and head.startswith(("<!", "<html", "<head", "<title")):
-                        continue
-                    found = extract_proxies(text)
-                    if found:
-                        prefix = source.get("prefix", "")
-                        if prefix:
-                            for p in found:
-                                if isinstance(p, dict):
-                                    p["name"] = prefix + str(p.get("name", "")).strip()
-                        source_found.extend(found)
-                        used_url = url
-                        if merge_all:
-                            toolkit_hits.append((url, len(found)))
-                            continue
-                        break
+            pending = unique_ordered(candidates)
+            ua = str(source.get("user_agent") or "")
+            ref = str(source.get("referer") or "")
+
+            def _ingest(url: str, text: str) -> bool:
+                nonlocal used_url
+                head = str(text).lstrip()[:64].lower()
+                if merge_all and head.startswith(("<!", "<html", "<head", "<title")):
+                    return False
+                found = extract_proxies(text)
+                if not found:
                     if not merge_all:
                         print(f"[WARN] source={source['name']} empty url={url}")
-                except Exception as exc:
-                    if not merge_all:
+                    return False
+                prefix = source.get("prefix", "")
+                if prefix:
+                    for p in found:
+                        if isinstance(p, dict):
+                            p["name"] = prefix + str(p.get("name", "")).strip()
+                source_found.extend(found)
+                used_url = url
+                if merge_all:
+                    toolkit_hits.append((url, len(found)))
+                return True
+
+            if merge_all and pending:
+                def _fetch_one(url: str) -> tuple[str, str | None, str]:
+                    try:
+                        body = fetch_text(
+                            url,
+                            retries=CFG_FETCH_RETRIES,
+                            user_agent=ua,
+                            referer=ref,
+                            timeout=CFG_FETCH_TIMEOUT,
+                        )
+                        return url, body, ""
+                    except Exception as exc:
+                        return url, None, str(exc)
+
+                workers = max(1, min(CFG_FETCH_WORKERS, len(pending)))
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    futures = [pool.submit(_fetch_one, url) for url in pending]
+                    for future in as_completed(futures):
+                        url, text, err = future.result()
+                        if err or text is None:
+                            continue
+                        _ingest(url, text)
+            else:
+                for url in pending:
+                    try:
+                        text = fetch_text(url, user_agent=ua, referer=ref)
+                    except Exception as exc:
                         print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
-                if source_found and not merge_all:
-                    break
+                        continue
+                    if _ingest(url, text):
+                        break
+                    if source_found:
+                        break
         if not source_found:
             print(f"[WARN] source={source['name']} no proxies")
             source_found = load_previous_source_proxies(source)
@@ -2661,8 +2688,7 @@ def _apk_keys_from_source(source: dict[str, Any]) -> list[bytes]:
 def _apk_keys_for(source: dict[str, Any], scanned: list[bytes] | None = None) -> list[bytes]:
     merged: list[bytes] = []
     seen: set[bytes] = set()
-    # scanned keys already ranked; hardcoded source keys are fallback only
-    for item in list(scanned or []) + list(_apk_keys_from_source(source)):
+    for item in list(scanned or []):
         if item in seen or len(item) not in {16, 24, 32}:
             continue
         seen.add(item)
