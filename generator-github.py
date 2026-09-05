@@ -124,8 +124,8 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
             "discover:sublink:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
         ],
-        "prefix": "[大FQ运动] ",
         "all_bare": True,
+        "prefix": "[大FQ运动] ",
     },
     {
         "name": "大FQ运动-SS密钥",
@@ -144,8 +144,8 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/hello-world-1989/v2-sub/main/end-gfw-together-af3e13",
         ],
         "exclude": "end-gfw.com",
-        "prefix": "[大FQ运动-补充] ",
         "all_bare": True,
+        "prefix": "[大FQ运动-补充] ",
     },
     {
         "name": "ChromeGO-工具包",
@@ -327,8 +327,8 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
-        "prefix": "[免费节点9] ",
         "all_bare": True,
+        "prefix": "[免费节点9] ",
     },
     {
         "name": "免费节点10",
