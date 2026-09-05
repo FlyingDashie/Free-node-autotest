@@ -1550,10 +1550,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         if link not in pending
                     ]
                     if extra:
-                        print(
-                            f"[INFO] sublink fallback bare links={len(extra)} "
-                            f"file_nodes={len(source_seen)}"
-                        )
                         workers = max(1, min(CFG_FETCH_WORKERS, len(extra)))
                         with ThreadPoolExecutor(max_workers=workers) as pool:
                             futures = [pool.submit(_fetch_one, url) for url in extra]
