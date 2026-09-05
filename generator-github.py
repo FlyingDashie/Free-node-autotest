@@ -3688,6 +3688,7 @@ def _start_mihomo_for_batch(
             stdout, stderr = "", ""
         _stop_process(process)
         message = f"{exc}\n{stderr}\n{stdout}"
+        print(f"[WARN] batch start failed size={len(proxies)}")
         return None, message
 
 
@@ -3787,7 +3788,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
                 continue
             if metric:
                 metrics.append(metric)
-            if completed % 100 == 0 or (completed == len(futures) and len(futures) >= 20):
+            if completed % 100 == 0 or completed == len(futures):
                 print(f"[INFO] tested {completed}/{len(futures)} kept={len(metrics)}")
     return metrics
 
