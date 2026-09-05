@@ -3064,8 +3064,16 @@ def discover_article(feed_url: str, prefer: str = "") -> list[str]:
     except Exception:
         body = ""
 
-    pages: list[str] = []
-    via_feed = False
+    groups: dict[str, list[str]] = {}
+
+    def _add_page(stamp: str, page: str) -> None:
+        page = str(page or "").strip()
+        if not page:
+            return
+        key = stamp if stamp and stamp != "00000000" else "00000000"
+        groups.setdefault(key, [])
+        groups[key].append(page)
+
     parsed = None
     try:
         import feedparser
@@ -3090,34 +3098,18 @@ def discover_article(feed_url: str, prefer: str = "") -> list[str]:
                 return f"{parsed_time.tm_year:04d}{parsed_time.tm_mon:02d}{parsed_time.tm_mday:02d}"
             return "00000000"
 
-        stamped = [(entry_stamp(entry), entry) for entry in parsed.entries[:30]]
-        latest = max((stamp for stamp, _ in stamped if stamp != "00000000"), default="")
-        if latest:
-            pages = [
-                str(getattr(entry, "link", "") or "")
-                for stamp, entry in stamped
-                if stamp == latest
-            ]
-        else:
-            pages = [str(getattr(stamped[0][1], "link", "") or "")] if stamped else []
-        pages = [page for page in pages if page]
-        if pages:
-            via_feed = True
-            print(f"[INFO] article try feed: {feed_url} date={latest or 'latest'}")
-    if not pages and body:
-        raw_pages = _collect_article_links(body, feed_url)
-        stamped_pages = [(_page_stamp(page), page) for page in raw_pages]
-        latest = max((stamp for stamp, _ in stamped_pages if stamp != "00000000"), default="")
-        if latest:
-            pages = [page for stamp, page in stamped_pages if stamp == latest]
-        else:
-            pages = sorted(raw_pages, key=_page_stamp, reverse=True)[:1]
-        if pages:
-            print(f"[INFO] article try page: {feed_url} date={latest or 'latest'}")
+        for entry in parsed.entries[:30]:
+            _add_page(entry_stamp(entry), str(getattr(entry, "link", "") or ""))
+        if groups:
+            print(f"[INFO] article try feed: {feed_url}")
+    if not groups and body:
+        for page in _collect_article_links(body, feed_url):
+            _add_page(_page_stamp(page), page)
+        if groups:
+            print(f"[INFO] article try page: {feed_url}")
 
-    collected: list[str] = []
-    pages = unique_ordered(pages)
-    if not pages:
+    stamps = sorted(groups, reverse=True)
+    if not stamps:
         print(f"[WARN] article discovery failed: {feed_url}")
         return []
 
@@ -3127,16 +3119,20 @@ def discover_article(feed_url: str, prefer: str = "") -> list[str]:
         except Exception:
             return []
 
-    workers = max(1, min(CFG_FETCH_WORKERS, len(pages)))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_page_subs, page) for page in pages]
-        for future in as_completed(futures):
-            collected.extend(future.result() or [])
-    found = unique_ordered(collected)
-    _DISCOVER_PAGES = list(pages)
-    if not found:
-        print(f"[WARN] article discovery failed: {feed_url}")
-    return found
+    for stamp in stamps:
+        pages = unique_ordered(groups[stamp])
+        collected: list[str] = []
+        workers = max(1, min(CFG_FETCH_WORKERS, len(pages)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(_page_subs, page) for page in pages]
+            for future in as_completed(futures):
+                collected.extend(future.result() or [])
+        found = unique_ordered(collected)
+        if found:
+            _DISCOVER_PAGES = list(pages)
+            return found
+    print(f"[WARN] article discovery failed: {feed_url}")
+    return []
 
 
 def unique_ordered(items: list[str]) -> list[str]:
