@@ -1433,6 +1433,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 break
             url, prefer, exclude = _item_spec(item, source)
             merge_all = False
+            _SUBLINK_BARE.clear()
             if url.startswith("discover:article:"):
                 candidates = discover_article(url[len("discover:article:"):], prefer=prefer)
                 merge_all = True
@@ -1543,6 +1544,24 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         if err or text is None:
                             continue
                         _ingest(url, text)
+                if _SUBLINK_BARE and len(source_seen) <= 10:
+                    extra = [
+                        link for link in unique_ordered(_SUBLINK_BARE)
+                        if link not in pending
+                    ]
+                    if extra:
+                        print(
+                            f"[INFO] sublink fallback bare links={len(extra)} "
+                            f"file_nodes={len(source_seen)}"
+                        )
+                        workers = max(1, min(CFG_FETCH_WORKERS, len(extra)))
+                        with ThreadPoolExecutor(max_workers=workers) as pool:
+                            futures = [pool.submit(_fetch_one, url) for url in extra]
+                            for future in as_completed(futures):
+                                url, text, err = future.result()
+                                if err or text is None:
+                                    continue
+                                _ingest(url, text)
             else:
                 for url in pending:
                     try:
@@ -1723,13 +1742,13 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
             files.append((_score_sub_link(link, match.group(0), prefer=prefer), link))
     files.sort(key=lambda item: item[0], reverse=True)
     bare.sort(key=lambda item: item[0], reverse=True)
-    # 有扩展名链接只扫扩展名；没有才扫裸链接
-    chosen = files if files else bare
-    return unique_ordered([url for _, url in chosen])
+    file_links = unique_ordered([url for _, url in files])
+    bare_links = unique_ordered([url for _, url in bare if url not in file_links])
+    return file_links, bare_links
 
 
 def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list[str]:
-    global _DISCOVER_PAGES
+    global _DISCOVER_PAGES, _SUBLINK_BARE
     page_url = _blob_to_raw(page_url.strip())
     _DISCOVER_PAGES = [page_url]
     print(f"[INFO] sublink try page: {page_url}")
@@ -1738,11 +1757,14 @@ def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list
     except Exception as exc:
         print(f"[WARN] sublink page failed: {page_url} {exc}")
         return []
-    candidate_links = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
-    if not candidate_links:
-        print(f"[WARN] sublink discovery failed: {page_url}")
-        return []
-    return candidate_links
+    file_links, bare_links = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
+    if file_links:
+        _SUBLINK_BARE.extend(bare_links)
+        return file_links
+    if bare_links:
+        return bare_links
+    print(f"[WARN] sublink discovery failed: {page_url}")
+    return []
 
 
 def _collect_article_links(text: str, page_url: str) -> list[str]:
@@ -1814,6 +1836,7 @@ _TOOLKIT_CONFIG_EXT = {
 _TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
 _TOOLKIT_ARCHIVE_URL = ""
 _DISCOVER_PAGES: list[str] = []
+_SUBLINK_BARE: list[str] = []
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
@@ -2945,22 +2968,10 @@ def _discover_toolkit_encrypted_apk(
 
             names = sorted(names, key=_name_rank)
             urls = _apk_build_cfg_urls(prefixes, names, tokens)
-            urls.sort(
-                key=lambda item: (
-                    0 if "shadowrockets.app" in item.lower() else
-                    1 if "pixelor" in item.lower() else
-                    2 if "159236" in item.lower() else
-                    3 if "onmicrosoft" in item.lower() or "jsdelivr" in item.lower() else 4,
-                    next(
-                        (
-                            wanted.index(item.lower().rsplit("/", 1)[-1].split("?", 1)[0])
-                            for _ in [0]
-                            if item.lower().rsplit("/", 1)[-1].split("?", 1)[0] in wanted
-                        ),
-                        99,
-                    ),
-                )
-            )
+            def _file_rank(item: str) -> int:
+                name = item.split("?", 1)[0].rsplit("/", 1)[-1].lower()
+                return wanted.index(name) if name in wanted else 99
+            urls.sort(key=_file_rank)
             collected: list[dict[str, Any]] = []
             seen: set[str] = set()
             locked = None
