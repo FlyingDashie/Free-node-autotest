@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse, urlunparse
 
 _REQUIRED_PACKAGES = {
     "requests": "requests",
@@ -40,8 +40,41 @@ _OPTIONAL_PACKAGES = {
 def _pkg_missing(mod: str) -> bool:
     return importlib.util.find_spec(mod) is None
 
+def _which_any(*names: str) -> str:
+    for name in names:
+        found = shutil.which(name)
+        if found:
+            return found
+    extra = (
+        "/usr/bin",
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+        "/data/data/com.termux/files/usr/bin",
+        "/system/bin",
+        "/system/xbin",
+    )
+    for folder in extra:
+        for name in names:
+            path = Path(folder) / name
+            if path.exists() and os.access(path, os.X_OK):
+                return str(path)
+    return ""
+
+
+def _have_7z_tool() -> str:
+    return _which_any("7z", "7za", "7zz", "7zr", "p7zip")
+
+
+def _have_rar_tool() -> str:
+    return _have_7z_tool() or _which_any("unrar", "unar", "rar", "bsdtar")
+
+
 _missing_required = [pip for mod, pip in _REQUIRED_PACKAGES.items() if _pkg_missing(mod)]
 _missing_optional = [pip for mod, pip in _OPTIONAL_PACKAGES.items() if _pkg_missing(mod)]
+if _have_7z_tool():
+    _missing_optional = [name for name in _missing_optional if name != "py7zr"]
+if _have_rar_tool():
+    _missing_optional = [name for name in _missing_optional if name != "rarfile"]
 if _missing_required or _missing_optional:
     if _missing_required:
         print("[WARN] required packages missing: " + ", ".join(_missing_required))
@@ -70,9 +103,10 @@ RAW_PATH = Path("output/raw.yaml")
 HISTORY_DIR = Path("history")
 TEST_URL = "http://www.gstatic.com/generate_204"
 SOURCE_TIMEOUT = 20
-CFG_FETCH_TIMEOUT = 8
+CFG_FETCH_TIMEOUT = 12
 CFG_FETCH_WORKERS = 24
 CFG_FETCH_RETRIES = 1
+_DROP_NAMES: list[str] = []
 # Temporary diagnostic prints must use prefix [DEBUG], not [INFO]/[OK]/[WARN].
 LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 2
@@ -108,7 +142,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/hello-world-1989/v2-sub/main/end-gfw-together-af3e13",
         ],
-        "prefer": "速度更快",
         "exclude": "end-gfw.com",
         "prefix": "[大FQ运动-补充] ",
     },
@@ -190,7 +223,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://free-clash-v2ray.github.io/uploads/latest.yaml",
         ],
-        "prefer": "3-",
         "prefix": "[Free-clash-v2ray] ",
     },
     {
@@ -285,7 +317,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml",
         ],
-        "prefer": "sub_merge",
         "prefix": "[免费节点8] ",
     },
     {
@@ -294,14 +325,7 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
-        "prefer": "subscription_num",
         "prefix": "[免费节点9-1] ",
-    },
-    {
-        "name": "免费节点9-2",
-        "primary": "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_try",
-        "fallbacks": [],
-        "prefix": "[免费节点9-2] ",
     },
     {
         "name": "免费节点10",
@@ -309,7 +333,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/proxies.yaml",
         ],
-        "prefer": "订阅地址",
         "prefix": "[免费节点10] ",
     },
     {
@@ -320,20 +343,7 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/all.yaml",
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/mihomo.yaml",
         ],
-        "prefer": "订阅链接",
         "prefix": "[免费节点11-1] ",
-    },
-    {
-        "name": "免费节点11-2",
-        "primary": "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/byxiaoxi.txt",
-        "fallbacks": [],
-        "prefix": "[免费节点11-2] ",
-    },
-    {
-        "name": "免费节点11-3",
-        "primary": "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/kooker.jp.txt",
-        "fallbacks": [],
-        "prefix": "[免费节点11-3] ",
     },
     {
         "name": "Pawdroid-sr-apk",
@@ -357,7 +367,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             {
                 "url": "discover:sublink:https://raw.githubusercontent.com/free-nodes/v2rayfree/refs/heads/main/README.md",
-                "prefer": "订阅地址",
             },
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         ],
@@ -369,7 +378,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
         ],
-        "prefer": "All_Configs",
         "prefix": "[Epodonios-v2ray-configs] ",
     },
     {
@@ -471,6 +479,15 @@ def _bind_dirs() -> None:
     HISTORY_DIR = _writable_dir("history")
 
 
+def _safe_http_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or "." not in parsed.netloc:
+        return url
+    path = quote(parsed.path or "", safe="/-._~@")
+    query = quote(parsed.query or "", safe="=&%+-._~")
+    return urlunparse((parsed.scheme, parsed.netloc, path, parsed.params, query, parsed.fragment))
+
+
 def fetch_text(
     url: str,
     retries: int = MAX_RETRIES,
@@ -485,6 +502,7 @@ def fetch_text(
     }
     if referer:
         headers["Referer"] = referer
+    url = _safe_http_url(url)
     session = requests.Session()
     session.trust_env = False
     session.verify = False
@@ -523,17 +541,11 @@ def maybe_base64_decode(text: str) -> str:
 
 
 _YAML_WARN_SEEN: set[str] = set()
-_YAML_WARN_SILENT = False
+_YAML_WARN_SILENT = True
 
 
 def _yaml_warn(brief: str) -> None:
-    if _YAML_WARN_SILENT:
-        return
-    key = re.sub(r"\s*skipped=\d+", "", brief).strip()
-    if not key or key in _YAML_WARN_SEEN:
-        return
-    _YAML_WARN_SEEN.add(key)
-    print(f"[WARN] YAML parse failed: {brief}")
+    return
 
 
 def _yaml_error_brief(exc: Exception) -> str:
@@ -1411,7 +1423,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             print_sep()
         first = False
         source_found: list[dict[str, Any]] = []
+        source_seen: set[str] = set()
         used_url = ""
+        used_toolkit = False
+        discover_pages: list[str] = []
+        toolkit_hits: list[tuple[str, list[str], int]] = []
         for item in _source_queue(source):
             if source_found:
                 break
@@ -1419,12 +1435,17 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             merge_all = False
             if url.startswith("discover:article:"):
                 candidates = discover_article(url[len("discover:article:"):], prefer=prefer)
+                merge_all = True
+                discover_pages = list(_DISCOVER_PAGES)
             elif url.startswith("discover:sublink:"):
+                page = url[len("discover:sublink:"):]
                 candidates = discover_sublink(
-                    url[len("discover:sublink:"):],
+                    page,
                     prefer=prefer,
                     exclude=exclude,
                 )
+                merge_all = True
+                discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
             elif url.startswith("discover:toolkit:"):
                 toolkit_spec = url[len("discover:toolkit:"):]
                 if toolkit_spec.lower().startswith("ss-apk:"):
@@ -1455,10 +1476,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     continue
                 candidates = discover_toolkit(toolkit_spec, prefer=prefer)
                 merge_all = True
+                used_toolkit = True
             else:
                 candidates = [url]
-            toolkit_hits: list[tuple[str, int]] = []
-            if merge_all and _TOOLKIT_EMBEDDED:
+                print(f"[INFO] source try url: {url}")
+            if used_toolkit and _TOOLKIT_EMBEDDED:
                 prefix = source.get("prefix", "")
                 local_nodes = []
                 for proxy in _TOOLKIT_EMBEDDED:
@@ -1467,7 +1489,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         item["name"] = prefix + str(item.get("name", "")).strip()
                     local_nodes.append(item)
                 source_found.extend(local_nodes)
-                toolkit_hits.append(("embedded://archive-config", len(local_nodes)))
+                marks = [proxy_fingerprint(item) for item in local_nodes]
+                toolkit_hits.append(("embedded://archive-config", marks, len(local_nodes)))
             pending = unique_ordered(candidates)
             ua = str(source.get("user_agent") or "")
             ref = str(source.get("referer") or "")
@@ -1483,14 +1506,24 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         print(f"[WARN] source={source['name']} empty url={url}")
                     return False
                 prefix = source.get("prefix", "")
-                if prefix:
-                    for p in found:
-                        if isinstance(p, dict):
-                            p["name"] = prefix + str(p.get("name", "")).strip()
-                source_found.extend(found)
+                kept: list[dict[str, Any]] = []
+                marks: list[str] = []
+                for p in found:
+                    if not isinstance(p, dict):
+                        continue
+                    if prefix:
+                        p["name"] = prefix + str(p.get("name", "")).strip()
+                    mark = proxy_fingerprint(p)
+                    marks.append(mark)
+                    if mark in source_seen:
+                        continue
+                    source_seen.add(mark)
+                    kept.append(p)
+                toolkit_hits.append((url, marks, len(kept)))
+                if not kept:
+                    return bool(found)
+                source_found.extend(kept)
                 used_url = url
-                if merge_all:
-                    toolkit_hits.append((url, len(found)))
                 return True
 
             if merge_all and pending:
@@ -1501,7 +1534,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                             retries=CFG_FETCH_RETRIES,
                             user_agent=ua,
                             referer=ref,
-                            timeout=CFG_FETCH_TIMEOUT,
+                            timeout=SOURCE_TIMEOUT,
                         )
                         return url, body, ""
                     except Exception as exc:
@@ -1529,12 +1562,18 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
         if not source_found:
             print(f"[WARN] source={source['name']} no proxies")
             source_found = load_previous_source_proxies(source)
-        elif merge_all:
-            _print_toolkit_groups(toolkit_hits)
-            extra = f" url={_TOOLKIT_ARCHIVE_URL}" if _TOOLKIT_ARCHIVE_URL else ""
+        else:
+            if toolkit_hits:
+                _print_toolkit_groups(toolkit_hits)
+            if used_toolkit and _TOOLKIT_ARCHIVE_URL:
+                extra = f" url={_TOOLKIT_ARCHIVE_URL}"
+            elif discover_pages:
+                extra = f" url={_aggregate_urls(discover_pages)}"
+            elif used_url:
+                extra = f" url={used_url.split('?', 1)[0]}"
+            else:
+                extra = ""
             print(f"[OK] proxies={len(source_found)} source={source['name']}{extra}")
-        elif used_url:
-            print(f"[OK] proxies={len(source_found)} source={source['name']} url={used_url}")
         collected.extend(source_found)
 
     write_raw_backup(collected)
@@ -1659,8 +1698,8 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
                 break
             prefer_positions.append(pos)
             start = pos + len(hint)
-    for match in re.finditer(r"https?://[^\s\"'<>\]\)]+", text, re.I):
-        raw = match.group(0).split("`")[0].rstrip(").,;\"'")
+    for match in re.finditer(r"https?://[^\s\"'`<>\]\|)]+", text, re.I):
+        raw = match.group(0).split("`")[0].rstrip(").,;\"'|")
         link = _blob_to_raw(raw)
         if exclude_keyword and exclude_keyword in link.lower():
             continue
@@ -1675,16 +1714,29 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
             continue
         else:
             bare.append((scored, link))
-    if prefer_positions:
-        chosen = files + bare
-    else:
-        chosen = files if files else bare
-    chosen.sort(key=lambda item: item[0], reverse=True)
+    if page_url:
+        for match in re.finditer(
+            r"""(?:href|src)=["']([^"']+\.(?:yaml|yml|txt|json)(?:[?#][^"']*)?)["']""",
+            text,
+            re.I,
+        ):
+            link = urljoin(page_url, html.unescape(match.group(1)))
+            if not link.startswith("http"):
+                continue
+            if exclude_keyword and exclude_keyword in link.lower():
+                continue
+            files.append((_score_sub_link(link, match.group(0), prefer=prefer), link))
+    files.sort(key=lambda item: item[0], reverse=True)
+    bare.sort(key=lambda item: item[0], reverse=True)
+    # 有扩展名链接只扫扩展名；没有才扫裸链接
+    chosen = files if files else bare
     return unique_ordered([url for _, url in chosen])
 
 
 def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list[str]:
+    global _DISCOVER_PAGES
     page_url = _blob_to_raw(page_url.strip())
+    _DISCOVER_PAGES = [page_url]
     print(f"[INFO] sublink try page: {page_url}")
     try:
         body = fetch_text(page_url)
@@ -1692,11 +1744,10 @@ def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list
         print(f"[WARN] sublink page failed: {page_url} {exc}")
         return []
     candidate_links = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
-    for link in candidate_links:
-        if _probe_sub_file("sublink", link):
-            return [link]
-    print(f"[WARN] sublink discovery failed: {page_url}")
-    return []
+    if not candidate_links:
+        print(f"[WARN] sublink discovery failed: {page_url}")
+        return []
+    return candidate_links
 
 
 def _collect_article_links(text: str, page_url: str) -> list[str]:
@@ -1767,6 +1818,7 @@ _TOOLKIT_CONFIG_EXT = {
 }
 _TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
 _TOOLKIT_ARCHIVE_URL = ""
+_DISCOVER_PAGES: list[str] = []
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
@@ -2231,7 +2283,7 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                 tf.extractall(dest_dir)
             return True
         if name.endswith(".7z"):
-            seven = shutil.which("7z") or shutil.which("7za") or shutil.which("7zz")
+            seven = _have_7z_tool()
             if seven:
                 result = subprocess.run(
                     [seven, "x", str(archive), f"-o{dest_dir}", "-y"],
@@ -2257,6 +2309,24 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                     zf.extractall(path=dest_dir)
             return True
         if name.endswith(".rar"):
+            seven = _have_7z_tool()
+            if seven:
+                result = subprocess.run(
+                    [seven, "x", str(archive), f"-o{dest_dir}", "-y"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    return True
+            unrar = _which_any("unrar", "unar", "rar")
+            if unrar:
+                result = subprocess.run(
+                    [unrar, "x", "-o+", str(archive), str(dest_dir) + "/"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    return True
             try:
                 import rarfile
             except ImportError as exc:
@@ -2265,7 +2335,7 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
             with rarfile.RarFile(archive) as rf:
                 rf.extractall(dest_dir)
             return True
-        seven = shutil.which("7z") or shutil.which("7za") or shutil.which("7zz")
+        seven = _have_7z_tool()
         if seven:
             result = subprocess.run(
                 [seven, "x", str(archive), f"-o{dest_dir}", "-y"],
@@ -2331,12 +2401,7 @@ def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             continue
-        global _YAML_WARN_SILENT
-        _YAML_WARN_SILENT = True
-        try:
-            nodes = extract_proxies(text)
-        finally:
-            _YAML_WARN_SILENT = False
+        nodes = extract_proxies(text)
         if nodes:
             found.extend(nodes)
     return found
@@ -2351,79 +2416,135 @@ def _toolkit_tail_parts(path: str) -> list[str]:
     return parts[-6:] if len(parts) > 6 else parts
 
 
-def _toolkit_merge_key(url: str) -> tuple[str, ...]:
-    if str(url).startswith("embedded:"):
-        return ("embedded",)
-    key: list[str] = []
-    for part in _toolkit_tail_parts(urlparse(url).path):
-        lower = part.lower()
-        if part.isdigit() or (len(lower) <= 3 and "." not in lower):
-            key.append("#")
+def _unwrap_proxy_url(url: str) -> str:
+    raw = str(url).split("?", 1)[0]
+    match = re.match(
+        r"https?://(?:ghfast\.top|ghproxy\.[^/]+|mirror\.ghproxy\.com)/+(https?://.+)$",
+        raw,
+        re.I,
+    )
+    return match.group(1) if match else raw
+
+
+def _url_tokens(url: str) -> list[str]:
+    raw = _unwrap_proxy_url(url)
+    parsed = urlparse(raw)
+    host = (parsed.netloc or "").lower()
+    parts = [p for p in parsed.path.split("/") if p]
+    if "jsdelivr.net" in host and len(parts) >= 3 and parts[0].lower() == "gh":
+        user = parts[1]
+        repo_ref = parts[2]
+        if "@" in repo_ref:
+            repo, ref = repo_ref.split("@", 1)
         else:
-            key.append(lower)
-    return tuple(key)
+            repo, ref = repo_ref, "main"
+        return ["github", user, repo, ref, *parts[3:]]
+    if host == "raw.githubusercontent.com" and len(parts) >= 3:
+        user, repo, *rest = parts
+        if len(rest) >= 3 and rest[0] == "refs" and rest[1] == "heads":
+            ref, rest = rest[2], rest[3:]
+        else:
+            ref, rest = rest[0], rest[1:]
+        return ["github", user, repo, ref, *rest]
+    if host == "github.com" and len(parts) >= 4 and parts[2] == "raw":
+        user, repo = parts[0], parts[1]
+        rest = parts[3:]
+        if len(rest) >= 3 and rest[0] == "refs" and rest[1] == "heads":
+            ref, rest = rest[2], rest[3:]
+        else:
+            ref, rest = (rest[0] if rest else "main"), rest[1:]
+        return ["github", user, repo, ref, *rest]
+    if "gitlab." in host or host.endswith("gitlab.com"):
+        flat: list[str] = []
+        index = 0
+        while index < len(parts):
+            if parts[index] == "-" and index + 1 < len(parts) and parts[index + 1] == "raw":
+                index += 2
+                continue
+            flat.append(parts[index])
+            index += 1
+        return [host, *flat]
+    return [host, *parts]
+
+
+def _url_filename(url: str) -> str:
+    parts = _url_tokens(url)
+    return parts[-1].lower() if parts else ""
+
+
+def _url_group_key(url: str) -> str:
+    name = _url_filename(url)
+    return re.sub(r"\d+", "#", name) if name else urlparse(_unwrap_proxy_url(url)).netloc.lower()
+
+
+def _aggregate_urls(urls: list[str]) -> str:
+    items = unique_ordered([str(item).split("?", 1)[0] for item in urls if item])
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    rows = [_url_tokens(item) for item in items]
+    prefix: list[str] = []
+    for column in zip(*rows):
+        unique = list(dict.fromkeys(column))
+        if len(unique) != 1:
+            break
+        prefix.append(unique[0])
+    suffix: list[str] = []
+    mids = [row[len(prefix):] for row in rows]
+    while mids and all(item and item[-1] == mids[0][-1] for item in mids):
+        suffix.insert(0, mids[0][-1])
+        for item in mids:
+            item.pop()
+    def _finish(parts: list[str]) -> str:
+        rendered = [item for item in parts if item]
+        if rendered and rendered[0] == "github":
+            hosts = unique_ordered(
+                [urlparse(_unwrap_proxy_url(item)).netloc for item in items]
+            )
+            rendered[0] = hosts[0] if len(hosts) == 1 else "{" + "|".join(hosts) + "}"
+        return "https://" + "/".join(rendered)
+
+    if mids and all(len(item) == len(mids[0]) and item for item in mids):
+        rendered = list(prefix)
+        for index in range(len(mids[0])):
+            unique = list(dict.fromkeys(item[index] for item in mids))
+            rendered.append(unique[0] if len(unique) == 1 else "{" + "|".join(unique) + "}")
+        return _finish(rendered + suffix)
+    mid_text = unique_ordered(["/".join(item) for item in mids if item])
+    if not mid_text:
+        return _finish(prefix + suffix)
+    if len(mid_text) == 1:
+        return _finish(prefix + mid_text + suffix)
+    return _finish(prefix + ["{" + "|".join(mid_text) + "}"] + suffix)
 
 
 def _toolkit_format_group(urls: list[str]) -> str:
-    parsed = [urlparse(item) for item in urls]
-    tails = [_toolkit_tail_parts(item.path) for item in parsed]
-    width = max((len(tail) for tail in tails), default=0)
-    rendered: list[str] = []
-    for index in range(width):
-        values: list[str] = []
-        for tail in tails:
-            if index < len(tail):
-                values.append(tail[index])
-        unique = list(dict.fromkeys(values))
-        if len(unique) == 1:
-            rendered.append(unique[0])
-        elif unique and all(item.isdigit() or (len(item) <= 3 and "." not in item) for item in unique):
-            ordered = list(dict.fromkeys(unique))
-            rendered.append("{" + "|".join(ordered) + "}")
-        elif unique and all(item.isdigit() for item in unique):
-            rendered.append("{" + "|".join(sorted(unique, key=int)) + "}")
-        else:
-            rendered.append("{" + "|".join(unique) + "}")
-    prefixes: list[list[str]] = []
-    for item, tail in zip(parsed, tails):
-        parts = _toolkit_path_parts(item.path)
-        head = parts[: max(0, len(parts) - len(tail))]
-        prefixes.append([item.netloc, *head])
-    shared: list[str] = []
-    if len(prefixes) >= 2:
-        while prefixes and all(len(item) > 1 and item[-1] == prefixes[0][-1] for item in prefixes):
-            shared.insert(0, prefixes[0][-1])
-            for item in prefixes:
-                item.pop()
-    unique_prefix = ["/".join(item) for item in prefixes if item]
-    unique_prefix = list(dict.fromkeys(unique_prefix))
-    if len(unique_prefix) <= 1:
-        origin = "https://" + (unique_prefix[0] if unique_prefix else "")
-    else:
-        origin = "https://{" + "|".join(unique_prefix) + "}"
-    rest = [part for part in (shared + rendered) if part]
-    if rest and origin:
-        return origin + "/" + "/".join(rest)
-    return origin or "/".join(rest)
+    return _aggregate_urls(urls)
 
 
-def _print_toolkit_groups(hits: list[tuple[str, int]]) -> None:
-    buckets: dict[tuple[str, ...], list[tuple[str, int]]] = {}
-    order: list[tuple[str, ...]] = []
-    for url, count in hits:
-        key = _toolkit_merge_key(url)
+def _print_toolkit_groups(hits: list[tuple[str, list[str], int]]) -> None:
+    embedded = [row for row in hits if str(row[0]).startswith("embedded:")]
+    remote = [row for row in hits if not str(row[0]).startswith("embedded:")]
+    if embedded:
+        marks = [mark for _, group, _ in embedded for mark in group]
+        new_total = sum(new for _, _, new in embedded)
+        print(f"[OK] proxies={len(set(marks))} new={new_total} embedded=archive-config")
+    buckets: dict[tuple[str, int], list[tuple[str, list[str], int]]] = {}
+    order: list[tuple[str, int]] = []
+    for url, marks, new in remote:
+        depth = len(_url_tokens(url))
+        key = (_url_group_key(url) or url, depth)
         if key not in buckets:
             buckets[key] = []
             order.append(key)
-        buckets[key].append((url, count))
+        buckets[key].append((url, marks, new))
     for key in order:
         rows = buckets[key]
-        total = sum(count for _, count in rows)
-        if key == ("embedded",):
-            print(f"[OK] proxies={total} embedded=archive-config")
-            continue
-        label = _toolkit_format_group([url for url, _ in rows])
-        print(f"[OK] proxies={total} url={label}")
+        marks = [mark for _, group, _ in rows for mark in group]
+        new_total = sum(new for _, _, new in rows)
+        label = _aggregate_urls([url for url, _, _ in rows])
+        print(f"[OK] proxies={len(set(marks))} new={new_total} url={label}")
 
 
 def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
@@ -2603,7 +2724,14 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
         for match in re.finditer(rb"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+", blob):
             url = match.group(0).decode("ascii", "ignore").rstrip("\\").rstrip()
             low = url.lower()
-            if any(mark in low for mark in ("/config/", "/raw/data/", "/data/", "gitee.com/api/v5/repos", "foxovpn", "159236", "ecsfg")):
+            host = urlparse(url.split("?", 1)[0]).netloc
+            if "." not in host or host.count(".") < 1:
+                continue
+            if any(mark in low for mark in (
+                "/config/", "/raw/data/", "/data/",
+                "gitee.com/api/v5/repos", "foxovpn", "159236", "ecsfg",
+                "onmicrosoft", "jsdelivr", "shadowsharing", "v2gh",
+            )):
                 piece = url.split("?", 1)[0]
                 for mark in ("/config", "/data", "/raw/data"):
                     idx = piece.lower().find(mark)
@@ -2712,7 +2840,9 @@ def _apk_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[str]
                     urls.append(f"{piece}?access_token={token}")
             else:
                 urls.append(piece)
-    return unique_ordered(urls)
+    built = unique_ordered(urls)
+    extra = [_safe_http_url(item) for item in built if "@" in item]
+    return unique_ordered(built + extra)
 
 
 def _apk_decrypt_once(
@@ -2834,6 +2964,7 @@ def _discover_toolkit_encrypted_apk(
             used_scan = False
             last_err = ""
             tried = 0
+            apk_hits: list[tuple[str, list[str], int]] = []
             def _fetch_cfg(url: str) -> tuple[str, str | None, str]:
                 try:
                     body = fetch_text(
@@ -2875,21 +3006,19 @@ def _discover_toolkit_encrypted_apk(
                     if not found:
                         continue
                     kept: list[dict[str, Any]] = []
+                    marks: list[str] = []
                     for proxy in found:
                         mark = proxy_fingerprint(proxy)
+                        marks.append(mark)
                         if mark in seen:
                             continue
                         seen.add(mark)
                         kept.append(proxy)
-                    if not kept:
-                        continue
-                    print(
-                        f"[OK] {label} decrypted proxies={len(found)} "
-                        f"url={short}"
-                    )
+                    apk_hits.append((short, marks, len(kept)))
                     collected.extend(kept)
                     hit_names.add(fname)
             if collected:
+                _print_toolkit_groups(apk_hits)
                 return collected, archive_url
         extra = f" tried={tried}"
         if last_err:
@@ -2919,6 +3048,8 @@ def _discover_toolkit_ss_apk(source: dict[str, Any], page_url: str) -> tuple[lis
 
 
 def discover_article(feed_url: str, prefer: str = "") -> list[str]:
+    global _DISCOVER_PAGES
+    _DISCOVER_PAGES = []
     body = ""
     try:
         body = fetch_text(feed_url)
@@ -2951,24 +3082,53 @@ def discover_article(feed_url: str, prefer: str = "") -> list[str]:
                 return f"{parsed_time.tm_year:04d}{parsed_time.tm_mon:02d}{parsed_time.tm_mday:02d}"
             return "00000000"
 
-        ranked = sorted(parsed.entries[:20], key=entry_stamp, reverse=True)[:10]
-        pages = [str(getattr(entry, "link", "") or "") for entry in ranked]
+        stamped = [(entry_stamp(entry), entry) for entry in parsed.entries[:30]]
+        latest = max((stamp for stamp, _ in stamped if stamp != "00000000"), default="")
+        if latest:
+            pages = [
+                str(getattr(entry, "link", "") or "")
+                for stamp, entry in stamped
+                if stamp == latest
+            ]
+        else:
+            pages = [str(getattr(stamped[0][1], "link", "") or "")] if stamped else []
         pages = [page for page in pages if page]
         if pages:
             via_feed = True
-            print(f"[INFO] article try feed: {feed_url}")
+            print(f"[INFO] article try feed: {feed_url} date={latest or 'latest'}")
     if not pages and body:
-        pages = _collect_article_links(body, feed_url)
-        pages = sorted(pages, key=_page_stamp, reverse=True)[:10]
+        raw_pages = _collect_article_links(body, feed_url)
+        stamped_pages = [(_page_stamp(page), page) for page in raw_pages]
+        latest = max((stamp for stamp, _ in stamped_pages if stamp != "00000000"), default="")
+        if latest:
+            pages = [page for stamp, page in stamped_pages if stamp == latest]
+        else:
+            pages = sorted(raw_pages, key=_page_stamp, reverse=True)[:1]
         if pages:
-            print(f"[INFO] article try page: {feed_url}")
+            print(f"[INFO] article try page: {feed_url} date={latest or 'latest'}")
 
-    for page in unique_ordered(pages):
-        found = discover_sublink(page, prefer=prefer)
-        if found:
-            return found
-    print(f"[WARN] article discovery failed: {feed_url}")
-    return []
+    collected: list[str] = []
+    pages = unique_ordered(pages)
+    if not pages:
+        print(f"[WARN] article discovery failed: {feed_url}")
+        return []
+
+    def _page_subs(page: str) -> list[str]:
+        try:
+            return discover_sublink(page, prefer=prefer)
+        except Exception:
+            return []
+
+    workers = max(1, min(CFG_FETCH_WORKERS, len(pages)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_page_subs, page) for page in pages]
+        for future in as_completed(futures):
+            collected.extend(future.result() or [])
+    found = unique_ordered(collected)
+    _DISCOVER_PAGES = list(pages)
+    if not found:
+        print(f"[WARN] article discovery failed: {feed_url}")
+    return found
 
 
 def unique_ordered(items: list[str]) -> list[str]:
@@ -3541,12 +3701,7 @@ def _benchmark_batch(
 
     if len(proxies) == 1:
         bad = proxies[0]
-        print(
-            f"[DROP] isolate bad proxy name={bad.get('name')} "
-            f"server={bad.get('server')}:{bad.get('port')}"
-        )
-        if error:
-            print(f"[DROP] reason: {error[:300]}")
+        _DROP_NAMES.append(str(bad.get("name") or ""))
         return []
 
     mid = max(1, len(proxies) // 2)
@@ -3573,9 +3728,17 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         config_path = temp_dir / "benchmark.yaml"
         controller_port = find_free_port()
         controller_url = f"http://127.0.0.1:{controller_port}"
+        global _DROP_NAMES
+        _DROP_NAMES = []
         metrics = _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, list(proxies)
         )
+        if _DROP_NAMES:
+            names = " | ".join(item for item in _DROP_NAMES if item)
+            if len(names) > 400:
+                names = names[:397] + "..."
+            print(f"[DROP] discarded={len(_DROP_NAMES)} {names}")
+        _DROP_NAMES = []
         _SEP_JUST_PRINTED = False
         print_sep()
         if not metrics:
@@ -3595,8 +3758,8 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
             proxy = futures[future]
             try:
                 metric = future.result()
-            except Exception as exc:
-                print(f"[DROP] {proxy.get('name')} failed: {exc}")
+            except Exception:
+                _DROP_NAMES.append(str(proxy.get("name") or ""))
                 continue
             if metric:
                 metrics.append(metric)
