@@ -336,7 +336,6 @@ SOURCE_GROUPS = [
         "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
         "fallbacks": [],
         "prefer": "apk",
-        "keys": "8YfiQ8wrkziZ5YFa",
         "prefix": "[Pawdroid-sr-apk] ",
     },
     {
@@ -346,7 +345,6 @@ SOURCE_GROUPS = [
             "discover:toolkit:ss-apk:https://github.com/Pawdroid/ShadowShare/releases",
         ],
         "prefer": "apk",
-        "keys": "8YfiQ8wrkziZ5YFW",
         "prefix": "[Pawdroid-ss-apk] ",
     },
     {
@@ -428,8 +426,8 @@ def resolve_ua(name: str = "") -> str:
     return UA_PRESETS.get(key, key)
 
 
-def _writable_dir(name: str) -> Path:
-    bases = []
+def _path_search_bases() -> list[Path]:
+    bases: list[Path] = []
     try:
         bases.append(Path(__file__).resolve().parent)
     except Exception:
@@ -438,7 +436,15 @@ def _writable_dir(name: str) -> Path:
         bases.append(Path(os.getcwd()))
     except OSError:
         pass
-    bases.append(Path.home())
+    try:
+        bases.append(Path.home())
+    except Exception:
+        pass
+    return bases
+
+
+def _writable_dir(name: str) -> Path:
+    bases = _path_search_bases()
     last_exc: Exception | None = None
     for base in bases:
         target = base / name
@@ -1795,7 +1801,32 @@ def _rank_package_links(links: list[str], prefer: str = "") -> list[str]:
     return unique_ordered([url for _, url in ranked])
 
 
+def _find_local_package(name: str) -> Path | None:
+    raw = str(name or "").strip().strip("\"'")
+    if not raw or re.match(r"https?://", raw, re.I):
+        return None
+    path = Path(raw).expanduser()
+    if path.is_file():
+        return path.resolve()
+    filename = path.name
+    if not filename:
+        return None
+    seen: set[str] = set()
+    for base in _path_search_bases():
+        for folder in (base, base / "output", base / "history"):
+            key = str(folder)
+            if key in seen:
+                continue
+            seen.add(key)
+            candidate = folder / filename
+            if candidate.is_file():
+                return candidate.resolve()
+    return None
+
+
 def _toolkit_kind(url: str) -> str:
+    if _find_local_package(url):
+        return "local"
     parsed = urlparse(url)
     host = parsed.netloc.lower()
     path = parsed.path.lower()
@@ -1961,6 +1992,10 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
 
 def _download_archive(url: str, dest_dir: Path) -> Path | None:
     from urllib.parse import urlparse, unquote
+    local = _find_local_package(url)
+    if local is not None:
+        print(f"[OK] toolkit using local: {local} bytes={local.stat().st_size}")
+        return local
     name = unquote(Path(urlparse(url).path).name) or "toolkit.bin"
     if not (_ARCHIVE_EXT_RE.search(name) or _INSTALLER_EXT_RE.search(name)):
         name = "toolkit.bin"
@@ -2018,6 +2053,19 @@ def _unwrap_crx(archive: Path) -> Path:
 
 
 _NESTED_PKG_SUFFIX = {".apk", ".xapk", ".apks", ".aab", ".xpi", ".crx"}
+# Runtime / asset files that never hold APK config keys or subscribe URLs.
+_APK_SKIP_SO = {
+    "libflutter.so",
+    "libgojni.so",
+    "libhysteria2.so",
+    "libhev-socks5-tunnel.so",
+    "libtun2socks.so",
+    "libmmkv.so",
+    "libverificationlib.so",
+    "libdatastore_shared_counter.so",
+    "libimage_processing_util_jni.so",
+    "libsurface_util_jni.so",
+}
 
 
 def _looks_like_zip(path: Path) -> bool:
@@ -2032,6 +2080,8 @@ def _is_nested_package(path: Path) -> bool:
     if not path.is_file():
         return False
     suffix = path.suffix.lower()
+    if path.stat().st_size < 256 * 1024:
+        return False
     if suffix in _NESTED_PKG_SUFFIX:
         return _looks_like_zip(path) or suffix in {".apk", ".xapk", ".apks", ".aab"}
     if suffix not in {"", ".zip", ".bin"}:
@@ -2081,7 +2131,45 @@ def _extract_nested_packages(dest_dir: Path, depth: int = 0) -> list[str]:
             continue
         unpacked.append(path.name)
         unpacked.extend(_extract_nested_packages(target, depth + 1))
+        try:
+            path.unlink()
+        except Exception:
+            pass
     return unpacked
+
+
+def _zip_member_keep(filename: str, size: int, apk_mode: bool = False) -> bool:
+    low = filename.replace("\\", "/").lower()
+    base = low.rsplit("/", 1)[-1]
+    if base in _APK_SKIP_SO:
+        return False
+    if base.endswith(".so") and "libapp" not in base:
+        return False
+    if base.endswith(".dex") or "libapp" in base:
+        return True
+    suffix = Path(base).suffix
+    if suffix in _NESTED_PKG_SUFFIX and size >= 256 * 1024:
+        if base.startswith("config.") and "arm64" not in base:
+            return False
+        return True
+    if apk_mode:
+        return False
+    if suffix in _TOOLKIT_TEXT_EXT:
+        return True
+    return False
+
+
+def _extract_zip_filtered(zf: Any, dest_dir: Path, apk_mode: bool = False) -> bool:
+    members = [
+        info for info in zf.infolist()
+        if not info.is_dir() and _zip_member_keep(info.filename, info.file_size, apk_mode)
+    ]
+    if not members:
+        zf.extractall(dest_dir)
+        return True
+    for info in members:
+        zf.extract(info, dest_dir)
+    return True
 
 
 def _extract_archive(archive: Path, dest_dir: Path) -> bool:
@@ -2093,8 +2181,8 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
         if name.endswith((".zip", ".apk", ".xapk", ".apks", ".xpi", ".crx")):
             import zipfile
             with zipfile.ZipFile(archive) as zf:
-                zf.extractall(dest_dir)
-            return True
+                apk_mode = name.endswith((".apk", ".xapk", ".apks", ".aab"))
+                return _extract_zip_filtered(zf, dest_dir, apk_mode=apk_mode)
         if name.endswith(".tar") or name.endswith(".tar.gz") or name.endswith(".tgz"):
             import tarfile
             with tarfile.open(archive) as tf:
@@ -2301,6 +2389,9 @@ def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
     if kind == "probe":
         kind = _probe_payload(page_url)
     print(f"[INFO] toolkit try {kind}: {page_url}")
+    if kind == "local":
+        found = _find_local_package(page_url)
+        return [str(found)] if found else []
     if kind in {"chrome", "edge", "firefox"}:
         return _store_package_urls(kind, page_url)
     if kind == "direct":
@@ -2401,24 +2492,72 @@ def _aes128_cbc_zero_iv(key: bytes, data: bytes) -> bytes:
     return _aes128_cbc(key, data, b"\x00" * 16)
 
 
+_APK_KEY_PREFIX_DENY = (
+    b"get", b"set", b"hash", b"parse", b"encode", b"decode", b"write",
+    b"compute", b"game", b"uint", b"chacha", b"iso7", b"numpad", b"idle",
+    b"main", b"also", b"hint", b"chunk",
+)
+_APK_KEY_CTX = (b"aes", b"ecfg", b"sare", b"secret", b"cfg")
+
+
+def _apk_scan_file(path: Path) -> bool:
+    low_name = path.name.lower()
+    suffix = path.suffix.lower()
+    if suffix == ".dex" or "libapp" in low_name:
+        return path.stat().st_size <= 32 * 1024 * 1024
+    return False
+
+
+def _apk_key_shape(item: bytes) -> int:
+    """Score password-like 16-byte keys shared by old/new Play packages.
+
+    Both families are [A-Za-z0-9]{16} with upper+lower+digit, 12+ unique
+    chars, 2-6 digits, and do not look like CamelCase API identifiers.
+    """
+    if len(item) != 16 or not item.isalnum():
+        return 0
+    upper = sum(65 <= b <= 90 for b in item)
+    lower = sum(97 <= b <= 122 for b in item)
+    digit = sum(48 <= b <= 57 for b in item)
+    if not upper or not lower or not digit:
+        return 0
+    if digit < 2 or digit > 6:
+        return 0
+    unique = len(set(item))
+    if unique < 12:
+        return 0
+    low = item.lower()
+    if any(low.startswith(prefix) for prefix in _APK_KEY_PREFIX_DENY):
+        return 0
+    # Java/Kotlin identifiers: isSamsung..., bufferInt..., times2ToThe..., Extensions...
+    if re.match(rb"^[a-z]{2,}[A-Z]", item):
+        return 0
+    if re.match(rb"^[a-z]{3,}\d+[A-Z]", item):
+        return 0
+    if re.match(rb"^[A-Z][a-z]{4,}", item):
+        return 0
+    score = 8 + unique - 12
+    # old 8Yfi... starts with digit; new d3JV... starts with lowercase
+    if 48 <= item[0] <= 57 or 97 <= item[0] <= 122:
+        score += 3
+    if 5 <= upper <= 8 and 5 <= lower <= 9:
+        score += 2
+    return score
+
+
 def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
     prefixes: list[str] = []
     names: list[str] = []
     tokens: list[str] = []
     scored: list[tuple[int, bytes]] = []
     for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        suffix = path.suffix.lower()
-        low_name = path.name.lower()
-        if suffix not in {".dex", ".so"} and "libapp" not in low_name:
-            continue
-        if path.stat().st_size > 32 * 1024 * 1024:
+        if not path.is_file() or not _apk_scan_file(path):
             continue
         try:
             blob = path.read_bytes()
         except Exception:
             continue
+        low_name = path.name.lower()
         for match in re.finditer(rb"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+", blob):
             url = match.group(0).decode("ascii", "ignore").rstrip("\\").rstrip()
             low = url.lower()
@@ -2431,51 +2570,57 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
                         break
                 else:
                     prefixes.append(piece.rsplit("/", 1)[0])
-        for match in re.finditer(rb"(?:ecfg(?:_[a-z]{2}|\d+)?|sareserver(?:_[a-z]{2})?|socks5)", blob):
+        for match in re.finditer(
+            rb"(?:ecfg(?:\d+)?(?:_[a-z]{2})?|sareserver(?:\d+)?(?:_[a-z]{2})?|socks5)",
+            blob,
+        ):
             names.append(match.group(0).decode("ascii", "ignore"))
         for match in re.finditer(rb"access_token=([0-9a-f]{32})", blob):
             tokens.append(match.group(1).decode("ascii"))
-        so_bonus = 20 if suffix == ".so" or "libapp" in low_name else 0
+        libapp = "libapp" in low_name
+        # Flutter AOT one-byte string of length 16 is tagged 0xA0.
+        for match in re.finditer(rb"\xa0([A-Za-z0-9]{16})", blob):
+            item = match.group(1)
+            shape = _apk_key_shape(item)
+            if not shape:
+                continue
+            bonus = 40 + shape
+            if libapp:
+                bonus += 8
+            after = blob[match.end(): match.end() + 12]
+            # leftover old key still sits next to "servers" in new SS builds
+            if after.startswith(b"servers") or after[1:8] == b"servers":
+                bonus -= 6
+            scored.append((bonus, item))
+        # DEX MUTF-8 string: uleb128(16) == 0x10, payload, NUL
         for match in re.finditer(rb"\x10([A-Za-z0-9]{16})\x00", blob):
             item = match.group(1)
-            window = blob[max(0, match.start() - 80): match.end() + 80].lower()
-            bonus = 1 + so_bonus
-            if any(mark in window for mark in (b"aes", b"ecfg", b"sare", b"secret", b"cfg")):
-                bonus += 8
+            shape = _apk_key_shape(item)
+            if not shape:
+                continue
+            bonus = 28 + shape
+            window = blob[max(0, match.start() - 48): match.end() + 48].lower()
+            if any(mark in window for mark in _APK_KEY_CTX):
+                bonus += 3
             scored.append((bonus, item))
         for match in re.finditer(rb"(?:[A-Za-z0-9]\x00){16}", blob):
             item = match.group(0)[::2]
-            window = blob[max(0, match.start() - 80): match.end() + 80].lower()
-            bonus = 3 + so_bonus
-            if any(mark in window for mark in (b"aes", b"ecfg", b"sare", b"secret", b"cfg")):
-                bonus += 8
-            scored.append((bonus, item))
-        for match in re.finditer(rb"[A-Za-z0-9]{16}", blob):
-            item = match.group(0)
-            if not (
-                any(65 <= b <= 90 for b in item)
-                and any(97 <= b <= 122 for b in item)
-                and any(48 <= b <= 57 for b in item)
-            ):
+            shape = _apk_key_shape(item)
+            if not shape:
                 continue
+            bonus = 12 + shape
             window = blob[max(0, match.start() - 48): match.end() + 48].lower()
-            if not any(mark in window for mark in (b"aes", b"ecfg", b"sare", b"secret", b"cfg", b"key")):
-                continue
-            scored.append((12 + so_bonus, item))
+            if any(mark in window for mark in _APK_KEY_CTX):
+                bonus += 3
+            scored.append((bonus, item))
     ranked: list[bytes] = []
     seen: set[bytes] = set()
     for _score, item in sorted(scored, key=lambda pair: pair[0], reverse=True):
-        if item in seen or len(item) != 16:
-            continue
-        if not (
-            any(65 <= b <= 90 for b in item)
-            and any(97 <= b <= 122 for b in item)
-            and any(48 <= b <= 57 for b in item)
-        ):
+        if item in seen:
             continue
         seen.add(item)
         ranked.append(item)
-        if len(ranked) >= 24:
+        if len(ranked) >= 12:
             break
     return unique_ordered(prefixes), unique_ordered(names), ranked, unique_ordered(tokens)[:8]
 
@@ -2501,7 +2646,8 @@ def _apk_keys_from_source(source: dict[str, Any]) -> list[bytes]:
 def _apk_keys_for(source: dict[str, Any], scanned: list[bytes] | None = None) -> list[bytes]:
     merged: list[bytes] = []
     seen: set[bytes] = set()
-    for item in list(_apk_keys_from_source(source)) + list(scanned or []):
+    # scanned keys already ranked; hardcoded source keys are fallback only
+    for item in list(scanned or []) + list(_apk_keys_from_source(source)):
         if item in seen or len(item) not in {16, 24, 32}:
             continue
         seen.add(item)
@@ -2623,7 +2769,9 @@ def _discover_toolkit_encrypted_apk(
             urls = _apk_build_cfg_urls(prefixes, names, tokens)
             urls.sort(
                 key=lambda item: (
-                    0 if "159236" in item.lower() else 1,
+                    0 if "shadowrockets.app" in item.lower() else
+                    1 if "pixelor" in item.lower() else
+                    2 if "159236" in item.lower() else 3,
                     next(
                         (
                             wanted.index(item.lower().rsplit("/", 1)[-1].split("?", 1)[0])
@@ -2640,21 +2788,27 @@ def _discover_toolkit_encrypted_apk(
             hit_names: set[str] = set()
             key_pool = list(hard_keys)
             used_scan = False
+            last_err = ""
+            tried = 0
             for url in urls:
                 try:
                     body = fetch_text(url, user_agent=ua, referer=referer)
-                except Exception:
+                except Exception as exc:
+                    last_err = str(exc)
                     continue
+                tried += 1
                 try:
                     plain, locked = _apk_decrypt_body(body, key_pool, locked)
-                except Exception:
+                except Exception as exc:
+                    last_err = str(exc)
                     if used_scan or not scanned:
                         continue
                     used_scan = True
                     key_pool = _apk_keys_for(source, scanned)
                     try:
                         plain, locked = _apk_decrypt_body(body, key_pool, None)
-                    except Exception:
+                    except Exception as exc:
+                        last_err = str(exc)
                         continue
                 found = extract_proxies(plain)
                 if not found:
@@ -2681,7 +2835,10 @@ def _discover_toolkit_encrypted_apk(
                     continue
             if collected:
                 return collected, archive_url
-        print(f"[WARN] {label} discovery failed")
+        extra = f" tried={tried}"
+        if last_err:
+            extra += f" last={last_err[:80]}"
+        print(f"[WARN] {label} discovery failed{extra}")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -2692,7 +2849,7 @@ def _discover_toolkit_sr_apk(source: dict[str, Any], page_url: str) -> tuple[lis
         "sr-apk",
         source,
         page_url,
-        ["ecfg_zh", "ecfg5", "ecfg"],
+        ["ecfg6_zh", "ecfg_zh", "ecfg6_en", "ecfg6", "ecfg5", "ecfg"],
     )
 
 
@@ -2701,7 +2858,7 @@ def _discover_toolkit_ss_apk(source: dict[str, Any], page_url: str) -> tuple[lis
         "ss-apk",
         source,
         page_url,
-        ["sareserver_en", "sareserver", "socks5"],
+        ["sareserver6_en", "sareserver_en", "sareserver6", "sareserver", "socks5"],
     )
 
 
