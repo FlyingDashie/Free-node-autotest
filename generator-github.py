@@ -1432,11 +1432,12 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             if source_found:
                 break
             url, prefer, exclude = _item_spec(item, source)
+            first_hit = bool(source.get("first_hit"))
             merge_all = False
             _SUBLINK_BARE.clear()
             if url.startswith("discover:article:"):
                 candidates = discover_article(url[len("discover:article:"):], prefer=prefer)
-                merge_all = True
+                merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES)
             elif url.startswith("discover:sublink:"):
                 page = url[len("discover:sublink:"):]
@@ -1445,7 +1446,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     prefer=prefer,
                     exclude=exclude,
                 )
-                merge_all = True
+                merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
             elif url.startswith("discover:toolkit:"):
                 toolkit_spec = url[len("discover:toolkit:"):]
@@ -1471,7 +1472,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         used_url = apk_url or url
                     continue
                 candidates = _discover_toolkit_crg(rest, prefer=prefer)
-                merge_all = True
+                merge_all = not first_hit
                 used_toolkit = True
             else:
                 candidates = [url]
@@ -1544,7 +1545,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         if err or text is None:
                             continue
                         _ingest(url, text)
-                if _SUBLINK_BARE and len(source_seen) <= 10:
+                if _SUBLINK_BARE and (
+                    (not first_hit and len(source_seen) <= 10)
+                    or (first_hit and not source_seen)
+                ):
                     extra = [
                         link for link in unique_ordered(_SUBLINK_BARE)
                         if link not in pending
@@ -1613,6 +1617,10 @@ def _source_queue(source: dict[str, Any]) -> list[Any]:
     return items
 
 
+# Reserved source flag: first_hit=True → stop after the first URL that yields nodes
+# (sublink / article / toolkit). Not set on existing sources.
+
+
 def _item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
     if isinstance(item, dict):
         url = str(item.get("url") or "")
@@ -1653,42 +1661,14 @@ def _probe_sub_file(tag: str, link: str) -> bool:
 
 
 def _score_sub_link(url: str, context: str = "", prefer: str = "", distance: int = 9999) -> int:
-    blob = f"{url} {context}".lower()
-    path = url.split("?", 1)[0].lower()
-    filename = path.rstrip("/").rsplit("/", 1)[-1]
-    score = 1
     hint = prefer.strip().lower()
-    if hint and hint in blob:
-        score += 4000
-    if hint and distance < 400:
-        score += max(0, 8000 - distance * 10)
-    stamp = ""
-    found = re.search(r"(20\d{6})", filename) or re.search(r"(20\d{6})", path)
-    if found:
-        stamp = found.group(1)
-    else:
-        found = re.search(r"(20\d{2})[/_-](\d{1,2})[/_-](\d{1,2})", path)
-        if found:
-            stamp = f"{found.group(1)}{int(found.group(2)):02d}{int(found.group(3)):02d}"
-    if stamp:
-        try:
-            day = datetime.strptime(stamp, "%Y%m%d").replace(tzinfo=timezone.utc)
-            if day >= datetime.now(timezone.utc) - timedelta(days=10):
-                score += int(stamp) * 1000
-        except ValueError:
-            pass
-    if filename.endswith(".txt"):
-        score += 500
-    if filename.endswith(".json"):
-        score += 340
-    if filename.endswith((".yaml", ".yml")):
-        score += 300
-    if "mihomo" in filename or re.fullmatch(r"m20\d{6}\.ya?ml", filename):
-        score += 80
-    if re.search(r"clash-?meta", filename):
-        score += 200
-    if "v2ray" in filename and "clash" not in filename and not filename.endswith((".yaml", ".yml")):
-        score += 500
+    if not hint:
+        return 0
+    blob = f"{url} {context}".lower()
+    score = 0
+    if hint in blob:
+        score += 100000
+    score += max(0, 10000 - min(distance, 10000))
     return score
 
 
@@ -1742,12 +1722,16 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
                 continue
             if exclude_keyword and exclude_keyword in link.lower():
                 continue
-            files.append((_score_sub_link(link, match.group(0), prefer=prefer), link))
+            dist = 9999
+            if prefer_positions:
+                dist = min(abs(match.start() - pos) for pos in prefer_positions)
+            files.append((_score_sub_link(link, match.group(0), prefer=prefer, distance=dist), link))
     files.sort(key=lambda item: item[0], reverse=True)
     bare.sort(key=lambda item: item[0], reverse=True)
     file_links = unique_ordered([url for _, url in files])
     bare_links = unique_ordered([url for _, url in bare if url not in file_links])
-    return file_links, bare_links
+    ranked = unique_ordered([url for _, url in sorted(files + bare, key=lambda item: item[0], reverse=True)])
+    return file_links, bare_links, ranked
 
 
 def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list[str]:
@@ -1760,7 +1744,9 @@ def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list
     except Exception as exc:
         print(f"[WARN] sublink page failed: {page_url} {exc}")
         return []
-    file_links, bare_links = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
+    file_links, bare_links, ranked = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
+    if prefer.strip() and ranked:
+        return ranked
     if file_links:
         _SUBLINK_BARE.extend(bare_links)
         return file_links
@@ -1880,30 +1866,50 @@ def _collect_archive_links(text: str, page_url: str) -> list[str]:
     return unique_ordered(found)
 
 
-def _package_score(link: str, prefer: str = "") -> int:
+def _package_allowed(link: str) -> bool:
     lower = str(link or "").lower()
-    score = 0
-    if _ARCHIVE_EXT_RE.search(lower):
-        score = 80
-    elif _ANDROID_PKG_RE.search(lower):
-        score = 70
-    elif _BROWSER_PKG_RE.search(lower):
-        score = 65
-    elif _INSTALLER_EXT_RE.search(lower):
-        score = 25
-    elif re.search(r"github\.com/.+/releases(?:/|$)", lower):
-        score = 40
-    if not score:
+    return bool(
+        _ARCHIVE_EXT_RE.search(lower)
+        or _ANDROID_PKG_RE.search(lower)
+        or _BROWSER_PKG_RE.search(lower)
+        or _INSTALLER_EXT_RE.search(lower)
+        or re.search(r"github\.com/.+/releases(?:/|$)", lower)
+    )
+
+
+def _prefer_distance(text: str, hint: str, pos: int) -> int:
+    hint = (hint or "").strip().lower()
+    if not hint or pos < 0:
+        return 9999
+    low = (text or "").lower()
+    spots: list[int] = []
+    start = 0
+    while True:
+        found = low.find(hint, start)
+        if found < 0:
+            break
+        spots.append(found)
+        start = found + len(hint)
+    if not spots:
+        return 9999
+    return min(abs(pos - item) for item in spots)
+
+
+def _package_score(link: str, prefer: str = "", distance: int = 9999) -> int:
+    if not _package_allowed(link):
         return 0
-    token = (prefer or "").strip().lower()
-    if token and token in lower:
-        score += 20
-    return score
+    return 1 + _score_sub_link(link, prefer=prefer, distance=distance)
 
 
-def _rank_package_links(links: list[str], prefer: str = "") -> list[str]:
-    ranked = [( _package_score(link, prefer), link) for link in links]
-    ranked = [item for item in ranked if item[0] > 0]
+def _rank_package_links(links: list[str], prefer: str = "", page_text: str = "") -> list[str]:
+    ranked: list[tuple[int, str]] = []
+    low = (page_text or "").lower()
+    for link in links:
+        loc = low.find(str(link).lower()[:120]) if low else -1
+        dist = _prefer_distance(page_text, prefer, loc)
+        score = _package_score(link, prefer, dist)
+        if score > 0:
+            ranked.append((score, link))
     ranked.sort(key=lambda item: item[0], reverse=True)
     return unique_ordered([url for _, url in ranked])
 
@@ -2059,17 +2065,18 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
     seen_tags: set[str] = set()
     tag_match = re.search(r"/releases/tag/([^/?#\"']+)", page_url, re.I)
     if tag_match:
-        tags.append((9, unquote(tag_match.group(1))))
-        seen_tags.add(tag_match.group(1))
+        tag = unquote(tag_match.group(1))
+        tags.append((_score_sub_link(tag, prefer=token, distance=0), tag))
+        seen_tags.add(tag)
     for found in re.finditer(r"/releases/tag/([^/?#\"']+)", listing, re.I):
         tag = unquote(found.group(1))
         if tag in seen_tags:
             continue
         seen_tags.add(tag)
-        score = 5 if token and token.lower() in tag.lower() else 1
-        tags.append((score, tag))
+        dist = _prefer_distance(listing, token, found.start())
+        tags.append((_score_sub_link(tag, prefer=token, distance=dist), tag))
     if "latest" not in seen_tags and not token:
-        tags.append((1, "latest"))
+        tags.append((0, "latest"))
     tags.sort(key=lambda item: item[0], reverse=True)
     ranked: list[tuple[int, str]] = []
     seen: set[str] = set()
@@ -2089,8 +2096,9 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
             if link in seen:
                 continue
             seen.add(link)
-            score = 3 if token and token in lower else 1
-            ranked.append((score, link))
+            loc = body.lower().find(lower[:120])
+            dist = _prefer_distance(body, token, loc)
+            ranked.append((_score_sub_link(link, prefer=token, distance=dist), link))
         if ranked:
             break
     ranked.sort(key=lambda item: item[0], reverse=True)
@@ -2631,7 +2639,7 @@ def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
     except Exception:
         body = ""
     links = _collect_archive_links(body, page_url)
-    return _rank_package_links(links, prefer=prefer)
+    return _rank_package_links(links, prefer=prefer, page_text=body)
 
 
 def _discover_toolkit_crg(page_url: str, prefer: str = "") -> list[str]:
