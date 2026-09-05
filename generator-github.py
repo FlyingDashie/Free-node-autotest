@@ -1550,9 +1550,12 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         if link not in pending
                     ]
                     if extra:
+                        if toolkit_hits:
+                            _print_toolkit_groups(toolkit_hits)
+                            toolkit_hits = []
                         print(
-                            f"[INFO] sublink bare links={len(extra)} "
-                            f"file_nodes={len(source_seen)}"
+                            f"[INFO] sublink file_nodes={len(source_seen)} "
+                            f"bare links={len(extra)}"
                         )
                         workers = max(1, min(CFG_FETCH_WORKERS, len(extra)))
                         with ThreadPoolExecutor(max_workers=workers) as pool:
