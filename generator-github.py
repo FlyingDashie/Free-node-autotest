@@ -125,6 +125,7 @@ SOURCE_GROUPS = [
             "discover:sublink:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
         ],
         "prefix": "[大FQ运动] ",
+        "all_bare": True,
     },
     {
         "name": "大FQ运动-SS密钥",
@@ -144,6 +145,7 @@ SOURCE_GROUPS = [
         ],
         "exclude": "end-gfw.com",
         "prefix": "[大FQ运动-补充] ",
+        "all_bare": True,
     },
     {
         "name": "ChromeGO-工具包",
@@ -326,6 +328,7 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
         "prefix": "[免费节点9] ",
+        "all_bare": True,
     },
     {
         "name": "免费节点10",
@@ -1436,7 +1439,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             merge_all = False
             _SUBLINK_BARE.clear()
             if url.startswith("discover:article:"):
-                candidates = discover_article(url[len("discover:article:"):], prefer=prefer)
+                candidates = discover_article(
+                    url[len("discover:article:"):],
+                    prefer=prefer,
+                    all_bare=bool(source.get("all_bare")),
+                )
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES)
             elif url.startswith("discover:sublink:"):
@@ -1445,6 +1452,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     page,
                     prefer=prefer,
                     exclude=exclude,
+                    all_bare=bool(source.get("all_bare")),
                 )
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
@@ -1710,7 +1718,7 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
         elif skip_re.search(link):
             continue
         else:
-            bare.append((scored, link))
+            bare.append((min_distance, scored, link))
     if page_url:
         for match in re.finditer(
             r"""(?:href|src)=["']([^"']+\.(?:yaml|yml|txt|json)(?:[?#][^"']*)?)["']""",
@@ -1727,14 +1735,25 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
                 dist = min(abs(match.start() - pos) for pos in prefer_positions)
             files.append((_score_sub_link(link, match.group(0), prefer=prefer, distance=dist), link))
     files.sort(key=lambda item: item[0], reverse=True)
-    bare.sort(key=lambda item: item[0], reverse=True)
+    if hint:
+        bare.sort(key=lambda item: (item[0], -item[1]))
+    else:
+        bare.sort(key=lambda item: item[1], reverse=True)
     file_links = unique_ordered([url for _, url in files])
-    bare_links = unique_ordered([url for _, url in bare if url not in file_links])
-    ranked = unique_ordered([url for _, url in sorted(files + bare, key=lambda item: item[0], reverse=True)])
+    bare_links = unique_ordered([url for _, _, url in bare if url not in file_links])
+    ranked = unique_ordered(
+        file_links
+        + [url for url in bare_links]
+    )
     return file_links, bare_links, ranked
 
 
-def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list[str]:
+def discover_sublink(
+    page_url: str,
+    prefer: str = "",
+    exclude: str = "",
+    all_bare: bool = False,
+) -> list[str]:
     global _DISCOVER_PAGES, _SUBLINK_BARE
     page_url = _blob_to_raw(page_url.strip())
     _DISCOVER_PAGES = [page_url]
@@ -1745,8 +1764,18 @@ def discover_sublink(page_url: str, prefer: str = "", exclude: str = "") -> list
         print(f"[WARN] sublink page failed: {page_url} {exc}")
         return []
     file_links, bare_links, ranked = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
-    if prefer.strip() and ranked:
-        return ranked
+    if all_bare:
+        found = unique_ordered(file_links + bare_links)
+        if found:
+            return found
+        print(f"[WARN] sublink discovery failed: {page_url}")
+        return []
+    if prefer.strip():
+        found = unique_ordered(file_links + bare_links[:3])
+        if found:
+            return found
+        print(f"[WARN] sublink discovery failed: {page_url}")
+        return []
     if file_links:
         _SUBLINK_BARE.extend(bare_links)
         return file_links
@@ -3077,7 +3106,7 @@ def _discover_toolkit_ss_apk(source: dict[str, Any], page_url: str) -> tuple[lis
     )
 
 
-def discover_article(feed_url: str, prefer: str = "") -> list[str]:
+def discover_article(feed_url: str, prefer: str = "", all_bare: bool = False) -> list[str]:
     global _DISCOVER_PAGES
     _DISCOVER_PAGES = []
     body = ""
@@ -3137,7 +3166,7 @@ def discover_article(feed_url: str, prefer: str = "") -> list[str]:
 
     def _page_subs(page: str) -> list[str]:
         try:
-            return discover_sublink(page, prefer=prefer)
+            return discover_sublink(page, prefer=prefer, all_bare=all_bare)
         except Exception:
             return []
 
