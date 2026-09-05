@@ -147,7 +147,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "ChromeGO-工具包",
-        "primary": "discover:toolkit:https://github.com/bannedbook/fanqiang/releases",
+        "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang/releases",
         "fallbacks": [],
         "prefer": "ChromeGo",
         "prefix": "[ChromeGO-工具包] ",
@@ -320,12 +320,12 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点8] ",
     },
     {
-        "name": "免费节点9-1",
+        "name": "免费节点9",
         "primary": "discover:sublink:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
-        "prefix": "[免费节点9-1] ",
+        "prefix": "[免费节点9] ",
     },
     {
         "name": "免费节点10",
@@ -336,14 +336,14 @@ SOURCE_GROUPS = [
         "prefix": "[免费节点10] ",
     },
     {
-        "name": "免费节点11-1",
+        "name": "免费节点11",
         "primary": "discover:sublink:https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/base64.txt",
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/all.yaml",
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/mihomo.yaml",
         ],
-        "prefix": "[免费节点11-1] ",
+        "prefix": "[免费节点11] ",
     },
     {
         "name": "Pawdroid-sr-apk",
@@ -1448,10 +1448,18 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
             elif url.startswith("discover:toolkit:"):
                 toolkit_spec = url[len("discover:toolkit:"):]
-                if toolkit_spec.lower().startswith("ss-apk:"):
-                    apk_found, apk_url = _discover_toolkit_ss_apk(
-                        source, toolkit_spec[len("ss-apk:"):]
+                child, sep, rest = toolkit_spec.partition(":")
+                child_l = child.lower()
+                if child_l not in {"ss-apk", "sr-apk", "crg"} or not rest:
+                    print(f"[WARN] toolkit need ss-apk|sr-apk|crg: {url}")
+                    continue
+                if child_l in {"ss-apk", "sr-apk"}:
+                    finder = (
+                        _discover_toolkit_ss_apk
+                        if child_l == "ss-apk"
+                        else _discover_toolkit_sr_apk
                     )
+                    apk_found, apk_url = finder(source, rest)
                     if apk_found:
                         prefix = source.get("prefix", "")
                         for proxy in apk_found:
@@ -1461,20 +1469,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                             source_found.append(item_proxy)
                         used_url = apk_url or url
                     continue
-                if toolkit_spec.lower().startswith("sr-apk:"):
-                    apk_found, apk_url = _discover_toolkit_sr_apk(
-                        source, toolkit_spec[len("sr-apk:"):]
-                    )
-                    if apk_found:
-                        prefix = source.get("prefix", "")
-                        for proxy in apk_found:
-                            item_proxy = dict(proxy)
-                            if prefix:
-                                item_proxy["name"] = prefix + str(item_proxy.get("name", "")).strip()
-                            source_found.append(item_proxy)
-                        used_url = apk_url or url
-                    continue
-                candidates = discover_toolkit(toolkit_spec, prefer=prefer)
+                candidates = _discover_toolkit_crg(rest, prefer=prefer)
                 merge_all = True
                 used_toolkit = True
             else:
@@ -2351,6 +2346,38 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
         return False
 
 
+def _toolkit_iter_packages(
+    page_url: str,
+    prefer: str = "",
+    work: Path | None = None,
+    limit: int | None = None,
+):
+    page_url = str(page_url or "").strip()
+    archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))
+    if limit is not None:
+        archives = archives[:limit]
+    if not archives:
+        return
+    own_work = work is None
+    root = work or Path(tempfile.mkdtemp(prefix="toolkit-"))
+    try:
+        for index, archive_url in enumerate(archives):
+            archive = _download_archive(archive_url, root)
+            if not archive:
+                continue
+            unpack = root / f"unpack-{index}"
+            os.makedirs(str(unpack), exist_ok=True)
+            if not _extract_archive(archive, unpack):
+                continue
+            nested = _extract_nested_packages(unpack)
+            if nested:
+                print(f"[INFO] toolkit nested unpacked={len(nested)}")
+            yield archive, unpack, archive_url
+    finally:
+        if own_work:
+            shutil.rmtree(root, ignore_errors=True)
+
+
 def _collect_toolkit_sub_urls(root: Path) -> list[str]:
     url_re = re.compile(r"https?://[^\s\"'<>]+", re.I)
     found: list[str] = []
@@ -2407,6 +2434,17 @@ def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
     return found
 
 
+def _toolkit_collect_payload(root: Path, archive_name: str = "") -> tuple[list[str], list[dict[str, Any]]]:
+    urls = _collect_toolkit_sub_urls(root)
+    embedded = _collect_toolkit_embedded_proxies(root)
+    tag = f" archive={archive_name}" if archive_name else ""
+    if embedded:
+        print(f"[OK] toolkit embedded proxies={len(embedded)}{tag}")
+    if urls:
+        print(f"[OK] toolkit discovered subs={len(urls)}{tag}")
+    return urls, embedded
+
+
 def _toolkit_path_parts(path: str) -> list[str]:
     return [p for p in str(path or "").split("/") if p]
 
@@ -2431,7 +2469,7 @@ def _url_tokens(url: str) -> list[str]:
     parsed = urlparse(raw)
     host = (parsed.netloc or "").lower()
     parts = [p for p in parsed.path.split("/") if p]
-    if "jsdelivr.net" in host and len(parts) >= 3 and parts[0].lower() == "gh":
+    if ("jsdelivr.net" in host or "onmicrosoft." in host) and len(parts) >= 3 and parts[0].lower() == "gh":
         user = parts[1]
         repo_ref = parts[2]
         if "@" in repo_ref:
@@ -2570,40 +2608,22 @@ def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
     return _rank_package_links(links, prefer=prefer)
 
 
-def discover_toolkit(page_url: str, prefer: str = "") -> list[str]:
+def _discover_toolkit_crg(page_url: str, prefer: str = "") -> list[str]:
     global _TOOLKIT_EMBEDDED, _TOOLKIT_ARCHIVE_URL
     _TOOLKIT_EMBEDDED = []
     _TOOLKIT_ARCHIVE_URL = ""
     page_url = page_url.strip()
-    archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))
-    if not archives:
-        print(f"[WARN] toolkit discovery failed: {page_url}")
-        return []
     work = Path(tempfile.mkdtemp(prefix="toolkit-"))
     try:
-        for archive_url in archives:
-            archive = _download_archive(archive_url, work)
-            if not archive:
-                continue
-            unpack = work / "unpack"
-            os.makedirs(str(unpack), exist_ok=True)
-            if not _extract_archive(archive, unpack):
-                continue
-            nested = _extract_nested_packages(unpack)
-            if nested:
-                print(f"[INFO] toolkit nested unpacked={len(nested)}")
-            embedded = _collect_toolkit_embedded_proxies(unpack)
-            urls = _collect_toolkit_sub_urls(unpack)
+        for archive, unpack, archive_url in _toolkit_iter_packages(page_url, prefer, work):
+            urls, embedded = _toolkit_collect_payload(unpack, archive.name)
             if embedded:
                 _TOOLKIT_EMBEDDED = embedded
-                print(f"[OK] toolkit embedded proxies={len(embedded)} archive={archive.name}")
-            if urls:
-                print(f"[OK] toolkit discovered subs={len(urls)} archive={archive.name}")
             if embedded or urls:
                 _TOOLKIT_ARCHIVE_URL = archive_url
                 return urls
-            print(f"[WARN] toolkit empty bundle: {archive.name}")
-        print(f"[WARN] toolkit discovery failed: {page_url}")
+            print(f"[WARN] toolkit crg empty bundle: {archive.name}")
+        print(f"[WARN] toolkit crg discovery failed: {page_url}")
         return []
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -2840,9 +2860,7 @@ def _apk_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[str]
                     urls.append(f"{piece}?access_token={token}")
             else:
                 urls.append(piece)
-    built = unique_ordered(urls)
-    extra = [_safe_http_url(item) for item in built if "@" in item]
-    return unique_ordered(built + extra)
+    return unique_ordered(urls)
 
 
 def _apk_decrypt_once(
@@ -2896,36 +2914,23 @@ def _discover_toolkit_encrypted_apk(
     name_order: list[str],
 ) -> tuple[list[dict[str, Any]], str]:
     page_url = page_url.strip()
-    label = f"toolkit {kind}"
     if not page_url:
-        print(f"[WARN] {label} missing url")
+        print(f"[WARN] toolkit {kind} missing url")
         return [], ""
     prefer = str(source.get("prefer") or "apk")
     ua = str(source.get("user_agent") or "v2rayNG")
     referer = str(source.get("referer") or "")
-    archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))[:1]
-    if not archives:
-        print(f"[WARN] {label} no archive url page={page_url}")
-        return [], ""
     work = Path(tempfile.mkdtemp(prefix=f"{kind}-"))
     tried = 0
     last_err = ""
     try:
-        for archive_url in archives:
-            archive = _download_archive(archive_url, work)
-            if not archive:
-                continue
-            unpack = work / "unpack"
-            os.makedirs(str(unpack), exist_ok=True)
-            if not _extract_archive(archive, unpack):
-                continue
-            nested = _extract_nested_packages(unpack)
-            if nested:
-                print(f"[INFO] toolkit nested unpacked={len(nested)}")
+        opened = False
+        for archive, unpack, archive_url in _toolkit_iter_packages(page_url, prefer, work, limit=1):
+            opened = True
             prefixes, names, scanned, tokens = _apk_scan(unpack)
             hard_keys = _apk_keys_for(source, scanned)
             print(
-                f"[INFO] {label} scanned prefixes={len(prefixes)} "
+                f"[INFO] toolkit {kind} scanned prefixes={len(prefixes)} "
                 f"files={len(names)} keys={len(hard_keys)} archive={archive.name}"
             )
             if not prefixes:
@@ -3023,7 +3028,10 @@ def _discover_toolkit_encrypted_apk(
         extra = f" tried={tried}"
         if last_err:
             extra += f" last={last_err[:80]}"
-        print(f"[WARN] {label} discovery failed{extra}")
+        if not opened:
+            print(f"[WARN] toolkit {kind} no archive url page={page_url}")
+        else:
+            print(f"[WARN] toolkit {kind} discovery failed{extra}")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -3673,9 +3681,6 @@ def _start_mihomo_for_batch(
             stdout, stderr = "", ""
         _stop_process(process)
         message = f"{exc}\n{stderr}\n{stdout}"
-        print(f"[WARN] batch start failed size={len(proxies)}")
-        if stderr:
-            print(f"[WARN] Mihomo stderr: {stderr[:500]}")
         return None, message
 
 
@@ -3701,6 +3706,18 @@ def _benchmark_batch(
 
     if len(proxies) == 1:
         bad = proxies[0]
+        reason = re.sub(r"\s+", " ", str(error or "")).strip()
+        match = re.search(r'msg="([^"]+)"', reason)
+        if match:
+            reason = match.group(1)
+        if "invalid REALITY" in reason:
+            reason = "invalid REALITY public key"
+        elif len(reason) > 180:
+            reason = reason[:177] + "..."
+        print(
+            f"[DROP] name={bad.get('name')} "
+            f"server={bad.get('server')}:{bad.get('port')} reason={reason or 'mihomo start failed'}"
+        )
         _DROP_NAMES.append(str(bad.get("name") or ""))
         return []
 
@@ -3763,7 +3780,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
                 continue
             if metric:
                 metrics.append(metric)
-            if completed % 100 == 0 or completed == len(futures):
+            if completed % 100 == 0 or (completed == len(futures) and len(futures) >= 20):
                 print(f"[INFO] tested {completed}/{len(futures)} kept={len(metrics)}")
     return metrics
 
