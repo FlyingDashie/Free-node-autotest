@@ -391,6 +391,11 @@ SOURCE_GROUPS = [
     },
 ]
 
+for _src in SOURCE_GROUPS:
+    _keys = list(_src.keys())
+    if _keys and _keys[-1] != "prefix":
+        raise ValueError(f"source prefix must be last: {_src.get('name')} keys={_keys}")
+
 SUPPORTED_PROXY_TYPES = {
     "ss",
     "ssr",
