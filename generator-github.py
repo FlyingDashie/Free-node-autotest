@@ -70,6 +70,9 @@ RAW_PATH = Path("output/raw.yaml")
 HISTORY_DIR = Path("history")
 TEST_URL = "http://www.gstatic.com/generate_204"
 SOURCE_TIMEOUT = 20
+CFG_FETCH_TIMEOUT = 8
+CFG_FETCH_WORKERS = 24
+CFG_FETCH_RETRIES = 1
 LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 2
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
@@ -336,6 +339,7 @@ SOURCE_GROUPS = [
         "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
         "fallbacks": [],
         "prefer": "apk",
+        "keys": "8YfiQ8wrkziZ5YFa",
         "prefix": "[Pawdroid-sr-apk] ",
     },
     {
@@ -345,6 +349,7 @@ SOURCE_GROUPS = [
             "discover:toolkit:ss-apk:https://github.com/Pawdroid/ShadowShare/releases",
         ],
         "prefer": "apk",
+        "keys": "8YfiQ8wrkziZ5YFW",
         "prefix": "[Pawdroid-ss-apk] ",
     },
     {
@@ -473,6 +478,7 @@ def fetch_text(
     user_agent: str = "",
     referer: str = "",
     accept: str = "",
+    timeout: int | None = None,
 ) -> str:
     headers = {
         "User-Agent": resolve_ua(user_agent),
@@ -485,13 +491,14 @@ def fetch_text(
     session.verify = False
     proxy_tries = [PROXIES, {}] if PROXIES else [{}]
     last_error: Exception | None = None
+    wait = SOURCE_TIMEOUT if timeout is None else timeout
     for proxies in proxy_tries:
         for attempt in range(1, retries + 1):
             try:
                 response = session.get(
                     url,
                     headers=headers,
-                    timeout=SOURCE_TIMEOUT,
+                    timeout=wait,
                     proxies=proxies,
                 )
                 response.raise_for_status()
@@ -499,7 +506,7 @@ def fetch_text(
             except Exception as exc:
                 last_error = exc
                 if attempt < retries:
-                    time.sleep(2 * attempt)
+                    time.sleep(min(1, attempt))
     raise RuntimeError(f"failed to fetch {url}: {last_error}")
 
 
@@ -2010,28 +2017,36 @@ def _download_archive(url: str, dest_dir: Path) -> Path | None:
         written = 0
         downloaded = False
         for proxies in proxy_tries:
-            try:
-                with session.get(
-                    url,
-                    headers={"User-Agent": resolve_ua("Chrome")},
-                    timeout=180,
-                    stream=True,
-                    verify=False,
-                    proxies=proxies,
-                ) as response:
-                    response.raise_for_status()
-                    written = 0
-                    with dest.open("wb") as handle:
-                        for chunk in response.iter_content(chunk_size=1024 * 256):
-                            if not chunk:
-                                continue
-                            handle.write(chunk)
-                            written += len(chunk)
-                downloaded = True
+            for attempt in range(1, 4):
+                try:
+                    with session.get(
+                        url,
+                        headers={"User-Agent": resolve_ua("Chrome")},
+                        timeout=180,
+                        stream=True,
+                        verify=False,
+                        proxies=proxies,
+                    ) as response:
+                        response.raise_for_status()
+                        written = 0
+                        total = int(response.headers.get("Content-Length") or 0)
+                        with dest.open("wb") as handle:
+                            for chunk in response.iter_content(chunk_size=1024 * 256):
+                                if not chunk:
+                                    continue
+                                handle.write(chunk)
+                                written += len(chunk)
+                    if total and written < total:
+                        raise RuntimeError(f"incomplete download {written}/{total}")
+                    downloaded = True
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    dest.unlink(missing_ok=True)
+                    print(f"[WARN] toolkit download retry {attempt}/3: {exc}")
+                    time.sleep(attempt)
+            if downloaded:
                 break
-            except Exception as exc:
-                last_error = exc
-                dest.unlink(missing_ok=True)
         if not downloaded:
             raise last_error or RuntimeError("download failed")
         print(f"[OK] toolkit downloaded: {dest.name} bytes={written}")
@@ -2737,6 +2752,8 @@ def _discover_toolkit_encrypted_apk(
         print(f"[WARN] {label} no archive url page={page_url}")
         return [], ""
     work = Path(tempfile.mkdtemp(prefix=f"{kind}-"))
+    tried = 0
+    last_err = ""
     try:
         for archive_url in archives:
             archive = _download_archive(archive_url, work)
@@ -2771,7 +2788,8 @@ def _discover_toolkit_encrypted_apk(
                 key=lambda item: (
                     0 if "shadowrockets.app" in item.lower() else
                     1 if "pixelor" in item.lower() else
-                    2 if "159236" in item.lower() else 3,
+                    2 if "159236" in item.lower() else
+                    3 if "onmicrosoft" in item.lower() or "jsdelivr" in item.lower() else 4,
                     next(
                         (
                             wanted.index(item.lower().rsplit("/", 1)[-1].split("?", 1)[0])
@@ -2790,49 +2808,61 @@ def _discover_toolkit_encrypted_apk(
             used_scan = False
             last_err = ""
             tried = 0
-            for url in urls:
+            def _fetch_cfg(url: str) -> tuple[str, str | None, str]:
                 try:
-                    body = fetch_text(url, user_agent=ua, referer=referer)
+                    body = fetch_text(
+                        url,
+                        retries=CFG_FETCH_RETRIES,
+                        user_agent=ua,
+                        referer=referer,
+                        timeout=CFG_FETCH_TIMEOUT,
+                    )
+                    return url, body, ""
                 except Exception as exc:
-                    last_err = str(exc)
-                    continue
-                tried += 1
-                try:
-                    plain, locked = _apk_decrypt_body(body, key_pool, locked)
-                except Exception as exc:
-                    last_err = str(exc)
-                    if used_scan or not scanned:
+                    return url, None, str(exc)
+
+            workers = max(1, min(CFG_FETCH_WORKERS, len(urls)))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = [pool.submit(_fetch_cfg, url) for url in urls]
+                for future in as_completed(futures):
+                    url, body, err = future.result()
+                    short = url.split("?", 1)[0]
+                    fname = short.rsplit("/", 1)[-1].lower()
+                    tried += 1
+                    if err or body is None:
+                        last_err = err or "empty"
                         continue
-                    used_scan = True
-                    key_pool = _apk_keys_for(source, scanned)
                     try:
-                        plain, locked = _apk_decrypt_body(body, key_pool, None)
+                        plain, locked = _apk_decrypt_body(body, key_pool, locked)
                     except Exception as exc:
                         last_err = str(exc)
+                        if used_scan or not scanned:
+                            continue
+                        used_scan = True
+                        key_pool = _apk_keys_for(source, scanned)
+                        try:
+                            plain, locked = _apk_decrypt_body(body, key_pool, None)
+                        except Exception as exc:
+                            last_err = str(exc)
+                            continue
+                    found = extract_proxies(plain)
+                    if not found:
                         continue
-                found = extract_proxies(plain)
-                if not found:
-                    continue
-                kept: list[dict[str, Any]] = []
-                for proxy in found:
-                    mark = proxy_fingerprint(proxy)
-                    if mark in seen:
+                    kept: list[dict[str, Any]] = []
+                    for proxy in found:
+                        mark = proxy_fingerprint(proxy)
+                        if mark in seen:
+                            continue
+                        seen.add(mark)
+                        kept.append(proxy)
+                    if not kept:
                         continue
-                    seen.add(mark)
-                    kept.append(proxy)
-                if not kept:
-                    continue
-                print(
-                    f"[OK] {label} decrypted proxies={len(found)} "
-                    f"url={url.split('?', 1)[0]}"
-                )
-                collected.extend(kept)
-                hit_names.add(url.lower().rsplit("/", 1)[-1].split("?", 1)[0])
-                if wanted and wanted[0] in hit_names and len(hit_names) >= min(2, len(wanted)):
-                    break
-                if len(collected) >= 20 and "159236" in url.lower() and len(hit_names) >= 1:
-                    # 已拿到主文件，只再给同主机一次机会补小文件
-                    continue
+                    print(
+                        f"[OK] {label} decrypted proxies={len(found)} "
+                        f"url={short}"
+                    )
+                    collected.extend(kept)
+                    hit_names.add(fname)
             if collected:
                 return collected, archive_url
         extra = f" tried={tried}"
