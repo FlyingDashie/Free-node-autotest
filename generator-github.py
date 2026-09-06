@@ -183,6 +183,7 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://neko-warp.nloli.xyz/neko_warp.yaml",
         ],
+        "user_agent": "Chrome",
         "prefix": "[NekoWarp] ",
     },
     {
