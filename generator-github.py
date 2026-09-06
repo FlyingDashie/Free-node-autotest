@@ -179,11 +179,8 @@ SOURCE_GROUPS = [
     },
     {
         "name": "NekoWarp",
-        "primary": "discover:sublink:https://neko-warp.nloli.xyz",
-        "fallbacks": [
-            "https://neko-warp.nloli.xyz/neko_warp.yaml",
-        ],
-        "user_agent": "Chrome",
+        "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
+        "fallbacks": [],
         "prefix": "[NekoWarp] ",
     },
     {
@@ -1448,6 +1445,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 )
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES)
+                if merge_all:
+                    pages = [_blob_to_raw(p) for p in discover_pages if p]
+                    candidates = unique_ordered(pages + list(candidates))
             elif url.startswith("discover:sublink:"):
                 page = url[len("discover:sublink:"):]
                 candidates = discover_sublink(
@@ -1508,9 +1508,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
 
             def _ingest(url: str, text: str) -> bool:
                 nonlocal used_url
-                head = str(text).lstrip()[:64].lower()
-                if merge_all and head.startswith(("<!", "<html", "<head", "<title")):
-                    return False
                 found = extract_proxies(text)
                 if not found:
                     if not merge_all:
