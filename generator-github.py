@@ -1436,6 +1436,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             url, prefer, exclude = _item_spec(item, source)
             first_hit = bool(source.get("first_hit"))
             merge_all = False
+            first_pages: list[str] = []
             _SUBLINK_BARE.clear()
             if url.startswith("discover:article:"):
                 candidates = discover_article(
@@ -1446,8 +1447,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES)
                 if merge_all:
-                    pages = [_blob_to_raw(p) for p in discover_pages if p]
-                    candidates = unique_ordered(pages + list(candidates))
+                    first_pages = unique_ordered(
+                        [_blob_to_raw(p) for p in discover_pages if p]
+                    )
+                    candidates = unique_ordered(first_pages + list(candidates))
             elif url.startswith("discover:sublink:"):
                 page = url[len("discover:sublink:"):]
                 candidates = discover_sublink(
@@ -1459,9 +1462,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
                 if merge_all:
-                    self_page = _blob_to_raw(page)
-                    if self_page and self_page not in candidates:
-                        candidates = [self_page] + list(candidates)
+                    first_pages = unique_ordered(
+                        [_blob_to_raw(p) for p in discover_pages if p]
+                    )
+                    candidates = unique_ordered(first_pages + list(candidates))
             elif url.startswith("discover:toolkit:"):
                 toolkit_spec = url[len("discover:toolkit:"):]
                 child, sep, rest = toolkit_spec.partition(":")
@@ -1548,14 +1552,22 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     except Exception as exc:
                         return url, None, str(exc)
 
-                workers = max(1, min(CFG_FETCH_WORKERS, len(pending)))
-                with ThreadPoolExecutor(max_workers=workers) as pool:
-                    futures = [pool.submit(_fetch_one, url) for url in pending]
-                    for future in as_completed(futures):
-                        url, text, err = future.result()
-                        if err or text is None:
-                            continue
-                        _ingest(url, text)
+                head = [url for url in first_pages if url in pending]
+                rest = [url for url in pending if url not in head]
+                for url in head:
+                    got, text, err = _fetch_one(url)
+                    if err or text is None:
+                        continue
+                    _ingest(got, text)
+                if rest:
+                    workers = max(1, min(CFG_FETCH_WORKERS, len(rest)))
+                    with ThreadPoolExecutor(max_workers=workers) as pool:
+                        futures = [pool.submit(_fetch_one, url) for url in rest]
+                        for future in as_completed(futures):
+                            url, text, err = future.result()
+                            if err or text is None:
+                                continue
+                            _ingest(url, text)
                 if _SUBLINK_BARE and (
                     (not first_hit and len(source_seen) <= 10)
                     or (first_hit and not source_seen)
