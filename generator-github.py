@@ -179,8 +179,10 @@ SOURCE_GROUPS = [
     },
     {
         "name": "NekoWarp",
-        "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
-        "fallbacks": [],
+        "primary": "discover:sublink:https://neko-warp.nloli.xyz",
+        "fallbacks": [
+            "https://neko-warp.nloli.xyz/neko_warp.yaml",
+        ],
         "prefix": "[NekoWarp] ",
     },
     {
@@ -256,12 +258,6 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml",
         ],
         "prefix": "[免费节点1] ",
-    },
-    {
-        "name": "免费节点1-自建",
-        "primary": "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
-        "fallbacks": [],
-        "prefix": "[免费节点1-自建] ",
     },
     {
         "name": "免费节点2",
@@ -1461,6 +1457,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 )
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
+                if merge_all:
+                    self_page = _blob_to_raw(page)
+                    if self_page and self_page not in candidates:
+                        candidates = [self_page] + list(candidates)
             elif url.startswith("discover:toolkit:"):
                 toolkit_spec = url[len("discover:toolkit:"):]
                 child, sep, rest = toolkit_spec.partition(":")
