@@ -229,7 +229,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Pawdroid",
-        "primary": "https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/README.md",
         "fallbacks": [
             "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
             "https://mirror.v2gh.com/https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
@@ -1429,14 +1429,27 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
         used_url = ""
         used_toolkit = False
         discover_pages: list[str] = []
+        first_pages: list[str] = []
         toolkit_hits: list[tuple[str, list[str], int]] = []
+
+        def _print_hits() -> None:
+            nonlocal toolkit_hits
+            if not toolkit_hits:
+                return
+            head = set(first_pages)
+            ordered = [row for row in toolkit_hits if row[0] in head] + [
+                row for row in toolkit_hits if row[0] not in head
+            ]
+            _print_toolkit_groups(ordered)
+            toolkit_hits = []
+
         for item in _source_queue(source):
             if source_found:
                 break
             url, prefer, exclude = _item_spec(item, source)
             first_hit = bool(source.get("first_hit"))
             merge_all = False
-            first_pages: list[str] = []
+            first_pages = []
             _SUBLINK_BARE.clear()
             if url.startswith("discover:article:"):
                 candidates = discover_article(
@@ -1552,22 +1565,14 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     except Exception as exc:
                         return url, None, str(exc)
 
-                head = [url for url in first_pages if url in pending]
-                rest = [url for url in pending if url not in head]
-                for url in head:
-                    got, text, err = _fetch_one(url)
-                    if err or text is None:
-                        continue
-                    _ingest(got, text)
-                if rest:
-                    workers = max(1, min(CFG_FETCH_WORKERS, len(rest)))
-                    with ThreadPoolExecutor(max_workers=workers) as pool:
-                        futures = [pool.submit(_fetch_one, url) for url in rest]
-                        for future in as_completed(futures):
-                            url, text, err = future.result()
-                            if err or text is None:
-                                continue
-                            _ingest(url, text)
+                workers = max(1, min(CFG_FETCH_WORKERS, len(pending)))
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    futures = [pool.submit(_fetch_one, url) for url in pending]
+                    for future in as_completed(futures):
+                        url, text, err = future.result()
+                        if err or text is None:
+                            continue
+                        _ingest(url, text)
                 if _SUBLINK_BARE and (
                     (not first_hit and len(source_seen) <= 10)
                     or (first_hit and not source_seen)
@@ -1578,8 +1583,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     ]
                     if extra:
                         if toolkit_hits:
-                            _print_toolkit_groups(toolkit_hits)
-                            toolkit_hits = []
+                            _print_hits()
                         print(
                             f"[INFO] sublink file_nodes={len(source_seen)} "
                             f"bare links={len(extra)}"
@@ -1608,7 +1612,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             source_found = load_previous_source_proxies(source)
         else:
             if toolkit_hits:
-                _print_toolkit_groups(toolkit_hits)
+                _print_hits()
             if used_toolkit and _TOOLKIT_ARCHIVE_URL:
                 extra = f" url={_TOOLKIT_ARCHIVE_URL}"
             elif discover_pages:
