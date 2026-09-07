@@ -3858,7 +3858,10 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
             if metric:
                 metrics.append(metric)
             if completed % 100 == 0 or completed == len(futures):
-                print(f"[INFO] tested {completed}/{len(futures)} kept={len(metrics)}")
+                print(
+                    f"[INFO] tested {completed}/{len(futures)} "
+                    f"kept={len(metrics)} rest={len(futures) - completed}"
+                )
     return metrics
 
 
