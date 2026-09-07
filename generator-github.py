@@ -107,6 +107,8 @@ CFG_FETCH_TIMEOUT = 12
 CFG_FETCH_WORKERS = 24
 CFG_FETCH_RETRIES = 1
 _DROP_NAMES: list[str] = []
+_TEST_TOTAL = 0
+_TEST_DONE = 0
 # Temporary diagnostic prints must use prefix [DEBUG], not [INFO]/[OK]/[WARN].
 LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 2
@@ -3796,6 +3798,8 @@ def _benchmark_batch(
             f"server={bad.get('server')}:{bad.get('port')} reason={reason or 'mihomo start failed'}"
         )
         _DROP_NAMES.append(str(bad.get("name") or ""))
+        global _TEST_DONE
+        _TEST_DONE += 1
         return []
 
     mid = max(1, len(proxies) // 2)
@@ -3822,8 +3826,10 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         config_path = temp_dir / "benchmark.yaml"
         controller_port = find_free_port()
         controller_url = f"http://127.0.0.1:{controller_port}"
-        global _DROP_NAMES
+        global _DROP_NAMES, _TEST_TOTAL, _TEST_DONE
         _DROP_NAMES = []
+        _TEST_TOTAL = len(proxies)
+        _TEST_DONE = 0
         metrics = _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, list(proxies)
         )
@@ -3848,19 +3854,21 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
             executor.submit(test_single_proxy, controller_url, proxy): proxy
             for proxy in proxies
         }
+        global _TEST_DONE
         for completed, future in enumerate(as_completed(futures), start=1):
             proxy = futures[future]
+            metric = None
             try:
                 metric = future.result()
             except Exception:
                 _DROP_NAMES.append(str(proxy.get("name") or ""))
-                continue
             if metric:
                 metrics.append(metric)
+            _TEST_DONE += 1
             if completed % 100 == 0 or completed == len(futures):
                 print(
                     f"[INFO] tested {completed}/{len(futures)} "
-                    f"kept={len(metrics)} rest={len(futures) - completed}"
+                    f"kept={len(metrics)} rest={max(0, _TEST_TOTAL - _TEST_DONE)}"
                 )
     return metrics
 
