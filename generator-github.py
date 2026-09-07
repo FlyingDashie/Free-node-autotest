@@ -184,6 +184,16 @@ SOURCE_GROUPS = [
         "prefix": "[NekoWarp] ",
     },
     {
+        "name": "OpenRunner-RSS",
+        "primary": "discover:article:https://free.datiya.com/index.xml",
+        "fallbacks": [
+            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/sub.yaml",
+            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
+            "https://raw.githubusercontent.com/openrunner/clash-freenode/main/clash.yaml",
+        ],
+        "prefix": "[OpenRunner-RSS] ",
+    },
+    {
         "name": "V2Rayshare-RSS",
         "primary": "discover:article:https://v2rayshare.com/feed",
         "fallbacks": [],
@@ -196,16 +206,6 @@ SOURCE_GROUPS = [
             "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
         ],
         "prefix": "[V2Rayshare-SUB] ",
-    },
-    {
-        "name": "OpenRunner-RSS",
-        "primary": "discover:article:https://free.datiya.com/index.xml",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/sub.yaml",
-            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
-            "https://raw.githubusercontent.com/openrunner/clash-freenode/main/clash.yaml",
-        ],
-        "prefix": "[OpenRunner-RSS] ",
     },
     {
         "name": "Mibei77-RSS",
