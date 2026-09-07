@@ -127,7 +127,6 @@ SOURCE_GROUPS = [
             "discover:sublink:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
         ],
         "all_bare": True,
-        "prefix": "[大FQ运动] ",
     },
     {
         "name": "大FQ运动-SS密钥",
@@ -137,7 +136,6 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
         ],
         "referer": "https://end-gfw.com/",
-        "prefix": "[大FQ运动-SS密钥] ",
     },
     {
         "name": "大FQ运动-补充",
@@ -147,14 +145,11 @@ SOURCE_GROUPS = [
         ],
         "exclude": "end-gfw.com",
         "all_bare": True,
-        "prefix": "[大FQ运动-补充] ",
     },
     {
         "name": "ChromeGO-工具包",
         "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang/releases",
-        "fallbacks": [],
         "prefer": "ChromeGo",
-        "prefix": "[ChromeGO-工具包] ",
     },
     {
         "name": "ChromeGO-ShiteThings",
@@ -162,7 +157,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://chg26.makou.cc.cd/",
         ],
-        "prefix": "[ChromeGO-ShiteThings] ",
     },
     {
         "name": "ChromeGO-Merge",
@@ -171,19 +165,14 @@ SOURCE_GROUPS = [
             "https://chromego-sub.netlify.app/sub/merged_proxies_new.yaml",
             "https://chromego-sub.netlify.app/sub/base64.txt",
         ],
-        "prefix": "[ChromeGO-Merge] ",
     },
     {
         "name": "Freesocks",
         "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
-        "fallbacks": [],
-        "prefix": "[Freesocks] ",
     },
     {
         "name": "NekoWarp",
         "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
-        "fallbacks": [],
-        "prefix": "[NekoWarp] ",
     },
     {
         "name": "OpenRunner-RSS",
@@ -193,13 +182,10 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
             "https://raw.githubusercontent.com/openrunner/clash-freenode/main/clash.yaml",
         ],
-        "prefix": "[OpenRunner-RSS] ",
     },
     {
         "name": "V2Rayshare-RSS",
         "primary": "discover:article:https://v2rayshare.com/feed",
-        "fallbacks": [],
-        "prefix": "[V2Rayshare-RSS] ",
     },
     {
         "name": "V2Rayshare-SUB",
@@ -207,19 +193,14 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
         ],
-        "prefix": "[V2Rayshare-SUB] ",
     },
     {
         "name": "Mibei77-RSS",
         "primary": "discover:article:https://www.mibei77.com/feed",
-        "fallbacks": [],
-        "prefix": "[Mibei77-RSS] ",
     },
     {
         "name": "Yoyapai-RSS",
         "primary": "discover:article:https://yoyapai.com/feed",
-        "fallbacks": [],
-        "prefix": "[Yoyapai-RSS] ",
     },
     {
         "name": "Free-clash-v2ray",
@@ -227,7 +208,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://free-clash-v2ray.github.io/uploads/latest.yaml",
         ],
-        "prefix": "[Free-clash-v2ray] ",
     },
     {
         "name": "Pawdroid",
@@ -236,20 +216,15 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
             "https://mirror.v2gh.com/https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
         ],
-        "prefix": "[Pawdroid] ",
     },
     {
         "name": "FreeV2-Base64",
         "primary": "https://xmxosfepggzm.503403.xyz",
-        "fallbacks": [],
-        "prefix": "[FreeV2-Base64] ",
     },
     {
         "name": "Bocchi2b-Base64",
         "primary": "https://links.bocchi2b.top/clash",
-        "fallbacks": [],
         "user_agent": "Chrome",
-        "prefix": "[Bocchi2b-Base64] ",
     },
     {
         "name": "免费节点1",
@@ -257,7 +232,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml",
         ],
-        "prefix": "[免费节点1] ",
     },
     {
         "name": "免费节点2",
@@ -265,7 +239,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml",
         ],
-        "prefix": "[免费节点2] ",
     },
     {
         "name": "免费节点3",
@@ -273,7 +246,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://sunmiao4458.github.io/free-proxy-airport/clash.yaml",
         ],
-        "prefix": "[免费节点3] ",
     },
     {
         "name": "免费节点4",
@@ -281,7 +253,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/mfuu/FreeProxies/master/sub.yaml",
         ],
-        "prefix": "[免费节点4] ",
     },
     {
         "name": "免费节点5",
@@ -290,7 +261,6 @@ SOURCE_GROUPS = [
             "https://cdn.jsdelivr.net/gh/vxiaov/free_proxies@main/clash/clash.provider.yaml",
             "https://raw.githubusercontent.com/vxiaov/free_proxies/main/clash/clash.provider.yaml",
         ],
-        "prefix": "[免费节点5] ",
     },
     {
         "name": "免费节点6",
@@ -299,7 +269,6 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
             "https://anaer.github.io/Sub/clash.yaml",
         ],
-        "prefix": "[免费节点6] ",
     },
     {
         "name": "免费节点7",
@@ -307,7 +276,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta-2.yaml",
         ],
-        "prefix": "[免费节点7] ",
     },
     {
         "name": "免费节点8",
@@ -315,7 +283,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml",
         ],
-        "prefix": "[免费节点8] ",
     },
     {
         "name": "免费节点9",
@@ -324,7 +291,6 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
         "all_bare": True,
-        "prefix": "[免费节点9] ",
     },
     {
         "name": "免费节点10",
@@ -332,7 +298,6 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/proxies.yaml",
         ],
-        "prefix": "[免费节点10] ",
     },
     {
         "name": "免费节点11",
@@ -342,14 +307,11 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/all.yaml",
             "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/mihomo.yaml",
         ],
-        "prefix": "[免费节点11] ",
     },
     {
         "name": "Pawdroid-sr-apk",
         "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
-        "fallbacks": [],
         "prefer": "apk",
-        "prefix": "[Pawdroid-sr-apk] ",
     },
     {
         "name": "Pawdroid-ss-apk",
@@ -358,7 +320,6 @@ SOURCE_GROUPS = [
             "discover:toolkit:ss-apk:https://github.com/Pawdroid/ShadowShare/releases",
         ],
         "prefer": "apk",
-        "prefix": "[Pawdroid-ss-apk] ",
     },
     {
         "name": "Clashfree",
@@ -369,7 +330,6 @@ SOURCE_GROUPS = [
             },
             "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
         ],
-        "prefix": "[Clashfree] ",
     },
     {
         "name": "Epodonios",
@@ -377,20 +337,35 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
         ],
-        "prefix": "[Epodonios] ",
     },
     {
         "name": "V2rayclashfree-RSS",
         "primary": "discover:article:https://v2rayclashfree.com/",
-        "fallbacks": [],
-        "prefix": "[V2rayclashfree-RSS] ",
     },
 ]
 
+
+_kept_sources: list[dict[str, Any]] = []
 for _src in SOURCE_GROUPS:
-    _keys = list(_src.keys())
-    if _keys and _keys[-1] != "prefix":
-        raise ValueError(f"source prefix must be last: {_src.get('name')} keys={_keys}")
+    if not str(_src.get("name") or "").strip():
+        print("[WARN] skip source without name")
+        continue
+    _kept_sources.append(_src)
+SOURCE_GROUPS = _kept_sources
+
+
+def source_label(source: dict[str, Any]) -> str:
+    return str(source.get("name") or "").strip()
+
+
+def source_tag(source: dict[str, Any]) -> str:
+    name = source_label(source)
+    return f"[{name}] " if name else ""
+
+
+def source_bracket(source: dict[str, Any]) -> str:
+    name = source_label(source)
+    return f"[{name}]" if name else ""
 
 SUPPORTED_PROXY_TYPES = {
     "ss",
@@ -1422,6 +1397,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     collected: list[dict[str, Any]] = []
     first = True
     for source in SOURCE_GROUPS:
+        if not source_label(source):
+            print("[WARN] skip source without name")
+            continue
         if not first:
             _SEP_JUST_PRINTED = False
             print_sep()
@@ -1496,7 +1474,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     )
                     apk_found, apk_url = finder(source, rest)
                     if apk_found:
-                        prefix = source.get("prefix", "")
+                        prefix = source_tag(source)
                         for proxy in apk_found:
                             item_proxy = dict(proxy)
                             if prefix:
@@ -1511,7 +1489,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 candidates = [url]
                 print(f"[INFO] source try url: {url}")
             if used_toolkit and _TOOLKIT_EMBEDDED:
-                prefix = source.get("prefix", "")
+                prefix = source_tag(source)
                 local_nodes = []
                 for proxy in _TOOLKIT_EMBEDDED:
                     item = dict(proxy)
@@ -1530,9 +1508,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 found = extract_proxies(text)
                 if not found:
                     if not merge_all:
-                        print(f"[WARN] source={source['name']} empty url={url}")
+                        print(f"[WARN] source={source_bracket(source)} empty url={url}")
                     return False
-                prefix = source.get("prefix", "")
+                prefix = source_tag(source)
                 kept: list[dict[str, Any]] = []
                 marks: list[str] = []
                 for p in found:
@@ -1613,14 +1591,14 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     try:
                         text = fetch_text(url, user_agent=ua, referer=ref)
                     except Exception as exc:
-                        print(f"[WARN] source={source['name']} skipped url={url} error={exc}")
+                        print(f"[WARN] source={source_bracket(source)} skipped url={url} error={exc}")
                         continue
                     if _ingest(url, text):
                         break
                     if source_found:
                         break
         if not source_found:
-            print(f"[WARN] source={source['name']} no proxies")
+            print(f"[WARN] source={source_bracket(source)} no proxies")
             source_found = load_previous_source_proxies(source)
         else:
             if toolkit_hits:
@@ -1633,7 +1611,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 extra = f" url={used_url.split('?', 1)[0]}"
             else:
                 extra = ""
-            print(f"[OK] proxies={len(source_found)} source={source['name']}{extra}")
+            print(f"[OK] proxies={len(source_found)} source={source_bracket(source)}{extra}")
         collected.extend(source_found)
 
     write_raw_backup(collected)
@@ -3648,10 +3626,10 @@ def history_file_stamp(name: str) -> str:
 
 
 def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]:
-    prefix = str(source.get("prefix") or "")
-    name = str(source.get("name") or "")
+    name = source_label(source)
+    prefix = source_tag(source)
     if not HISTORY_DIR.is_dir():
-        print(f"[WARN] source={name} no proxies; raw backup dir missing, skip reuse")
+        print(f"[WARN] source={source_bracket(source)} no proxies; raw backup dir missing, skip reuse")
         return []
     ranked: list[tuple[str, Path]] = []
     for path in HISTORY_DIR.glob("*raw*.yaml"):
@@ -3660,7 +3638,7 @@ def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]
             ranked.append((stamp, path))
     ranked.sort(reverse=True)
     if not ranked:
-        print(f"[WARN] source={name} no proxies; no raw backup file, skip reuse")
+        print(f"[WARN] source={source_bracket(source)} no proxies; no raw backup file, skip reuse")
         return []
     for stamp, path in ranked:
         try:
@@ -3680,11 +3658,11 @@ def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]
                 found.append(dict(item))
         if found:
             print(
-                f"[INFO] proxies={len(found)} source={name} reused previous raw "
+                f"[INFO] proxies={len(found)} source={source_bracket(source)} reused previous raw "
                 f"file={path.name} stamp={stamp}"
             )
             return found
-    print(f"[WARN] source={name} no proxies; raw backups have no prefix={prefix!r}, skip reuse")
+    print(f"[WARN] source={source_bracket(source)} no proxies; raw backups have no tag={prefix!r}, skip reuse")
     return []
 
 
@@ -4132,7 +4110,7 @@ def source_prefix_of(name: str) -> str:
     text = str(name or "")
     if text.startswith("[") and "]" in text:
         return text.split("]", 1)[0] + "]"
-    return "(无前缀)"
+    return text.strip() or "-"
 
 
 def count_live_by_prefix(metrics: list[ProxyMetric]) -> dict[str, int]:
@@ -4164,7 +4142,7 @@ def print_source_live_stats(
     prefixes: list[str] = []
     seen: set[str] = set()
     for source in SOURCE_GROUPS:
-        key = str(source.get("prefix") or "").strip() or f"[{source.get('name')}]"
+        key = f"[{source_label(source)}]"
         if key not in seen:
             prefixes.append(key)
             seen.add(key)
