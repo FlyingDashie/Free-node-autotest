@@ -3834,10 +3834,19 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
             engine, temp_dir, config_path, controller_url, controller_port, list(proxies)
         )
         if _DROP_NAMES:
-            names = " | ".join(item for item in _DROP_NAMES if item)
-            if len(names) > 400:
-                names = names[:397] + "..."
-            print(f"[DROP] discarded={len(_DROP_NAMES)} {names}")
+            tallies: dict[str, int] = {}
+            order: list[str] = []
+            for item in _DROP_NAMES:
+                key = source_prefix_of(item)
+                if key not in tallies:
+                    tallies[key] = 0
+                    order.append(key)
+                tallies[key] += 1
+            bits = [f"{key} × {tallies[key]}" for key in order]
+            text = " | ".join(bits)
+            if len(text) > 400:
+                text = text[:397] + "..."
+            print(f"[DROP] dropped={len(_DROP_NAMES)} {text}")
         _DROP_NAMES = []
         _SEP_JUST_PRINTED = False
         print_sep()
