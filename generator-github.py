@@ -2333,8 +2333,23 @@ def _extract_zip_filtered(zf: Any, dest_dir: Path, apk_mode: bool = False) -> bo
     return True
 
 
+def _dir_entry_counts(root: Path) -> tuple[int, int]:
+    files = 0
+    dirs = 0
+    try:
+        for path in root.rglob("*"):
+            if path.is_dir():
+                dirs += 1
+            elif path.is_file():
+                files += 1
+    except Exception:
+        return files, dirs
+    return files, dirs
+
+
 def _extract_archive(archive: Path, dest_dir: Path) -> bool:
     name = archive.name.lower()
+    tool = ""
     try:
         if name.endswith(".crx"):
             archive = _unwrap_crx(archive)
@@ -2343,13 +2358,42 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
             import zipfile
             with zipfile.ZipFile(archive) as zf:
                 apk_mode = name.endswith((".apk", ".xapk", ".apks", ".aab"))
-                return _extract_zip_filtered(zf, dest_dir, apk_mode=apk_mode)
-        if name.endswith(".tar") or name.endswith(".tar.gz") or name.endswith(".tgz"):
+                if not _extract_zip_filtered(zf, dest_dir, apk_mode=apk_mode):
+                    return False
+            tool = "zipfile"
+        elif name.endswith(".tar") or name.endswith(".tar.gz") or name.endswith(".tgz"):
             import tarfile
             with tarfile.open(archive) as tf:
                 tf.extractall(dest_dir)
-            return True
-        if name.endswith(".7z"):
+            tool = "tarfile"
+        elif name.endswith(".7z"):
+            seven = _have_7z_tool()
+            if seven:
+                result = subprocess.run(
+                    [seven, "x", str(archive), f"-o{dest_dir}", "-y"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "7z failed")
+                tool = Path(seven).name
+            else:
+                try:
+                    import py7zr
+                except ImportError as exc:
+                    print(f"[WARN] toolkit py7zr missing: {exc}")
+                    return False
+                with py7zr.SevenZipFile(archive, "r") as zf:
+                    names = [
+                        item for item in zf.getnames()
+                        if Path(item).suffix.lower() in _TOOLKIT_TEXT_EXT
+                    ]
+                    if names:
+                        zf.extract(path=dest_dir, targets=names)
+                    else:
+                        zf.extractall(path=dest_dir)
+                tool = "py7zr"
+        elif name.endswith(".rar"):
             seven = _have_7z_tool()
             if seven:
                 result = subprocess.run(
@@ -2358,24 +2402,27 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                     text=True,
                 )
                 if result.returncode == 0:
-                    return True
-                raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "7z failed")
-            try:
-                import py7zr
-            except ImportError as exc:
-                print(f"[WARN] toolkit py7zr missing: {exc}")
-                return False
-            with py7zr.SevenZipFile(archive, "r") as zf:
-                names = [
-                    item for item in zf.getnames()
-                    if Path(item).suffix.lower() in _TOOLKIT_TEXT_EXT
-                ]
-                if names:
-                    zf.extract(path=dest_dir, targets=names)
-                else:
-                    zf.extractall(path=dest_dir)
-            return True
-        if name.endswith(".rar"):
+                    tool = Path(seven).name
+            if not tool:
+                unrar = _which_any("unrar", "unar", "rar")
+                if unrar:
+                    result = subprocess.run(
+                        [unrar, "x", "-o+", str(archive), str(dest_dir) + "/"],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if result.returncode == 0:
+                        tool = Path(unrar).name
+            if not tool:
+                try:
+                    import rarfile
+                except ImportError as exc:
+                    print(f"[WARN] toolkit rarfile missing: {exc}")
+                    return False
+                with rarfile.RarFile(archive) as rf:
+                    rf.extractall(dest_dir)
+                tool = "rarfile"
+        else:
             seven = _have_7z_tool()
             if seven:
                 result = subprocess.run(
@@ -2384,38 +2431,19 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                     text=True,
                 )
                 if result.returncode == 0:
-                    return True
-            unrar = _which_any("unrar", "unar", "rar")
-            if unrar:
-                result = subprocess.run(
-                    [unrar, "x", "-o+", str(archive), str(dest_dir) + "/"],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode == 0:
-                    return True
-            try:
-                import rarfile
-            except ImportError as exc:
-                print(f"[WARN] toolkit rarfile missing: {exc}")
+                    tool = Path(seven).name
+            if not tool:
+                print(f"[WARN] toolkit unsupported archive: {archive.name}")
                 return False
-            with rarfile.RarFile(archive) as rf:
-                rf.extractall(dest_dir)
-            return True
-        seven = _have_7z_tool()
-        if seven:
-            result = subprocess.run(
-                [seven, "x", str(archive), f"-o{dest_dir}", "-y"],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                return True
-        print(f"[WARN] toolkit unsupported archive: {archive.name}")
-        return False
     except Exception as exc:
         print(f"[WARN] toolkit extract failed: {archive.name} {exc}")
         return False
+    files, dirs = _dir_entry_counts(dest_dir)
+    print(
+        f"[INFO] toolkit extracted archive={archive.name} tool={tool} "
+        f"files={files} dirs={dirs}"
+    )
+    return True
 
 
 def _toolkit_iter_packages(
