@@ -370,12 +370,12 @@ SOURCE_GROUPS = [
         "prefix": "[Clashfree] ",
     },
     {
-        "name": "Epodonios-v2ray-configs",
+        "name": "Epodonios",
         "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs/raw/refs/heads/main/README.md",
         "fallbacks": [
             "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
         ],
-        "prefix": "[Epodonios-v2ray-configs] ",
+        "prefix": "[Epodonios] ",
     },
     {
         "name": "V2rayclashfree-RSS",
@@ -1565,14 +1565,26 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     except Exception as exc:
                         return url, None, str(exc)
 
-                workers = max(1, min(CFG_FETCH_WORKERS, len(pending)))
-                with ThreadPoolExecutor(max_workers=workers) as pool:
-                    futures = [pool.submit(_fetch_one, url) for url in pending]
-                    for future in as_completed(futures):
-                        url, text, err = future.result()
-                        if err or text is None:
-                            continue
-                        _ingest(url, text)
+                def _fetch_pool(urls: list[str]) -> dict[str, str]:
+                    got: dict[str, str] = {}
+                    if not urls:
+                        return got
+                    workers = max(1, min(CFG_FETCH_WORKERS, len(urls)))
+                    with ThreadPoolExecutor(max_workers=workers) as pool:
+                        futs = [pool.submit(_fetch_one, url) for url in urls]
+                        for future in as_completed(futs):
+                            url, text, err = future.result()
+                            if err or text is None:
+                                continue
+                            got[url] = text
+                    return got
+
+                bodies = _fetch_pool(pending)
+                for url in pending:
+                    text = bodies.get(url)
+                    if text is None:
+                        continue
+                    _ingest(url, text)
                 if _SUBLINK_BARE and (
                     (not first_hit and len(source_seen) <= 10)
                     or (first_hit and not source_seen)
@@ -1588,14 +1600,12 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                             f"[INFO] sublink file_nodes={len(source_seen)} "
                             f"bare links={len(extra)}"
                         )
-                        workers = max(1, min(CFG_FETCH_WORKERS, len(extra)))
-                        with ThreadPoolExecutor(max_workers=workers) as pool:
-                            futures = [pool.submit(_fetch_one, url) for url in extra]
-                            for future in as_completed(futures):
-                                url, text, err = future.result()
-                                if err or text is None:
-                                    continue
-                                _ingest(url, text)
+                        extra_bodies = _fetch_pool(extra)
+                        for url in extra:
+                            text = extra_bodies.get(url)
+                            if text is None:
+                                continue
+                            _ingest(url, text)
             else:
                 for url in pending:
                     try:
