@@ -2333,15 +2333,72 @@ def _extract_zip_filtered(zf: Any, dest_dir: Path, apk_mode: bool = False) -> bo
     return True
 
 
-def _dir_entry_counts(root: Path) -> tuple[int, int]:
+def _archive_entry_counts(archive: Path) -> tuple[int, int]:
     files = 0
     dirs = 0
+    name = archive.name.lower()
     try:
-        for path in root.rglob("*"):
-            if path.is_dir():
-                dirs += 1
-            elif path.is_file():
-                files += 1
+        if name.endswith((".zip", ".apk", ".xapk", ".apks", ".xpi", ".crx")):
+            import zipfile
+            with zipfile.ZipFile(archive) as zf:
+                for info in zf.infolist():
+                    if info.is_dir() or str(info.filename).endswith("/"):
+                        dirs += 1
+                    else:
+                        files += 1
+            return files, dirs
+        if name.endswith(".tar") or name.endswith(".tar.gz") or name.endswith(".tgz"):
+            import tarfile
+            with tarfile.open(archive) as tf:
+                for info in tf.getmembers():
+                    if info.isdir():
+                        dirs += 1
+                    elif info.isfile():
+                        files += 1
+            return files, dirs
+        if name.endswith(".7z"):
+            try:
+                import py7zr
+                with py7zr.SevenZipFile(archive, "r") as zf:
+                    for item in zf.getnames():
+                        if str(item).endswith("/"):
+                            dirs += 1
+                        else:
+                            files += 1
+                return files, dirs
+            except Exception:
+                pass
+        if name.endswith(".rar"):
+            try:
+                import rarfile
+                with rarfile.RarFile(archive) as rf:
+                    for info in rf.infolist():
+                        is_dir = bool(getattr(info, "is_dir", lambda: False)())
+                        if is_dir or str(getattr(info, "filename", "")).endswith("/"):
+                            dirs += 1
+                        else:
+                            files += 1
+                return files, dirs
+            except Exception:
+                pass
+        seven = _have_7z_tool()
+        if seven:
+            result = subprocess.run(
+                [seven, "l", "-ba", str(archive)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    bits = line.split()
+                    if len(bits) < 5:
+                        continue
+                    attr = bits[2] if len(bits) > 2 else ""
+                    if "D" in attr:
+                        dirs += 1
+                    else:
+                        files += 1
+                return files, dirs
     except Exception:
         return files, dirs
     return files, dirs
@@ -2438,7 +2495,7 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
     except Exception as exc:
         print(f"[WARN] toolkit extract failed: {archive.name} {exc}")
         return False
-    files, dirs = _dir_entry_counts(dest_dir)
+    files, dirs = _archive_entry_counts(archive)
     print(
         f"[INFO] toolkit extracted archive={archive.name} tool={tool} "
         f"files={files} dirs={dirs}"
