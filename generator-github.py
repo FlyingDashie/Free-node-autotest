@@ -1607,12 +1607,27 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         break
                     if source_found:
                         break
+        if toolkit_hits:
+            _print_hits()
+        live_n = len(source_found)
+        if live_n < 10:
+            previous, raw_name, raw_stamp = load_previous_source_proxies(
+                source, announce=False
+            )
+            if len(previous) >= 10:
+                for item in previous:
+                    mark = proxy_fingerprint(item)
+                    if mark in source_seen:
+                        continue
+                    source_seen.add(mark)
+                    source_found.append(item)
+                print(
+                    f"[INFO] proxies={len(previous)} source={source_bracket(source)} reused previous raw "
+                    f"file={raw_name} stamp={raw_stamp}"
+                )
         if not source_found:
             print(f"[WARN] source={source_bracket(source)} no proxies")
-            source_found = load_previous_source_proxies(source)
-        else:
-            if toolkit_hits:
-                _print_hits()
+        if source_found:
             if used_toolkit and _TOOLKIT_ARCHIVE_URL:
                 extra = f" url={_TOOLKIT_ARCHIVE_URL}"
             elif discover_pages:
@@ -3674,12 +3689,17 @@ def history_file_stamp(name: str) -> str:
     return ""
 
 
-def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]:
-    name = source_label(source)
+def load_previous_source_proxies(
+    source: dict[str, Any],
+    *,
+    announce: bool = False,
+) -> tuple[list[dict[str, Any]], str, str]:
     prefix = source_tag(source)
-    if not HISTORY_DIR.is_dir():
-        print(f"[WARN] source={source_bracket(source)} no proxies; raw backup dir missing, skip reuse")
-        return []
+    name = source_bracket(source)
+    if not HISTORY_DIR.is_dir() or not prefix:
+        if announce:
+            print(f"[WARN] source={name} no proxies; raw backup dir missing, skip reuse")
+        return [], "", ""
     ranked: list[tuple[str, Path]] = []
     for path in HISTORY_DIR.glob("*raw*.yaml"):
         stamp = history_file_stamp(path.name)
@@ -3687,13 +3707,15 @@ def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]
             ranked.append((stamp, path))
     ranked.sort(reverse=True)
     if not ranked:
-        print(f"[WARN] source={source_bracket(source)} no proxies; no raw backup file, skip reuse")
-        return []
+        if announce:
+            print(f"[WARN] source={name} no proxies; no raw backup file, skip reuse")
+        return [], "", ""
     for stamp, path in ranked:
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            print(f"[WARN] raw backup unreadable file={path.name} error={exc}")
+            if announce:
+                print(f"[WARN] raw backup unreadable file={path.name} error={exc}")
             continue
         items = data.get("proxies") if isinstance(data, dict) else None
         if not isinstance(items, list):
@@ -3703,16 +3725,18 @@ def load_previous_source_proxies(source: dict[str, Any]) -> list[dict[str, Any]]
             if not isinstance(item, dict):
                 continue
             node_name = str(item.get("name") or "")
-            if prefix and node_name.startswith(prefix):
+            if node_name.startswith(prefix):
                 found.append(dict(item))
         if found:
-            print(
-                f"[INFO] proxies={len(found)} source={source_bracket(source)} reused previous raw "
-                f"file={path.name} stamp={stamp}"
-            )
-            return found
-    print(f"[WARN] source={source_bracket(source)} no proxies; raw backups have no tag={prefix!r}, skip reuse")
-    return []
+            if announce:
+                print(
+                    f"[INFO] proxies={len(found)} source={name} reused previous raw "
+                    f"file={path.name} stamp={stamp}"
+                )
+            return found, path.name, stamp
+    if announce:
+        print(f"[WARN] source={name} no proxies; raw backups have no tag={prefix!r}, skip reuse")
+    return [], "", ""
 
 
 def write_benchmark_config(path: Path, proxies: list[dict[str, Any]], controller_port: int) -> None:
