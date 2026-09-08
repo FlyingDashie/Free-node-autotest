@@ -1627,7 +1627,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     source_seen.add(mark)
                     source_found.append(item)
                 print(
-                    f"[INFO] proxies={len(previous)} source={source_bracket(source)} reused previous raw "
+                    f"[INFO] source={source_bracket(source)} reused previous raw "
                     f"file={raw_name} stamp={raw_stamp}"
                 )
         if not source_found:
