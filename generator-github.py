@@ -2480,7 +2480,7 @@ def _toolkit_iter_packages(
                 continue
             nested = _extract_nested_packages(unpack)
             if nested:
-                print(f"[INFO] toolkit nested unpacked={len(nested)}")
+                print(f"[OK] toolkit nested unpacked={len(nested)}")
             yield archive, unpack, archive_url
     finally:
         if own_work:
@@ -3039,7 +3039,7 @@ def _discover_toolkit_encrypted_apk(
             prefixes, names, scanned, tokens = _apk_scan(unpack)
             hard_keys = _apk_keys_for(source, scanned)
             print(
-                f"[INFO] toolkit {kind} scanned prefixes={len(prefixes)} "
+                f"[OK] toolkit {kind} scanned prefixes={len(prefixes)} "
                 f"files={len(names)} keys={len(hard_keys)} archive={archive.name}"
             )
             if not prefixes:
