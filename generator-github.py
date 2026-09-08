@@ -3873,7 +3873,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
             text = " | ".join(bits)
             if len(text) > 400:
                 text = text[:397] + "..."
-            print(f"[DROP] dropped={len(_DROP_NAMES)} {text}")
+            print(f"[INFO] dropped={len(_DROP_NAMES)} {text}")
         _DROP_NAMES = []
         _SEP_JUST_PRINTED = False
         print_sep()
