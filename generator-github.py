@@ -1615,6 +1615,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 source, announce=False
             )
             if len(previous) >= 10:
+                kind = "no proxies" if live_n == 0 else "few proxies"
+                print(
+                    f"[WARN] source={source_bracket(source)} {kind} "
+                    f"found={live_n} raw={len(previous)}"
+                )
                 for item in previous:
                     mark = proxy_fingerprint(item)
                     if mark in source_seen:
