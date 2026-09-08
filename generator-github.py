@@ -1490,15 +1490,23 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 print(f"[INFO] source try url: {url}")
             if used_toolkit and _TOOLKIT_EMBEDDED:
                 prefix = source_tag(source)
-                local_nodes = []
+                kept_embed: list[dict[str, Any]] = []
+                marks: list[str] = []
                 for proxy in _TOOLKIT_EMBEDDED:
                     item = dict(proxy)
                     if prefix:
                         item["name"] = prefix + str(item.get("name", "")).strip()
-                    local_nodes.append(item)
-                source_found.extend(local_nodes)
-                marks = [proxy_fingerprint(item) for item in local_nodes]
-                toolkit_hits.append(("embedded://archive-config", marks, len(local_nodes)))
+                    mark = proxy_fingerprint(item)
+                    if mark in marks:
+                        continue
+                    marks.append(mark)
+                    if mark in source_seen:
+                        continue
+                    source_seen.add(mark)
+                    kept_embed.append(item)
+                if marks:
+                    toolkit_hits.append(("embedded://archive-config", marks, len(kept_embed)))
+                source_found.extend(kept_embed)
             pending = unique_ordered(candidates)
             ua = str(source.get("user_agent") or "")
             ref = str(source.get("referer") or "")
@@ -1519,6 +1527,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     if prefix:
                         p["name"] = prefix + str(p.get("name", "")).strip()
                     mark = proxy_fingerprint(p)
+                    if mark in marks:
+                        continue
                     marks.append(mark)
                     if mark in source_seen:
                         continue
@@ -3111,6 +3121,8 @@ def _discover_toolkit_encrypted_apk(
                     marks: list[str] = []
                     for proxy in found:
                         mark = proxy_fingerprint(proxy)
+                        if mark in marks:
+                            continue
                         marks.append(mark)
                         if mark in seen:
                             continue
@@ -3861,7 +3873,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
             text = " | ".join(bits)
             if len(text) > 400:
                 text = text[:397] + "..."
-            print(f"[INFO] dropped={len(_DROP_NAMES)} {text}")
+            print(f"[DROP] dropped={len(_DROP_NAMES)} {text}")
         _DROP_NAMES = []
         _SEP_JUST_PRINTED = False
         print_sep()
