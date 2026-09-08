@@ -2447,7 +2447,7 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
         return False
     files, dirs = _dir_entry_counts(dest_dir)
     print(
-        f"[INFO] toolkit extracted archive={archive.name} tool={tool} "
+        f"[OK] toolkit extracted archive={archive.name} tool={tool} "
         f"files={files} dirs={dirs}"
     )
     if apk_mode:
