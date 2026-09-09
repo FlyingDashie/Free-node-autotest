@@ -126,7 +126,7 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
             "discover:sublink:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
         ],
-        "all_bare": True,
+        "bare_link": "all",
     },
     {
         "name": "大FQ运动-SS密钥",
@@ -144,7 +144,7 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/hello-world-1989/v2-sub/main/end-gfw-together-af3e13",
         ],
         "exclude": "end-gfw.com",
-        "all_bare": True,
+        "bare_link": "all",
     },
     {
         "name": "ChromeGO-工具包",
@@ -197,10 +197,12 @@ SOURCE_GROUPS = [
     {
         "name": "Mibei77-RSS",
         "primary": "discover:article:https://www.mibei77.com/feed",
+        "bare_link": "none",
     },
     {
         "name": "Yoyapai-RSS",
         "primary": "discover:article:https://yoyapai.com/feed",
+        "bare_link": "none",
     },
     {
         "name": "Free-clash-v2ray",
@@ -290,7 +292,7 @@ SOURCE_GROUPS = [
         "fallbacks": [
             "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
         ],
-        "all_bare": True,
+        "bare_link": "all",
     },
     {
         "name": "免费节点10",
@@ -1435,7 +1437,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 candidates = discover_article(
                     url[len("discover:article:"):],
                     prefer=prefer,
-                    all_bare=bool(source.get("all_bare")),
+                    bare_link=_bare_link_mode(source),
                 )
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES)
@@ -1450,7 +1452,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     page,
                     prefer=prefer,
                     exclude=exclude,
-                    all_bare=bool(source.get("all_bare")),
+                    bare_link=_bare_link_mode(source),
                 )
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
@@ -1575,7 +1577,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     if text is None:
                         continue
                     _ingest(url, text)
-                if _SUBLINK_BARE and (
+                if _SUBLINK_BARE and _bare_link_mode(source) != "none" and (
                     (not first_hit and len(source_seen) <= 10)
                     or (first_hit and not source_seen)
                 ):
@@ -1666,6 +1668,11 @@ def _source_queue(source: dict[str, Any]) -> list[Any]:
 
 # Reserved source flag: first_hit=True → stop after the first URL that yields nodes
 # (sublink / article / toolkit). Not set on existing sources.
+# bare_link: "all" scan every bare URL; "none" never scan bare links.
+
+
+def _bare_link_mode(source: dict[str, Any]) -> str:
+    return str(source.get("bare_link") or "").strip().lower()
 
 
 def _item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
@@ -1791,7 +1798,7 @@ def discover_sublink(
     page_url: str,
     prefer: str = "",
     exclude: str = "",
-    all_bare: bool = False,
+    bare_link: str = "",
 ) -> list[str]:
     global _DISCOVER_PAGES, _SUBLINK_BARE
     page_url = _blob_to_raw(page_url.strip())
@@ -1803,10 +1810,16 @@ def discover_sublink(
         print(f"[WARN] sublink page failed: {page_url} {exc}")
         return []
     file_links, bare_links, ranked = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
-    if all_bare:
+    mode = str(bare_link or "").strip().lower()
+    if mode == "all":
         found = unique_ordered(file_links + bare_links)
         if found:
             return found
+        print(f"[WARN] sublink discovery failed: {page_url}")
+        return []
+    if mode == "none":
+        if file_links:
+            return file_links
         print(f"[WARN] sublink discovery failed: {page_url}")
         return []
     if prefer.strip():
@@ -3272,7 +3285,7 @@ def _discover_toolkit_ss_apk(source: dict[str, Any], page_url: str) -> tuple[lis
     )
 
 
-def discover_article(feed_url: str, prefer: str = "", all_bare: bool = False) -> list[str]:
+def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> list[str]:
     global _DISCOVER_PAGES
     _DISCOVER_PAGES = []
     body = ""
@@ -3332,7 +3345,7 @@ def discover_article(feed_url: str, prefer: str = "", all_bare: bool = False) ->
 
     def _page_subs(page: str) -> list[str]:
         try:
-            return discover_sublink(page, prefer=prefer, all_bare=all_bare)
+            return discover_sublink(page, prefer=prefer, bare_link=bare_link)
         except Exception:
             return []
 
