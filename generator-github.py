@@ -182,10 +182,12 @@ SOURCE_GROUPS = [
             "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
             "https://raw.githubusercontent.com/openrunner/clash-freenode/main/clash.yaml",
         ],
+        "bare_link": "none",
     },
     {
         "name": "V2Rayshare-RSS",
         "primary": "discover:article:https://v2rayshare.com/feed",
+        "bare_link": "none",
     },
     {
         "name": "V2Rayshare-SUB",
@@ -343,6 +345,7 @@ SOURCE_GROUPS = [
     {
         "name": "V2rayclashfree-RSS",
         "primary": "discover:article:https://v2rayclashfree.com/",
+        "bare_link": "none",
     },
 ]
 
@@ -3343,24 +3346,24 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
         print(f"[WARN] article discovery failed: {feed_url}")
         return []
 
-    def _page_subs(page: str) -> list[str]:
-        try:
-            return discover_sublink(page, prefer=prefer, bare_link=bare_link)
-        except Exception:
-            return []
-
     for stamp in stamps:
-        pages = unique_ordered(groups[stamp])
-        collected: list[str] = []
-        workers = max(1, min(CFG_FETCH_WORKERS, len(pages)))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(_page_subs, page) for page in pages]
-            for future in as_completed(futures):
-                collected.extend(future.result() or [])
-        found = unique_ordered(collected)
-        if found:
-            _DISCOVER_PAGES = list(pages)
-            return found
+        for page in unique_ordered(groups[stamp]):
+            try:
+                found = unique_ordered(
+                    discover_sublink(page, prefer=prefer, bare_link=bare_link)
+                )
+            except Exception:
+                found = []
+            file_hits = [
+                item for item in found
+                if re.search(r"\.(?:yaml|yml|txt|json)(?:$|[?#])", item, re.I)
+            ]
+            ok = bool(file_hits)
+            if not ok and str(bare_link or "").strip().lower() != "none":
+                ok = bool(found)
+            if ok:
+                _DISCOVER_PAGES = [page]
+                return found
     print(f"[WARN] article discovery failed: {feed_url}")
     return []
 
