@@ -2820,13 +2820,30 @@ _APK_KEY_PREFIX_DENY = (
     b"main", b"also", b"hint", b"chunk",
 )
 _APK_KEY_CTX = (b"aes", b"ecfg", b"sare", b"secret", b"cfg")
+_APK_SCAN_NOISE = (
+    "audience_network", "facebook", "unityads", "applovin", "admob",
+)
+_APK_NAME_RE = rb"(?:ecfg(?:\d+)?(?:_[a-z]{2})?|sareserver(?:\d+)?(?:_[a-z]{2})?|socks5)"
+_APK_URL_RE = rb"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+"
+_APK_KEY_SLOT = {
+    "sr-apk": "[apk-key-sr] reserve",
+    "ss-apk": "[apk-key-ss] reserve",
+}
+_APK_VERIFIED_KEYS: dict[str, bytes] = {}
 
 
 def _apk_scan_file(path: Path) -> bool:
     low_name = path.name.lower()
+    if any(mark in low_name for mark in _APK_SCAN_NOISE):
+        return False
     suffix = path.suffix.lower()
-    if suffix == ".dex" or "libapp" in low_name:
-        return path.stat().st_size <= 32 * 1024 * 1024
+    size_ok = path.stat().st_size <= 32 * 1024 * 1024
+    if suffix == ".dex":
+        return size_ok
+    if suffix == ".so":
+        return size_ok and any(
+            mark in low_name for mark in ("libapp", "libflutter", "cfg", "ecfg")
+        )
     return False
 
 
@@ -2880,30 +2897,36 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
         except Exception:
             continue
         low_name = path.name.lower()
-        for match in re.finditer(rb"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+", blob):
-            url = match.group(0).decode("ascii", "ignore").rstrip("\\").rstrip()
+
+        def _take_prefix(url: str) -> None:
+            piece = url.split("?", 1)[0].rstrip("\\").rstrip()
+            try:
+                host = urlparse(piece).netloc
+            except Exception:
+                return
+            if "." not in host:
+                return
+            for mark in ("/config", "/data", "/raw/data"):
+                idx = piece.lower().find(mark)
+                if idx != -1:
+                    prefixes.append(piece[: idx + len(mark)])
+                    return
+            prefixes.append(piece.rsplit("/", 1)[0] if "/" in piece[8:] else piece)
+
+        for match in re.finditer(_APK_URL_RE, blob):
+            url = match.group(0).decode("ascii", "ignore")
             low = url.lower()
-            host = urlparse(url.split("?", 1)[0]).netloc
-            if "." not in host or host.count(".") < 1:
-                continue
             if any(mark in low for mark in (
                 "/config/", "/raw/data/", "/data/",
                 "gitee.com/api/v5/repos", "foxovpn", "159236", "ecsfg",
                 "onmicrosoft", "jsdelivr", "shadowsharing", "v2gh",
             )):
-                piece = url.split("?", 1)[0]
-                for mark in ("/config", "/data", "/raw/data"):
-                    idx = piece.lower().find(mark)
-                    if idx != -1:
-                        prefixes.append(piece[: idx + len(mark)])
-                        break
-                else:
-                    prefixes.append(piece.rsplit("/", 1)[0])
-        for match in re.finditer(
-            rb"(?:ecfg(?:\d+)?(?:_[a-z]{2})?|sareserver(?:\d+)?(?:_[a-z]{2})?|socks5)",
-            blob,
-        ):
+                _take_prefix(url)
+        for match in re.finditer(_APK_NAME_RE, blob):
             names.append(match.group(0).decode("ascii", "ignore"))
+            window = blob[max(0, match.start() - 240): match.end() + 240]
+            for umatch in re.finditer(_APK_URL_RE, window):
+                _take_prefix(umatch.group(0).decode("ascii", "ignore"))
         for match in re.finditer(rb"access_token=([0-9a-f]{32})", blob):
             tokens.append(match.group(1).decode("ascii"))
         libapp = "libapp" in low_name
@@ -2981,6 +3004,54 @@ def _apk_keys_for(source: dict[str, Any], scanned: list[bytes] | None = None) ->
         seen.add(item)
         merged.append(item)
     return merged
+
+
+def _apk_key_node(kind: str, key: bytes) -> dict[str, Any]:
+    return {
+        "name": _APK_KEY_SLOT[kind],
+        "type": "ss",
+        "server": "127.0.0.1",
+        "port": 1,
+        "cipher": "aes-128-gcm",
+        "password": key.decode("ascii", "ignore"),
+        "udp": False,
+    }
+
+
+def _apk_keys_from_raw_files() -> dict[str, bytes]:
+    found: dict[str, bytes] = {}
+    slots = {name: kind for kind, name in _APK_KEY_SLOT.items()}
+    paths: list[Path] = []
+    if RAW_PATH.is_file():
+        paths.append(RAW_PATH)
+    if HISTORY_DIR.is_dir():
+        ranked: list[tuple[str, Path]] = []
+        for path in HISTORY_DIR.glob("*raw*.yaml"):
+            stamp = history_file_stamp(path.name)
+            if stamp:
+                ranked.append((stamp, path))
+        ranked.sort(reverse=True)
+        paths.extend(item[1] for item in ranked[:8])
+    for path in paths:
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        items = data.get("proxies") if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            kind = slots.get(str(item.get("name") or ""))
+            if not kind or kind in found:
+                continue
+            password = str(item.get("password") or "")
+            if len(password) in {16, 24, 32}:
+                found[kind] = password.encode("utf-8")
+        if len(found) >= len(_APK_KEY_SLOT):
+            break
+    return found
 
 
 def _apk_build_cfg_urls(prefixes: list[str], names: list[str], tokens: list[str]) -> list[str]:
@@ -3093,7 +3164,11 @@ def _discover_toolkit_encrypted_apk(
             locked = None
             hit_names: set[str] = set()
             key_pool = list(hard_keys)
+            backup_keys = [
+                item for item in [_apk_keys_from_raw_files().get(kind)] if item
+            ]
             used_scan = False
+            used_backup = False
             last_err = ""
             tried = 0
             apk_hits: list[tuple[str, list[str], int]] = []
@@ -3125,18 +3200,31 @@ def _discover_toolkit_encrypted_apk(
                         plain, locked = _apk_decrypt_body(body, key_pool, locked)
                     except Exception as exc:
                         last_err = str(exc)
-                        if used_scan or not scanned:
-                            continue
-                        used_scan = True
-                        key_pool = _apk_keys_for(source, scanned)
-                        try:
-                            plain, locked = _apk_decrypt_body(body, key_pool, None)
-                        except Exception as exc:
-                            last_err = str(exc)
+                        if not used_scan and scanned:
+                            used_scan = True
+                            key_pool = _apk_keys_for(source, scanned)
+                            try:
+                                plain, locked = _apk_decrypt_body(body, key_pool, None)
+                            except Exception as exc:
+                                last_err = str(exc)
+                                plain = ""
+                        else:
+                            plain = ""
+                        if not plain and not used_backup and backup_keys:
+                            used_backup = True
+                            key_pool = list(backup_keys)
+                            try:
+                                plain, locked = _apk_decrypt_body(body, key_pool, None)
+                            except Exception as exc:
+                                last_err = str(exc)
+                                continue
+                        elif not plain:
                             continue
                     found = extract_proxies(plain)
                     if not found:
                         continue
+                    if locked:
+                        _APK_VERIFIED_KEYS[kind] = locked[0]
                     kept: list[dict[str, Any]] = []
                     marks: list[str] = []
                     for proxy in found:
@@ -3650,7 +3738,17 @@ def dump_yaml(data: Any) -> str:
 
 def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     os.makedirs(str(RAW_PATH.parent), exist_ok=True)
-    nodes = [dict(item) for item in proxies if isinstance(item, dict)]
+    reserved = set(_APK_KEY_SLOT.values())
+    nodes = [
+        dict(item)
+        for item in proxies
+        if isinstance(item, dict) and str(item.get("name") or "") not in reserved
+    ]
+    stored = _apk_keys_from_raw_files()
+    stored.update(_APK_VERIFIED_KEYS)
+    for kind, key in stored.items():
+        if kind in _APK_KEY_SLOT and key:
+            nodes.append(_apk_key_node(kind, key))
     names = [str(item.get("name") or "") for item in nodes]
     payload = {
         "mixed-port": 7890,
