@@ -372,6 +372,30 @@ def source_bracket(source: dict[str, Any]) -> str:
     name = source_label(source)
     return f"[{name}]" if name else ""
 
+
+def _dedupe_proxies(
+    items: list[dict[str, Any]],
+    seen: set[str],
+    prefix: str = "",
+) -> tuple[list[str], list[dict[str, Any]]]:
+    marks: list[str] = []
+    kept: list[dict[str, Any]] = []
+    for proxy in items:
+        if not isinstance(proxy, dict):
+            continue
+        item = dict(proxy)
+        if prefix:
+            item["name"] = prefix + str(item.get("name") or "").strip()
+        mark = proxy_fingerprint(item)
+        if mark in marks:
+            continue
+        marks.append(mark)
+        if mark in seen:
+            continue
+        seen.add(mark)
+        kept.append(item)
+    return marks, kept
+
 SUPPORTED_PROXY_TYPES = {
     "ss",
     "ssr",
@@ -805,14 +829,6 @@ def extract_singbox_from_data(data: dict[str, Any]) -> list[dict[str, Any]]:
     return found
 
 
-def extract_singbox_proxies(text: str) -> list[dict[str, Any]]:
-    found: list[dict[str, Any]] = []
-    for value in _iter_json_values(text):
-        if isinstance(value, dict):
-            found.extend(extract_singbox_from_data(value))
-    return found
-
-
 def _split_host_port(server: str, default_port: int = 443) -> tuple[str, int] | None:
     text = str(server or "").strip()
     if not text:
@@ -1050,6 +1066,7 @@ def extract_proxies(text: str) -> list[dict[str, Any]]:
                 parsed = parse_share_uri(uri)
                 if parsed:
                     clean.append(parsed)
+            clean.extend(extract_client_json_proxies(decoded))
             return clean
         document = load_yaml_document(decoded)
         if isinstance(document, dict):
@@ -1060,6 +1077,8 @@ def extract_proxies(text: str) -> list[dict[str, Any]]:
             proxies = []
         if not proxies:
             proxies = extract_proxy_block(decoded)
+        if not proxies:
+            proxies = extract_client_json_proxies(decoded)
 
     clean: list[dict[str, Any]] = []
     for proxy in proxies:
@@ -1472,19 +1491,15 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     print(f"[WARN] toolkit need ss-apk|sr-apk|crg: {url}")
                     continue
                 if child_l in {"ss-apk", "sr-apk"}:
-                    finder = (
-                        _discover_toolkit_ss_apk
-                        if child_l == "ss-apk"
-                        else _discover_toolkit_sr_apk
+                    apk_found, apk_url = _discover_toolkit_encrypted_apk(
+                        child_l, source, rest, _APK_FILE_ORDER[child_l]
                     )
-                    apk_found, apk_url = finder(source, rest)
                     if apk_found:
                         prefix = source_tag(source)
-                        for proxy in apk_found:
-                            item_proxy = dict(proxy)
-                            if prefix:
-                                item_proxy["name"] = prefix + str(item_proxy.get("name", "")).strip()
-                            source_found.append(item_proxy)
+                        _marks, kept = _dedupe_proxies(
+                            apk_found, source_seen, prefix=prefix
+                        )
+                        source_found.extend(kept)
                         used_url = apk_url or url
                     continue
                 candidates = _discover_toolkit_crg(rest, prefer=prefer)
@@ -1495,20 +1510,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 print(f"[INFO] source try url: {url}")
             if used_toolkit and _TOOLKIT_EMBEDDED:
                 prefix = source_tag(source)
-                kept_embed: list[dict[str, Any]] = []
-                marks: list[str] = []
-                for proxy in _TOOLKIT_EMBEDDED:
-                    item = dict(proxy)
-                    if prefix:
-                        item["name"] = prefix + str(item.get("name", "")).strip()
-                    mark = proxy_fingerprint(item)
-                    if mark in marks:
-                        continue
-                    marks.append(mark)
-                    if mark in source_seen:
-                        continue
-                    source_seen.add(mark)
-                    kept_embed.append(item)
+                marks, kept_embed = _dedupe_proxies(
+                    _TOOLKIT_EMBEDDED, source_seen, prefix=prefix
+                )
                 if marks:
                     toolkit_hits.append(("embedded://archive-config", marks, len(kept_embed)))
                 source_found.extend(kept_embed)
@@ -1524,21 +1528,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         print(f"[WARN] source={source_bracket(source)} empty url={url}")
                     return False
                 prefix = source_tag(source)
-                kept: list[dict[str, Any]] = []
-                marks: list[str] = []
-                for p in found:
-                    if not isinstance(p, dict):
-                        continue
-                    if prefix:
-                        p["name"] = prefix + str(p.get("name", "")).strip()
-                    mark = proxy_fingerprint(p)
-                    if mark in marks:
-                        continue
-                    marks.append(mark)
-                    if mark in source_seen:
-                        continue
-                    source_seen.add(mark)
-                    kept.append(p)
+                marks, kept = _dedupe_proxies(found, source_seen, prefix=prefix)
                 toolkit_hits.append((url, marks, len(kept)))
                 if not kept:
                     return bool(found)
@@ -1616,9 +1606,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             _print_hits()
         live_n = len(source_found)
         if live_n < 10:
-            previous, raw_name, raw_stamp = load_previous_source_proxies(
-                source, announce=False
-            )
+            previous, raw_name, raw_stamp = load_previous_source_proxies(source)
             raw_n = len(previous)
             reuse = live_n == 0 or raw_n >= 10
             if reuse and raw_n:
@@ -1627,12 +1615,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     f"[WARN] source={source_bracket(source)} {kind} "
                     f"found={live_n} raw={raw_n}"
                 )
-                for item in previous:
-                    mark = proxy_fingerprint(item)
-                    if mark in source_seen:
-                        continue
-                    source_seen.add(mark)
-                    source_found.append(item)
+                _marks, kept = _dedupe_proxies(previous, source_seen)
+                source_found.extend(kept)
                 print(
                     f"[INFO] source={source_bracket(source)} reused previous raw "
                     f"file={raw_name} stamp={raw_stamp}"
@@ -1701,24 +1685,6 @@ def _blob_to_raw(link: str) -> str:
         owner, repo, ref, path = blob.groups()
         return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
     return link
-
-
-def _probe_sub_file(tag: str, link: str) -> bool:
-    link = _blob_to_raw(link.strip())
-    print(f"[INFO] {tag} try file: {link}")
-    try:
-        body = fetch_text(link)
-    except Exception as exc:
-        print(f"[WARN] {tag} fetch failed: {link} {exc}")
-        return False
-    if not str(body).strip():
-        print(f"[WARN] {tag} empty file: {link}")
-        return False
-    found = extract_proxies(body)
-    if not found:
-        print(f"[WARN] {tag} empty subscription: {link}")
-        return False
-    return True
 
 
 def _score_sub_link(url: str, context: str = "", prefer: str = "", distance: int = 9999) -> int:
@@ -2604,15 +2570,6 @@ def _toolkit_collect_payload(root: Path, archive_name: str = "") -> tuple[list[s
     return urls, embedded
 
 
-def _toolkit_path_parts(path: str) -> list[str]:
-    return [p for p in str(path or "").split("/") if p]
-
-
-def _toolkit_tail_parts(path: str) -> list[str]:
-    parts = _toolkit_path_parts(path)
-    return parts[-6:] if len(parts) > 6 else parts
-
-
 def _unwrap_proxy_url(url: str) -> str:
     raw = str(url).split("?", 1)[0]
     match = re.match(
@@ -2714,10 +2671,6 @@ def _aggregate_urls(urls: list[str]) -> str:
     if len(mid_text) == 1:
         return _finish(prefix + mid_text + suffix)
     return _finish(prefix + ["{" + "|".join(mid_text) + "}"] + suffix)
-
-
-def _toolkit_format_group(urls: list[str]) -> str:
-    return _aggregate_urls(urls)
 
 
 def _print_toolkit_groups(hits: list[tuple[str, list[str], int]]) -> None:
@@ -2828,10 +2781,6 @@ def _aes128_cbc(key: bytes, data: bytes, iv: bytes) -> bytes:
     if proc.returncode == 0 and proc.stdout:
         return proc.stdout
     raise RuntimeError("AES decrypt unavailable (install pycryptodome or openssl)")
-
-
-def _aes128_cbc_zero_iv(key: bytes, data: bytes) -> bytes:
-    return _aes128_cbc(key, data, b"\x00" * 16)
 
 
 _APK_KEY_PREFIX_DENY = (
@@ -3245,17 +3194,7 @@ def _discover_toolkit_encrypted_apk(
                         continue
                     if locked:
                         _APK_VERIFIED_KEYS[kind] = locked[0]
-                    kept: list[dict[str, Any]] = []
-                    marks: list[str] = []
-                    for proxy in found:
-                        mark = proxy_fingerprint(proxy)
-                        if mark in marks:
-                            continue
-                        marks.append(mark)
-                        if mark in seen:
-                            continue
-                        seen.add(mark)
-                        kept.append(proxy)
+                    marks, kept = _dedupe_proxies(found, seen)
                     apk_hits.append((short, marks, len(kept)))
                     collected.extend(kept)
                     hit_names.add(fname)
@@ -3274,22 +3213,10 @@ def _discover_toolkit_encrypted_apk(
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _discover_toolkit_sr_apk(source: dict[str, Any], page_url: str) -> tuple[list[dict[str, Any]], str]:
-    return _discover_toolkit_encrypted_apk(
-        "sr-apk",
-        source,
-        page_url,
-        ["ecfg6_zh", "ecfg_zh", "ecfg6_en", "ecfg6", "ecfg5", "ecfg"],
-    )
-
-
-def _discover_toolkit_ss_apk(source: dict[str, Any], page_url: str) -> tuple[list[dict[str, Any]], str]:
-    return _discover_toolkit_encrypted_apk(
-        "ss-apk",
-        source,
-        page_url,
-        ["sareserver6_en", "sareserver_en", "sareserver6", "sareserver", "socks5"],
-    )
+_APK_FILE_ORDER = {
+    "sr-apk": ["ecfg6_zh", "ecfg_zh", "ecfg6_en", "ecfg6", "ecfg5", "ecfg"],
+    "ss-apk": ["sareserver6_en", "sareserver_en", "sareserver6", "sareserver", "socks5"],
+}
 
 
 def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> list[str]:
@@ -3814,14 +3741,9 @@ def history_file_stamp(name: str) -> str:
 
 def load_previous_source_proxies(
     source: dict[str, Any],
-    *,
-    announce: bool = False,
 ) -> tuple[list[dict[str, Any]], str, str]:
     prefix = source_tag(source)
-    name = source_bracket(source)
     if not HISTORY_DIR.is_dir() or not prefix:
-        if announce:
-            print(f"[WARN] source={name} no proxies; raw backup dir missing, skip reuse")
         return [], "", ""
     ranked: list[tuple[str, Path]] = []
     for path in HISTORY_DIR.glob("*raw*.yaml"):
@@ -3830,15 +3752,11 @@ def load_previous_source_proxies(
             ranked.append((stamp, path))
     ranked.sort(reverse=True)
     if not ranked:
-        if announce:
-            print(f"[WARN] source={name} no proxies; no raw backup file, skip reuse")
         return [], "", ""
     for stamp, path in ranked:
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except Exception as exc:
-            if announce:
-                print(f"[WARN] raw backup unreadable file={path.name} error={exc}")
+        except Exception:
             continue
         items = data.get("proxies") if isinstance(data, dict) else None
         if not isinstance(items, list):
@@ -3851,14 +3769,7 @@ def load_previous_source_proxies(
             if node_name.startswith(prefix):
                 found.append(dict(item))
         if found:
-            if announce:
-                print(
-                    f"[INFO] proxies={len(found)} source={name} reused previous raw "
-                    f"file={path.name} stamp={stamp}"
-                )
             return found, path.name, stamp
-    if announce:
-        print(f"[WARN] source={name} no proxies; raw backups have no tag={prefix!r}, skip reuse")
     return [], "", ""
 
 
