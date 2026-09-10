@@ -1619,11 +1619,13 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             previous, raw_name, raw_stamp = load_previous_source_proxies(
                 source, announce=False
             )
-            if len(previous) >= 10:
+            raw_n = len(previous)
+            reuse = live_n == 0 or raw_n >= 10
+            if reuse and raw_n:
                 kind = "no proxies" if live_n == 0 else "few proxies"
                 print(
                     f"[WARN] source={source_bracket(source)} {kind} "
-                    f"found={live_n} raw={len(previous)}"
+                    f"found={live_n} raw={raw_n}"
                 )
                 for item in previous:
                     mark = proxy_fingerprint(item)
@@ -1636,7 +1638,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     f"file={raw_name} stamp={raw_stamp}"
                 )
         if not source_found:
-            print(f"[WARN] source={source_bracket(source)} no proxies")
+            print(
+                f"[WARN] source={source_bracket(source)} no proxies found=0 raw=0"
+            )
         if source_found:
             if used_toolkit and _TOOLKIT_ARCHIVE_URL:
                 extra = f" url={_TOOLKIT_ARCHIVE_URL}"
