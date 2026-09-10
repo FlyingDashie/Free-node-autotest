@@ -2806,14 +2806,10 @@ def _apk_scan_file(path: Path) -> bool:
     if any(mark in low_name for mark in _APK_SCAN_NOISE):
         return False
     suffix = path.suffix.lower()
-    try:
-        size = path.stat().st_size
-    except OSError:
-        return False
     if suffix == ".dex":
-        return size <= 12 * 1024 * 1024
+        return True
     if suffix == ".so":
-        return size <= 24 * 1024 * 1024 and any(
+        return any(
             mark in low_name for mark in ("libapp", "libflutter", "cfg", "ecfg")
         )
     return False
