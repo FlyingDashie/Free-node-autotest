@@ -104,7 +104,7 @@ HISTORY_DIR = Path("history")
 TEST_URL = "http://www.gstatic.com/generate_204"
 SOURCE_TIMEOUT = 20
 CFG_FETCH_TIMEOUT = 12
-CFG_FETCH_WORKERS = 24
+CFG_FETCH_WORKERS = 50
 CFG_FETCH_RETRIES = 1
 _DROP_NAMES: list[str] = []
 _TEST_TOTAL = 0
@@ -2806,11 +2806,14 @@ def _apk_scan_file(path: Path) -> bool:
     if any(mark in low_name for mark in _APK_SCAN_NOISE):
         return False
     suffix = path.suffix.lower()
-    size_ok = path.stat().st_size <= 32 * 1024 * 1024
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return False
     if suffix == ".dex":
-        return size_ok
+        return size <= 12 * 1024 * 1024
     if suffix == ".so":
-        return size_ok and any(
+        return size <= 24 * 1024 * 1024 and any(
             mark in low_name for mark in ("libapp", "libflutter", "cfg", "ecfg")
         )
     return False
@@ -2853,67 +2856,65 @@ def _apk_key_shape(item: bytes) -> int:
     return score
 
 
-def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
+def _apk_scan_one(
+    path: Path,
+) -> tuple[list[str], list[str], list[tuple[int, bytes]], list[str]]:
     prefixes: list[str] = []
     names: list[str] = []
     tokens: list[str] = []
     scored: list[tuple[int, bytes]] = []
-    for path in root.rglob("*"):
-        if not path.is_file() or not _apk_scan_file(path):
-            continue
+    try:
+        blob = path.read_bytes()
+    except Exception:
+        return prefixes, names, scored, tokens
+    low_name = path.name.lower()
+    is_dex = path.suffix.lower() == ".dex"
+
+    def _take_prefix(url: str) -> None:
+        piece = url.split("?", 1)[0].rstrip("\\").rstrip()
         try:
-            blob = path.read_bytes()
+            host = urlparse(piece).netloc
         except Exception:
+            return
+        if "." not in host:
+            return
+        for mark in ("/config", "/data", "/raw/data"):
+            idx = piece.lower().find(mark)
+            if idx != -1:
+                prefixes.append(piece[: idx + len(mark)])
+                return
+        prefixes.append(piece.rsplit("/", 1)[0] if "/" in piece[8:] else piece)
+
+    for match in re.finditer(_APK_URL_RE, blob):
+        url = match.group(0).decode("ascii", "ignore")
+        low = url.lower()
+        if any(mark in low for mark in (
+            "/config/", "/raw/data/", "/data/",
+            "gitee.com/api/v5/repos", "foxovpn", "159236", "ecsfg",
+            "onmicrosoft", "jsdelivr", "shadowsharing", "v2gh",
+        )):
+            _take_prefix(url)
+    for match in re.finditer(_APK_NAME_RE, blob):
+        names.append(match.group(0).decode("ascii", "ignore"))
+        window = blob[max(0, match.start() - 240): match.end() + 240]
+        for umatch in re.finditer(_APK_URL_RE, window):
+            _take_prefix(umatch.group(0).decode("ascii", "ignore"))
+    for match in re.finditer(rb"access_token=([0-9a-f]{32})", blob):
+        tokens.append(match.group(1).decode("ascii"))
+    libapp = "libapp" in low_name
+    for match in re.finditer(rb"\xa0([A-Za-z0-9]{16})", blob):
+        item = match.group(1)
+        shape = _apk_key_shape(item)
+        if not shape:
             continue
-        low_name = path.name.lower()
-
-        def _take_prefix(url: str) -> None:
-            piece = url.split("?", 1)[0].rstrip("\\").rstrip()
-            try:
-                host = urlparse(piece).netloc
-            except Exception:
-                return
-            if "." not in host:
-                return
-            for mark in ("/config", "/data", "/raw/data"):
-                idx = piece.lower().find(mark)
-                if idx != -1:
-                    prefixes.append(piece[: idx + len(mark)])
-                    return
-            prefixes.append(piece.rsplit("/", 1)[0] if "/" in piece[8:] else piece)
-
-        for match in re.finditer(_APK_URL_RE, blob):
-            url = match.group(0).decode("ascii", "ignore")
-            low = url.lower()
-            if any(mark in low for mark in (
-                "/config/", "/raw/data/", "/data/",
-                "gitee.com/api/v5/repos", "foxovpn", "159236", "ecsfg",
-                "onmicrosoft", "jsdelivr", "shadowsharing", "v2gh",
-            )):
-                _take_prefix(url)
-        for match in re.finditer(_APK_NAME_RE, blob):
-            names.append(match.group(0).decode("ascii", "ignore"))
-            window = blob[max(0, match.start() - 240): match.end() + 240]
-            for umatch in re.finditer(_APK_URL_RE, window):
-                _take_prefix(umatch.group(0).decode("ascii", "ignore"))
-        for match in re.finditer(rb"access_token=([0-9a-f]{32})", blob):
-            tokens.append(match.group(1).decode("ascii"))
-        libapp = "libapp" in low_name
-        # Flutter AOT one-byte string of length 16 is tagged 0xA0.
-        for match in re.finditer(rb"\xa0([A-Za-z0-9]{16})", blob):
-            item = match.group(1)
-            shape = _apk_key_shape(item)
-            if not shape:
-                continue
-            bonus = 40 + shape
-            if libapp:
-                bonus += 8
-            after = blob[match.end(): match.end() + 12]
-            # leftover old key still sits next to "servers" in new SS builds
-            if after.startswith(b"servers") or after[1:8] == b"servers":
-                bonus -= 6
-            scored.append((bonus, item))
-        # DEX MUTF-8 string: uleb128(16) == 0x10, payload, NUL
+        bonus = 40 + shape
+        if libapp:
+            bonus += 8
+        after = blob[match.end(): match.end() + 12]
+        if after.startswith(b"servers") or after[1:8] == b"servers":
+            bonus -= 6
+        scored.append((bonus, item))
+    if is_dex:
         for match in re.finditer(rb"\x10([A-Za-z0-9]{16})\x00", blob):
             item = match.group(1)
             shape = _apk_key_shape(item)
@@ -2924,6 +2925,7 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
             if any(mark in window for mark in _APK_KEY_CTX):
                 bonus += 3
             scored.append((bonus, item))
+    else:
         for match in re.finditer(rb"(?:[A-Za-z0-9]\x00){16}", blob):
             item = match.group(0)[::2]
             shape = _apk_key_shape(item)
@@ -2934,6 +2936,40 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
             if any(mark in window for mark in _APK_KEY_CTX):
                 bonus += 3
             scored.append((bonus, item))
+    return prefixes, names, scored, tokens
+
+
+def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
+    files: list[Path] = []
+    for path in root.rglob("*"):
+        if path.is_file() and _apk_scan_file(path):
+            files.append(path)
+
+    def _rank(path: Path) -> tuple[int, int]:
+        name = path.name.lower()
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = 0
+        if "libapp" in name:
+            return (0, size)
+        if path.suffix.lower() == ".so":
+            return (1, size)
+        return (2, size)
+
+    files.sort(key=_rank)
+    prefixes: list[str] = []
+    names: list[str] = []
+    tokens: list[str] = []
+    scored: list[tuple[int, bytes]] = []
+    if files:
+        workers = max(1, min(8, len(files)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for pre, nam, sco, tok in pool.map(_apk_scan_one, files):
+                prefixes.extend(pre)
+                names.extend(nam)
+                scored.extend(sco)
+                tokens.extend(tok)
     ranked: list[bytes] = []
     seen: set[bytes] = set()
     for _score, item in sorted(scored, key=lambda pair: pair[0], reverse=True):
