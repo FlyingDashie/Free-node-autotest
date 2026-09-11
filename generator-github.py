@@ -2563,10 +2563,11 @@ def _toolkit_collect_payload(root: Path, archive_name: str = "") -> tuple[list[s
     urls = _collect_toolkit_sub_urls(root)
     embedded = _collect_toolkit_embedded_proxies(root)
     tag = f" archive={archive_name}" if archive_name else ""
-    if embedded:
-        print(f"[OK] toolkit embedded proxies={len(embedded)}{tag}")
-    if urls:
-        print(f"[OK] toolkit discovered subs={len(urls)}{tag}")
+    if urls or embedded:
+        print(
+            f"[OK] toolkit discovered subs={len(urls)} "
+            f"embedded={len(embedded)}{tag}"
+        )
     return urls, embedded
 
 
@@ -2959,7 +2960,7 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
     tokens: list[str] = []
     scored: list[tuple[int, bytes]] = []
     if files:
-        workers = max(1, min(8, len(files)))
+        workers = max(1, min(25, len(files)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for pre, nam, sco, tok in pool.map(_apk_scan_one, files):
                 prefixes.extend(pre)
