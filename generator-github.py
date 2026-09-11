@@ -2960,7 +2960,7 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
     tokens: list[str] = []
     scored: list[tuple[int, bytes]] = []
     if files:
-        workers = max(1, min(25, len(files)))
+        workers = max(1, min(8, len(files)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for pre, nam, sco, tok in pool.map(_apk_scan_one, files):
                 prefixes.extend(pre)
