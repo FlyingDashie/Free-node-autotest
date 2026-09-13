@@ -2263,6 +2263,29 @@ def _expand_github_release_assets(
     return kept
 
 
+def _toolkit_download_release(
+    page_url: str,
+    dest_dir: Path,
+    prefer: Any = "",
+    require_sha256: bool = False,
+) -> Path | None:
+    assets = _expand_github_release_assets(
+        page_url,
+        prefer=prefer,
+        require_sha256=require_sha256,
+    )
+    for url in assets:
+        expected = _lookup_sha256(url) if require_sha256 else ""
+        if require_sha256 and not expected:
+            name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
+            print(f"[WARN] toolkit skip no sha256: {name}")
+            continue
+        archive = _download_archive(url, dest_dir, expected_sha256=expected)
+        if archive is not None:
+            return archive
+    return None
+
+
 def _download_archive(
     url: str,
     dest_dir: Path,
@@ -3712,8 +3735,32 @@ def find_or_install_mihomo() -> Path:
         print(f"[OK] proxy engine ready: {binary.name} starting latency test")
         return binary
 
-    url, expected_sha256 = select_mihomo_asset(require_sha256=True)
-    archive = _download_archive(url, install_dir, expected_sha256=expected_sha256)
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    if system == "darwin":
+        os_token = "darwin"
+    elif system == "android":
+        os_token = "android"
+    elif system == "linux":
+        os_token = "linux"
+    elif system == "windows":
+        os_token = "windows"
+    else:
+        raise RuntimeError(f"unsupported OS for Mihomo download: {system}")
+    if machine in {"x86_64", "amd64"}:
+        arch_tokens = ["amd64"]
+    elif machine in {"arm64", "aarch64", "armv8l", "armv8"}:
+        arch_tokens = ["arm64-v8", "arm64"]
+    elif machine in {"armv7l", "armv7", "arm"}:
+        arch_tokens = ["armv7", "armv6"]
+    else:
+        raise RuntimeError(f"unsupported architecture for Mihomo download: {machine}")
+    archive = _toolkit_download_release(
+        "https://github.com/MetaCubeX/mihomo",
+        install_dir,
+        prefer=[os_token, *arch_tokens, "gz", "mihomo"],
+        require_sha256=True,
+    )
     if archive is None:
         raise RuntimeError("no matching Mihomo release asset found")
     extracted = extract_mihomo_binary(archive, install_dir)
@@ -3798,51 +3845,6 @@ def _lookup_sha256(url: str, extra_checksum_urls: list[str] | None = None) -> st
             _SHA256_BY_URL[url] = expected
             return expected
     return ""
-
-
-def select_mihomo_asset(require_sha256: bool = True) -> tuple[str, str]:
-    system = platform.system().lower()
-    machine = platform.machine().lower()
-    if system == "darwin":
-        os_token = "darwin"
-    elif system == "android":
-        os_token = "android"
-    elif system == "linux":
-        os_token = "linux"
-    elif system == "windows":
-        os_token = "windows"
-    else:
-        raise RuntimeError(f"unsupported OS for Mihomo download: {system}")
-    if machine in {"x86_64", "amd64"}:
-        arch_tokens = ["amd64"]
-    elif machine in {"arm64", "aarch64", "armv8l", "armv8"}:
-        arch_tokens = ["arm64-v8", "arm64"]
-    elif machine in {"armv7l", "armv7", "arm"}:
-        arch_tokens = ["armv7", "armv6"]
-    else:
-        raise RuntimeError(f"unsupported architecture for Mihomo download: {machine}")
-    prefer = [os_token, *arch_tokens, "gz", "mihomo"]
-    assets = _expand_github_release_assets(
-        "https://github.com/MetaCubeX/mihomo",
-        prefer=prefer,
-        require_sha256=require_sha256,
-    )
-    binaries: list[str] = []
-    for link in assets:
-        lower = link.lower()
-        if os_token not in lower:
-            continue
-        if not any(token in lower for token in arch_tokens):
-            continue
-        if not (lower.endswith(".gz") or lower.endswith(".zip")):
-            continue
-        binaries.append(link)
-    for url in binaries:
-        expected = _lookup_sha256(url) if require_sha256 else ""
-        if require_sha256 and not expected:
-            continue
-        return url, expected
-    raise RuntimeError("no matching Mihomo release asset found")
 
 
 def verify_file_sha256(path: Path, expected: str, label: str = "") -> None:
