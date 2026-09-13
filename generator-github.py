@@ -1608,10 +1608,10 @@ def _bare_link_mode(source: dict[str, Any]) -> str:
 def _item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
     if isinstance(item, dict):
         url = str(item.get("url") or "")
-        prefer = str(item["prefer"]) if "prefer" in item else str(source.get("prefer") or "")
+        prefer = item["prefer"] if "prefer" in item else source.get("prefer") or ""
         exclude = str(item["exclude"]) if "exclude" in item else str(source.get("exclude") or "")
-        return url, prefer, exclude
-    return str(item), str(source.get("prefer") or ""), str(source.get("exclude") or "")
+        return url, ",".join(_prefer_tokens(prefer)), exclude
+    return str(item), ",".join(_prefer_tokens(source.get("prefer") or "")), str(source.get("exclude") or "")
 
 
 def _github_repo_home(url: str) -> tuple[str, str] | None:
@@ -1729,14 +1729,23 @@ def _blob_to_raw(link: str) -> str:
     return link
 
 
-def _score_sub_link(url: str, context: str = "", prefer: str = "", distance: int = 9999) -> int:
-    hint = prefer.strip().lower()
-    if not hint:
+def _prefer_tokens(prefer: Any) -> list[str]:
+    if isinstance(prefer, (list, tuple)):
+        items = [str(item) for item in prefer]
+    else:
+        items = re.split(r"[,|]", str(prefer or ""))
+    return [item.strip().lower() for item in items if item and item.strip()]
+
+
+def _score_sub_link(url: str, context: str = "", prefer: Any = "", distance: int = 9999) -> int:
+    tokens = _prefer_tokens(prefer)
+    if not tokens:
         return 0
     blob = f"{url} {context}".lower()
     score = 0
-    if hint in blob:
-        score += 100000
+    for index, hint in enumerate(tokens):
+        if hint and hint in blob:
+            score += max(1000, 100000 - index * 5000)
     score += max(0, 10000 - min(distance, 10000))
     return score
 
@@ -1976,22 +1985,21 @@ def _package_allowed(link: str) -> bool:
     )
 
 
-def _prefer_distance(text: str, hint: str, pos: int) -> int:
-    hint = (hint or "").strip().lower()
-    if not hint or pos < 0:
+def _prefer_distance(text: str, hint: Any, pos: int) -> int:
+    tokens = _prefer_tokens(hint)
+    if not tokens or pos < 0:
         return 9999
     low = (text or "").lower()
-    spots: list[int] = []
-    start = 0
-    while True:
-        found = low.find(hint, start)
-        if found < 0:
-            break
-        spots.append(found)
-        start = found + len(hint)
-    if not spots:
-        return 9999
-    return min(abs(pos - item) for item in spots)
+    best = 9999
+    for index, token in enumerate(tokens):
+        start = 0
+        while True:
+            found = low.find(token, start)
+            if found < 0:
+                break
+            best = min(best, abs(pos - found) + index * 10)
+            start = found + max(1, len(token))
+    return best
 
 
 def _package_score(link: str, prefer: str = "", distance: int = 9999) -> int:
@@ -2195,7 +2203,11 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
             lower = link.lower()
             if "/releases/download/" not in lower:
                 continue
-            if not (_ARCHIVE_EXT_RE.search(link) or _INSTALLER_EXT_RE.search(link)):
+            if not (
+                _ARCHIVE_EXT_RE.search(link)
+                or _INSTALLER_EXT_RE.search(link)
+                or re.search(r"\.gz(?:$|[?#])", lower)
+            ):
                 continue
             if link in seen:
                 continue
@@ -3661,18 +3673,8 @@ def _checksum_from_text(text: str, filename: str) -> str:
 
 
 def select_mihomo_asset() -> tuple[str, str]:
-    api_url = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
-    data = requests.get(
-        api_url,
-        headers={"User-Agent": resolve_ua("ClashMeta")},
-        timeout=SOURCE_TIMEOUT,
-        verify=False,
-        proxies=PROXIES,
-    ).json()
-    assets = data.get("assets", [])
     system = platform.system().lower()
     machine = platform.machine().lower()
-
     if system == "darwin":
         os_token = "darwin"
     elif system == "android":
@@ -3683,7 +3685,6 @@ def select_mihomo_asset() -> tuple[str, str]:
         os_token = "windows"
     else:
         raise RuntimeError(f"unsupported OS for Mihomo download: {system}")
-
     if machine in {"x86_64", "amd64"}:
         arch_tokens = ["amd64"]
     elif machine in {"arm64", "aarch64", "armv8l", "armv8"}:
@@ -3692,50 +3693,35 @@ def select_mihomo_asset() -> tuple[str, str]:
         arch_tokens = ["armv7", "armv6"]
     else:
         raise RuntimeError(f"unsupported architecture for Mihomo download: {machine}")
-
-    checksum_assets: dict[str, str] = {}
-    sum_files: list[str] = []
-    binaries: list[tuple[str, str, str]] = []
-    for asset in assets:
-        name = str(asset.get("name", ""))
-        lower = name.lower()
-        download_url = str(asset.get("browser_download_url", ""))
-        if not download_url:
-            continue
-        if lower.endswith(".sha256") or lower.endswith(".sha256sum"):
-            checksum_assets[lower.rsplit(".", 1)[0]] = download_url
-            continue
-        if lower in {"checksums.txt", "sha256sums.txt", "sha256sums", "checksums"}:
-            sum_files.append(download_url)
+    prefer = [os_token, *arch_tokens, "gz", "mihomo"]
+    assets = _expand_github_release_assets(
+        "https://github.com/MetaCubeX/mihomo",
+        prefer=prefer,
+    )
+    binaries: list[str] = []
+    for link in assets:
+        lower = link.lower()
+        if "compatible" in lower:
             continue
         if os_token not in lower:
             continue
         if not any(token in lower for token in arch_tokens):
             continue
-        if "compatible" in lower:
-            continue
         if not (lower.endswith(".gz") or lower.endswith(".zip")):
             continue
-        binaries.append((name, download_url, _asset_sha256(asset)))
-
+        binaries.append(link)
     if not binaries:
         raise RuntimeError("no matching Mihomo release asset found")
-    name, url, expected = binaries[0]
-    if expected:
-        print(f"[INFO] release digest sha256={expected} asset={name}")
-        return url, expected
-
-    stem = name.lower()
-    for key, checksum_url in checksum_assets.items():
-        if stem.startswith(key) or key.startswith(stem):
-            expected = _checksum_from_text(_fetch_checksum_text(checksum_url), name)
-            if expected:
-                print(f"[INFO] checksum file sha256={expected} asset={name}")
-                return url, expected
-    for checksum_url in sum_files:
-        expected = _checksum_from_text(_fetch_checksum_text(checksum_url), name)
+    url = binaries[0]
+    name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
+    expected = ""
+    for suffix in (".sha256", ".sha256sum"):
+        try:
+            expected = _checksum_from_text(_fetch_checksum_text(url + suffix), name)
+        except Exception:
+            expected = ""
         if expected:
-            print(f"[INFO] checksums list sha256={expected} asset={name}")
+            print(f"[INFO] checksum file sha256={expected} asset={name}")
             return url, expected
     raise RuntimeError(f"no sha256 found for Mihomo asset: {name}")
 
