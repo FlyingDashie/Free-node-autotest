@@ -1767,18 +1767,55 @@ def _prefer_tokens(prefer: Any) -> list[str]:
         items = [str(item) for item in prefer]
     else:
         items = re.split(r"[,|]", str(prefer or ""))
-    return [item.strip().lower() for item in items if item and item.strip()]
+    return [item.strip() for item in items if item and item.strip()]
+
+
+def _prefer_literal(pattern: str) -> bool:
+    text = str(pattern or "").strip()
+    if not text:
+        return False
+    if "://" in text or text.lower().startswith("www."):
+        return True
+    if "\\" not in text and re.fullmatch(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", text):
+        return True
+    return False
+
+
+def _prefer_pattern(pattern: str) -> str:
+    text = str(pattern or "")
+    if _prefer_literal(text):
+        return re.escape(text)
+    if "\\" in text or re.search(r"[()[\]{}+^$|]", text):
+        return text
+    if "*" in text or "?" in text:
+        return "".join(
+            ".*" if char == "*" else "." if char == "?" else re.escape(char)
+            for char in text
+        )
+    return re.escape(text)
+
+
+def _prefer_spans(pattern: str, text: str) -> list[tuple[int, int]]:
+    if not pattern or text is None:
+        return []
+    flags = re.I
+    raw = _prefer_pattern(pattern)
+    try:
+        matches = list(re.finditer(raw, text, flags))
+    except re.error:
+        matches = list(re.finditer(re.escape(pattern), text, flags))
+    return [(m.start(), m.end()) for m in matches]
 
 
 def _score_sub_link(url: str, context: str = "", prefer: Any = "", distance: int = 9999) -> int:
     tokens = _prefer_tokens(prefer)
     if not tokens:
         return 0
-    blob = f"{url} {context}".lower()
+    blob = f"{url} {context}"
     score = 0
     hits = 0
     for index, hint in enumerate(tokens):
-        if hint and hint in blob:
+        if hint and _prefer_spans(hint, blob):
             hits += 1
             score += max(1000, 100000 - index * 5000)
     score += hits * 20000
@@ -1797,21 +1834,14 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
         r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|zip|exe|dmg|apk)(?:$|[?#&]))",
         re.I,
     )
-    exclude_keyword = exclude.strip().lower()
+    exclude_tokens = _prefer_tokens(exclude)
     prefer_positions = []
-    lower_text = text.lower()
     for hint in _prefer_tokens(prefer):
-        start = 0
-        while True:
-            pos = lower_text.find(hint, start)
-            if pos == -1:
-                break
-            prefer_positions.append(pos)
-            start = pos + max(1, len(hint))
+        prefer_positions.extend(start for start, _end in _prefer_spans(hint, text))
     for match in re.finditer(r"https?://[^\s\"'`<>\]\|)]+", text, re.I):
         raw = match.group(0).split("`")[0].rstrip(").,;\"'|")
         link = _blob_to_raw(raw)
-        if exclude_keyword and exclude_keyword in link.lower():
+        if exclude_tokens and any(_prefer_spans(token, link) for token in exclude_tokens):
             continue
         url_start = match.start()
         min_distance = 9999
@@ -1833,7 +1863,7 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
             link = urljoin(page_url, html.unescape(match.group(1)))
             if not link.startswith("http"):
                 continue
-            if exclude_keyword and exclude_keyword in link.lower():
+            if exclude_tokens and any(_prefer_spans(token, link) for token in exclude_tokens):
                 continue
             dist = 9999
             if prefer_positions:
@@ -2023,16 +2053,10 @@ def _prefer_distance(text: str, hint: Any, pos: int) -> int:
     tokens = _prefer_tokens(hint)
     if not tokens or pos < 0:
         return 9999
-    low = (text or "").lower()
     best = 9999
     for index, token in enumerate(tokens):
-        start = 0
-        while True:
-            found = low.find(token, start)
-            if found < 0:
-                break
+        for found, _end in _prefer_spans(token, text or ""):
             best = min(best, abs(pos - found) + index * 10)
-            start = found + max(1, len(token))
     return best
 
 
@@ -3776,7 +3800,7 @@ def find_or_install_mihomo() -> Path:
     archive = _toolkit_fetch_package(
         "https://github.com/MetaCubeX/mihomo",
         install_dir,
-        prefer=[os_token, *arch_tokens, "mihomo"],
+        prefer=[os_token, *arch_tokens, "mihomo", r"v\d+\."],
         require_sha256=True,
     )
     if archive is None:
