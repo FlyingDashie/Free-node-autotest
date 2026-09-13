@@ -3946,11 +3946,6 @@ def _start_mihomo_for_batch(
             stdout, stderr = "", ""
         _stop_process(process)
         message = f"{exc}\n{stderr}\n{stdout}"
-        print(
-            f"[WARN] batch start failed size={len(proxies)} {{{branch}}}"
-            if branch
-            else f"[WARN] batch start failed size={len(proxies)}"
-        )
         return None, message
 
 
@@ -4008,8 +4003,8 @@ def _benchmark_batch(
     left_id = _alloc_branch()
     right_id = _alloc_branch()
     print(
-        f"[WARN] split batch {len(proxies)} {{{branch}}} "
-        f"-> {len(left)} {{{left_id}}} + {len(right)} {{{right_id}}}"
+        f"[WARN] batch start failed size={len(proxies)} {{{branch}}} "
+        f"split -> {len(left)} {{{left_id}}} + {len(right)} {{{right_id}}}"
     )
     parts: list[list[ProxyMetric]] = [[], []]
 
