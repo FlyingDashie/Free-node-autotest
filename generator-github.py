@@ -1439,7 +1439,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         source_found.extend(kept)
                         used_url = apk_url or url
                     continue
-                candidates = _discover_toolkit_crg(rest, prefer=prefer)
+                candidates = _discover_toolkit_crg(
+                    rest,
+                    prefer=prefer,
+                    require_sha256=_flag(source.get("require_sha256")),
+                )
                 merge_all = not first_hit
                 used_toolkit = True
             else:
@@ -1605,6 +1609,12 @@ def _bare_link_mode(source: dict[str, Any]) -> str:
     return str(source.get("bare_link") or "").strip().lower()
 
 
+def _flag(value: Any, default: bool = False) -> bool:
+    if value is None or value == "":
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
     if isinstance(item, dict):
         url = str(item.get("url") or "")
@@ -1750,6 +1760,12 @@ def _score_sub_link(url: str, context: str = "", prefer: Any = "", distance: int
             score += max(1000, 100000 - index * 5000)
     score += hits * 20000
     score += max(0, 10000 - min(distance, 10000))
+    if re.search(r"v\d+\.\d+", blob):
+        score += 25000
+    if re.search(r"alpha|beta|nightly|pre-?release|\brc\d*\b", blob):
+        score -= 25000
+    if "compatible" in blob:
+        score -= 15000
     return score
 
 
@@ -2162,7 +2178,11 @@ def _store_package_urls(kind: str, page_url: str) -> list[str]:
     return []
 
 
-def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
+def _expand_github_release_assets(
+    page_url: str,
+    prefer: str = "",
+    require_sha256: bool = False,
+) -> list[str]:
     match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
     if not match:
         return []
@@ -2189,11 +2209,12 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
         seen_tags.add(tag)
         dist = _prefer_distance(listing, token, found.start())
         tags.append((_score_sub_link(tag, prefer=token, distance=dist), tag))
-    if "latest" not in seen_tags and not _prefer_tokens(token):
-        tags.append((0, "latest"))
+    if "latest" not in seen_tags:
+        tags.append((15000, "latest"))
     tags.sort(key=lambda item: item[0], reverse=True)
     ranked: list[tuple[int, str]] = []
     seen: set[str] = set()
+    checksum_links: list[str] = []
     for _, tag in tags:
         asset_page = f"https://github.com/{owner}/{repo}/releases/expanded_assets/{tag}"
         try:
@@ -2208,26 +2229,49 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
             if not (
                 _ARCHIVE_EXT_RE.search(link)
                 or _INSTALLER_EXT_RE.search(link)
-                or re.search(r"\.gz(?:$|[?#])", lower)
+                or re.search(r"\.(?:gz|sha256|sha256sum)(?:$|[?#])", lower)
             ):
                 continue
             if link in seen:
                 continue
             seen.add(link)
+            if lower.endswith(".sha256") or lower.endswith(".sha256sum") or lower.endswith("checksums.txt"):
+                checksum_links.append(link)
+                continue
             loc = body.lower().find(lower[:120])
             dist = _prefer_distance(body, token, loc)
             ranked.append((_score_sub_link(link, prefer=token, distance=dist), link))
         if ranked:
             break
     ranked.sort(key=lambda item: item[0], reverse=True)
-    return unique_ordered([url for _, url in ranked])
+    urls = unique_ordered([url for _, url in ranked])
+    if not require_sha256:
+        return urls
+    kept: list[str] = []
+    for url in urls:
+        if _lookup_sha256(url, checksum_links):
+            kept.append(url)
+        else:
+            name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
+            print(f"[WARN] toolkit skip no sha256: {name}")
+    return kept
 
 
-def _download_archive(url: str, dest_dir: Path) -> Path | None:
+def _download_archive(
+    url: str,
+    dest_dir: Path,
+    expected_sha256: str = "",
+) -> Path | None:
     from urllib.parse import urlparse, unquote
     local = _find_local_package(url)
     if local is not None:
         print(f"[OK] toolkit using local: {local} bytes={local.stat().st_size}")
+        if expected_sha256:
+            try:
+                verify_file_sha256(local, expected_sha256, label=local.name)
+            except Exception as exc:
+                print(f"[WARN] toolkit sha256 mismatch: {local.name} {exc}")
+                return None
         return local
     name = unquote(Path(urlparse(url).path).name) or "toolkit.bin"
     if not (_ARCHIVE_EXT_RE.search(name) or _INSTALLER_EXT_RE.search(name)):
@@ -2276,6 +2320,13 @@ def _download_archive(url: str, dest_dir: Path) -> Path | None:
         if not downloaded:
             raise last_error or RuntimeError("download failed")
         print(f"[OK] toolkit downloaded: {dest.name} bytes={written}")
+        if expected_sha256:
+            try:
+                verify_file_sha256(dest, expected_sha256, label=dest.name)
+            except Exception as exc:
+                print(f"[WARN] toolkit sha256 mismatch: {dest.name} {exc}")
+                dest.unlink(missing_ok=True)
+                return None
         return dest
     except Exception as exc:
         print(f"[WARN] toolkit download failed: {url} {exc}")
@@ -2540,9 +2591,12 @@ def _toolkit_iter_packages(
     prefer: str = "",
     work: Path | None = None,
     limit: int | None = None,
+    require_sha256: bool = False,
 ):
     page_url = str(page_url or "").strip()
-    archives = unique_ordered(_collect_toolkit_candidates(page_url, prefer=prefer))
+    archives = unique_ordered(
+        _collect_toolkit_candidates(page_url, prefer=prefer, require_sha256=require_sha256)
+    )
     if limit is not None:
         archives = archives[:limit]
     if not archives:
@@ -2551,7 +2605,12 @@ def _toolkit_iter_packages(
     root = work or Path(tempfile.mkdtemp(prefix="toolkit-"))
     try:
         for index, archive_url in enumerate(archives):
-            archive = _download_archive(archive_url, root)
+            expected = _lookup_sha256(archive_url) if require_sha256 else ""
+            if require_sha256 and not expected:
+                name = unquote(archive_url.rstrip("/").rsplit("/", 1)[-1])
+                print(f"[WARN] toolkit skip no sha256: {name}")
+                continue
+            archive = _download_archive(archive_url, root, expected_sha256=expected)
             if not archive:
                 continue
             unpack = root / f"unpack-{index}"
@@ -2762,7 +2821,11 @@ def _print_toolkit_groups(hits: list[tuple[str, list[str], int]]) -> None:
         print(f"[OK] proxies={len(set(marks))} new={new_total} url={label}")
 
 
-def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
+def _collect_toolkit_candidates(
+    page_url: str,
+    prefer: str = "",
+    require_sha256: bool = False,
+) -> list[str]:
     kind = _toolkit_kind(page_url)
     if kind == "probe":
         kind = _probe_payload(page_url)
@@ -2778,7 +2841,11 @@ def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
     if kind == "direct":
         return [page_url]
     if kind == "release":
-        found = _expand_github_release_assets(page_url, prefer=prefer)
+        found = _expand_github_release_assets(
+            page_url,
+            prefer=prefer,
+            require_sha256=require_sha256,
+        )
         if found:
             return found
         match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
@@ -2803,14 +2870,23 @@ def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
     return _rank_package_links(links, prefer=prefer, page_text=body)
 
 
-def _discover_toolkit_crg(page_url: str, prefer: str = "") -> list[str]:
+def _discover_toolkit_crg(
+    page_url: str,
+    prefer: str = "",
+    require_sha256: bool = False,
+) -> list[str]:
     global _TOOLKIT_EMBEDDED, _TOOLKIT_ARCHIVE_URL
     _TOOLKIT_EMBEDDED = []
     _TOOLKIT_ARCHIVE_URL = ""
     page_url = page_url.strip()
     work = Path(tempfile.mkdtemp(prefix="toolkit-"))
     try:
-        for archive, unpack, archive_url in _toolkit_iter_packages(page_url, prefer, work):
+        for archive, unpack, archive_url in _toolkit_iter_packages(
+            page_url,
+            prefer,
+            work,
+            require_sha256=require_sha256,
+        ):
             urls, embedded = _toolkit_collect_payload(unpack, archive.name)
             if embedded:
                 _TOOLKIT_EMBEDDED = embedded
@@ -3626,23 +3702,17 @@ def find_or_install_mihomo() -> Path:
         print(f"[OK] using cached proxy engine: {binary}")
         return binary
 
-    url, expected_sha256 = select_mihomo_asset()
+    url, expected_sha256 = select_mihomo_asset(require_sha256=True)
     print(f"[INFO] downloading proxy engine: {url}")
     archive = download_file(url, install_dir)
-    verify_file_sha256(archive, expected_sha256)
+    if expected_sha256:
+        verify_file_sha256(archive, expected_sha256, label=archive.name)
     extracted = extract_mihomo_binary(archive, install_dir)
     extracted.chmod(extracted.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return binary
-
-
-def _asset_sha256(asset: dict[str, Any]) -> str:
-    digest = str(asset.get("digest") or "").strip()
-    if digest.lower().startswith("sha256:"):
-        return digest.split(":", 1)[1].strip().lower()
-    return ""
 
 
 def _fetch_checksum_text(url: str) -> str:
@@ -3674,7 +3744,32 @@ def _checksum_from_text(text: str, filename: str) -> str:
     return ""
 
 
-def select_mihomo_asset() -> tuple[str, str]:
+def _lookup_sha256(url: str, extra_checksum_urls: list[str] | None = None) -> str:
+    name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
+    if not name:
+        return ""
+    folder = url.rsplit("/", 1)[0]
+    candidates = [url + suffix for suffix in (".sha256", ".sha256sum")]
+    candidates.extend(extra_checksum_urls or [])
+    candidates.extend(
+        f"{folder}/{item}"
+        for item in ("checksums.txt", "sha256sums.txt", "checksums", "sha256sums")
+    )
+    seen: set[str] = set()
+    for checksum_url in candidates:
+        if checksum_url in seen:
+            continue
+        seen.add(checksum_url)
+        try:
+            expected = _checksum_from_text(_fetch_checksum_text(checksum_url), name)
+        except Exception:
+            expected = ""
+        if expected:
+            return expected
+    return ""
+
+
+def select_mihomo_asset(require_sha256: bool = True) -> tuple[str, str]:
     system = platform.system().lower()
     machine = platform.machine().lower()
     if system == "darwin":
@@ -3699,12 +3794,11 @@ def select_mihomo_asset() -> tuple[str, str]:
     assets = _expand_github_release_assets(
         "https://github.com/MetaCubeX/mihomo",
         prefer=prefer,
+        require_sha256=require_sha256,
     )
     binaries: list[str] = []
     for link in assets:
         lower = link.lower()
-        if "compatible" in lower:
-            continue
         if os_token not in lower:
             continue
         if not any(token in lower for token in arch_tokens):
@@ -3712,31 +3806,24 @@ def select_mihomo_asset() -> tuple[str, str]:
         if not (lower.endswith(".gz") or lower.endswith(".zip")):
             continue
         binaries.append(link)
-    if not binaries:
-        raise RuntimeError("no matching Mihomo release asset found")
-    url = binaries[0]
-    name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
-    expected = ""
-    for suffix in (".sha256", ".sha256sum"):
-        try:
-            expected = _checksum_from_text(_fetch_checksum_text(url + suffix), name)
-        except Exception:
-            expected = ""
-        if expected:
-            print(f"[INFO] checksum file sha256={expected} asset={name}")
-            return url, expected
-    raise RuntimeError(f"no sha256 found for Mihomo asset: {name}")
+    for url in binaries:
+        expected = _lookup_sha256(url) if require_sha256 else ""
+        if require_sha256 and not expected:
+            continue
+        return url, expected
+    raise RuntimeError("no matching Mihomo release asset found")
 
 
-def verify_file_sha256(path: Path, expected: str) -> None:
+def verify_file_sha256(path: Path, expected: str, label: str = "") -> None:
     expected = expected.strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise RuntimeError(f"invalid sha256 value: {expected}")
     actual = hashlib.sha256(path.read_bytes()).hexdigest().lower()
     if actual != expected:
         path.unlink(missing_ok=True)
-        raise RuntimeError(f"proxy engine checksum mismatch expected={expected} actual={actual}")
-    print(f"[OK] proxy engine sha256 verified: {actual}")
+        raise RuntimeError(f"sha256 mismatch expected={expected} actual={actual}")
+    mark = label or path.name
+    print(f"[OK] toolkit sha256 verified: {mark} sha256={actual}")
 
 
 def download_file(url: str, directory: Path) -> Path:
