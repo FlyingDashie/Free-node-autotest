@@ -179,11 +179,10 @@ SOURCE_GROUPS = [
     {
         "name": "V2Rayshare-RSS",
         "primary": "discover:article:https://v2rayshare.com",
+        "also": [
+            "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription",
+        ],
         "bare_link": "none",
-    },
-    {
-        "name": "V2Rayshare-SUB",
-        "primary": "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription",
     },
     {
         "name": "Mibei77-RSS",
