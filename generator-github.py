@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -109,6 +110,8 @@ CFG_FETCH_RETRIES = 1
 _DROP_NAMES: list[str] = []
 _TEST_TOTAL = 0
 _TEST_DONE = 0
+_TEST_LOCK = threading.Lock()
+_BENCH_SLOTS = threading.Semaphore(3)
 # Temporary diagnostic prints must use prefix [DEBUG], not [INFO]/[OK]/[WARN].
 LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 2
@@ -120,17 +123,17 @@ MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "350"))
 SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
-        "primary": "discover:sublink:https://end-gfw.com/",
+        "primary": "discover:sublink:https://end-gfw.com",
         "bare_link": "all",
     },
     {
         "name": "大FQ运动-SS密钥",
         "primary": "https://end-gfw.com/ss-key",
-        "referer": "https://end-gfw.com/",
+        "referer": "https://end-gfw.com",
     },
     {
         "name": "大FQ运动-补充",
-        "primary": "discover:sublink:https://github.com/hello-world-1989/cn-news/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/hello-world-1989/cn-news",
         "exclude": "end-gfw.com",
         "bare_link": "all",
     },
@@ -141,15 +144,18 @@ SOURCE_GROUPS = [
     },
     {
         "name": "ChromeGO-ShiteThings",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/ShiteThings/extractNodes/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/ShiteThings/extractNodes",
     },
     {
-        "name": "ChromeGO-yaney01",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/yaney01/chromego/refs/heads/main/ReadMe.md",
+        "name": "ChromeGO-Merge1",
+        "primary": "discover:sublink:https://github.com/shangui999/chromego_merge",
+        "also": [
+            "discover:sublink:https://github.com/yaney01/chromego",
+        ],
     },
     {
-        "name": "ChromeGO-Merge",
-        "primary": "discover:sublink:https://github.com/Misaka-blog/chromego_merge/raw/refs/heads/main/README.md",
+        "name": "ChromeGO-Merge2",
+        "primary": "discover:sublink:https://github.com/Misaka-blog/chromego_merge",
     },
     {
         "name": "Freesocks",
@@ -161,35 +167,35 @@ SOURCE_GROUPS = [
     },
     {
         "name": "OpenRunner-RSS",
-        "primary": "discover:article:https://free.datiya.com/index.xml",
+        "primary": "discover:article:https://free.datiya.com",
         "bare_link": "none",
     },
     {
         "name": "V2Rayshare-RSS",
-        "primary": "discover:article:https://v2rayshare.com/feed",
+        "primary": "discover:article:https://v2rayshare.com",
         "bare_link": "none",
     },
     {
         "name": "V2Rayshare-SUB",
-        "primary": "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription",
     },
     {
         "name": "Mibei77-RSS",
-        "primary": "discover:article:https://www.mibei77.com/feed",
+        "primary": "discover:article:https://www.mibei77.com",
         "bare_link": "none",
     },
     {
         "name": "Yoyapai-RSS",
-        "primary": "discover:article:https://yoyapai.com/feed",
+        "primary": "discover:article:https://yoyapai.com",
         "bare_link": "none",
     },
     {
         "name": "Free-clash-v2ray",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/free-clash-v2ray/free-clash-v2ray.github.io/main/README.md",
+        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
     },
     {
         "name": "Pawdroid",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/Pawdroid/Free-servers",
     },
     {
         "name": "FreeV2-Base64",
@@ -202,48 +208,48 @@ SOURCE_GROUPS = [
     },
     {
         "name": "免费节点1",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/free18/v2ray",
     },
     {
         "name": "免费节点2",
-        "primary": "discover:sublink:https://github.com/ermaozi/get_subscribe/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/ermaozi/get_subscribe",
     },
     {
         "name": "免费节点3",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/sunmiao4458/free-proxy-airport/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/sunmiao4458/free-proxy-airport",
     },
     {
         "name": "免费节点4",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/mfuu/FreeProxies/refs/heads/master/README.md",
+        "primary": "discover:sublink:https://github.com/mfuu/FreeProxies",
     },
     {
         "name": "免费节点5",
-        "primary": "discover:sublink:https://github.com/vxiaov/free_proxies/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/vxiaov/free_proxies",
     },
     {
         "name": "免费节点6",
-        "primary": "discover:sublink:https://github.com/anaer/Sub/raw/refs/heads/main/README.MD",
+        "primary": "discover:sublink:https://github.com/anaer/Sub",
     },
     {
         "name": "免费节点7",
-        "primary": "discover:sublink:https://github.com/snakem982/proxypool/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/snakem982/proxypool",
     },
     {
         "name": "免费节点8",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/mahdibland/V2RayAggregator/refs/heads/master/README.md",
+        "primary": "discover:sublink:https://github.com/mahdibland/V2RayAggregator",
     },
     {
         "name": "免费节点9",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/w1770946466/Auto_proxy",
         "bare_link": "all",
     },
     {
         "name": "免费节点10",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/PuddinCat/BestClash",
     },
     {
         "name": "免费节点11",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/README.md",
+        "primary": "discover:sublink:https://github.com/kooker/FreeSubsCheck",
     },
     {
         "name": "Pawdroid-sr-apk",
@@ -252,20 +258,20 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Pawdroid-ss-apk",
-        "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com/",
+        "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com",
         "prefer": "apk",
     },
     {
         "name": "Clashfree",
-        "primary": "discover:sublink:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/free-nodes/clashfree",
     },
     {
         "name": "Epodonios",
-        "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs/raw/refs/heads/main/README.md",
+        "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs",
     },
     {
         "name": "V2rayclashfree-RSS",
-        "primary": "discover:article:https://v2rayclashfree.com/",
+        "primary": "discover:article:https://v2rayclashfree.com",
         "bare_link": "none",
     },
 ]
@@ -1368,8 +1374,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             _print_toolkit_groups(ordered)
             toolkit_hits = []
 
-        for item in _source_queue(source):
-            if source_found:
+        also_count = len(source.get("also") or [])
+        for item_index, item in enumerate(_source_queue(source)):
+            if source_found and item_index > also_count:
                 break
             url, prefer, exclude = _item_spec(item, source)
             first_hit = bool(source.get("first_hit"))
@@ -1574,7 +1581,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
 
 def _source_queue(source: dict[str, Any]) -> list[Any]:
     items = [source["primary"]]
-    items.extend(source.get("fallbacks", []))
+    items.extend(source.get("also") or [])
+    items.extend(source.get("fallbacks") or [])
     return items
 
 
@@ -1594,6 +1602,62 @@ def _item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
         exclude = str(item["exclude"]) if "exclude" in item else str(source.get("exclude") or "")
         return url, prefer, exclude
     return str(item), str(source.get("prefer") or ""), str(source.get("exclude") or "")
+
+
+def _github_repo_home(url: str) -> tuple[str, str] | None:
+    parsed = urlparse(str(url or "").strip())
+    host = (parsed.netloc or "").lower()
+    if host not in {"github.com", "www.github.com"}:
+        return None
+    parts = [p for p in parsed.path.split("/") if p]
+    if len(parts) != 2:
+        return None
+    if parts[1].lower().endswith(".git"):
+        parts[1] = parts[1][:-4]
+    return parts[0], parts[1]
+
+
+def _resolve_github_readme(url: str) -> str:
+    home = _github_repo_home(url)
+    if not home:
+        return url
+    owner, repo = home
+    headers = {
+        "User-Agent": resolve_ua("Chrome"),
+        "Accept": "application/vnd.github+json",
+    }
+    try:
+        session = requests.Session()
+        session.trust_env = False
+        session.verify = False
+        resp = session.get(
+            f"https://api.github.com/repos/{owner}/{repo}/readme",
+            headers=headers,
+            timeout=15,
+        )
+        if resp.status_code < 400:
+            data = resp.json()
+            name = str(data.get("name") or "")
+            download = str(data.get("download_url") or "")
+            if download:
+                return download
+            if name:
+                return f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{name}"
+    except Exception:
+        pass
+    for ref in ("HEAD", "main", "master"):
+        for name in ("README.md", "ReadMe.md", "README.MD", "readme.md", "README"):
+            raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{name}"
+            try:
+                session = requests.Session()
+                session.trust_env = False
+                session.verify = False
+                resp = session.get(raw, headers={"User-Agent": resolve_ua("Chrome")}, timeout=10)
+                if resp.status_code < 400 and resp.text.strip():
+                    return raw
+            except Exception:
+                continue
+    return url
 
 
 def _blob_to_raw(link: str) -> str:
@@ -1695,7 +1759,10 @@ def discover_sublink(
     bare_link: str = "",
 ) -> list[str]:
     global _DISCOVER_PAGES, _SUBLINK_BARE
-    page_url = _blob_to_raw(page_url.strip())
+    given = _blob_to_raw(page_url.strip())
+    page_url = _resolve_github_readme(given)
+    if _github_repo_home(given):
+        print(f"[INFO] sublink try repo: {given}")
     _DISCOVER_PAGES = [page_url]
     print(f"[INFO] sublink try page: {page_url}")
     try:
@@ -3173,15 +3240,27 @@ _APK_FILE_ORDER = {
 }
 
 
+def _article_feed_candidates(home: str) -> list[str]:
+    parsed = urlparse(str(home or "").strip())
+    path = parsed.path or "/"
+    looks_feed = bool(
+        re.search(r"(?:feed|rss|atom|index\.xml)(?:$|[?#])", path, re.I)
+        or path.endswith(".xml")
+    )
+    if looks_feed:
+        return [home]
+    roots = [urlunparse((parsed.scheme or "https", parsed.netloc, "", "", "", ""))]
+    if not roots[0].endswith("/"):
+        roots[0] += "/"
+    suffixes = ("feed", "rss", "index.xml", "feed.xml", "rss.xml", "atom.xml")
+    return [urljoin(roots[0], suffix) for suffix in suffixes]
+
+
 def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> list[str]:
     global _DISCOVER_PAGES
     _DISCOVER_PAGES = []
     body = ""
-    try:
-        body = fetch_text(feed_url)
-    except Exception:
-        body = ""
-
+    used_feed = ""
     groups: dict[str, list[str]] = {}
 
     def _add_page(stamp: str, page: str) -> None:
@@ -3192,39 +3271,56 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
         groups.setdefault(key, [])
         groups[key].append(page)
 
-    parsed = None
+    def entry_stamp(entry: Any) -> str:
+        title = str(getattr(entry, "title", "") or "")
+        link = str(getattr(entry, "link", "") or "")
+        stamp = _page_stamp(title)
+        if stamp != "00000000":
+            return stamp
+        stamp = _page_stamp(link)
+        if stamp != "00000000":
+            return stamp
+        parsed_time = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+        if parsed_time:
+            return f"{parsed_time.tm_year:04d}{parsed_time.tm_mon:02d}{parsed_time.tm_mday:02d}"
+        return "00000000"
+
+    feedparser = None
     try:
-        import feedparser
-        parsed = feedparser.parse(body) if body else None
+        import feedparser as _feedparser
+        feedparser = _feedparser
     except ImportError as exc:
         print(f"[WARN] article feedparser missing: {exc}")
-        parsed = None
-    except Exception:
-        parsed = None
-    if parsed and parsed.entries:
-        def entry_stamp(entry: Any) -> str:
-            title = str(getattr(entry, "title", "") or "")
-            link = str(getattr(entry, "link", "") or "")
-            stamp = _page_stamp(title)
-            if stamp != "00000000":
-                return stamp
-            stamp = _page_stamp(link)
-            if stamp != "00000000":
-                return stamp
-            parsed_time = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
-            if parsed_time:
-                return f"{parsed_time.tm_year:04d}{parsed_time.tm_mon:02d}{parsed_time.tm_mday:02d}"
-            return "00000000"
 
-        for entry in parsed.entries[:30]:
-            _add_page(entry_stamp(entry), str(getattr(entry, "link", "") or ""))
-        if groups:
-            print(f"[INFO] article try feed: {feed_url}")
-    if not groups and body:
-        for page in _collect_article_links(body, feed_url):
-            _add_page(_page_stamp(page), page)
-        if groups:
-            print(f"[INFO] article try page: {feed_url}")
+    for cand in _article_feed_candidates(feed_url):
+        try:
+            body = fetch_text(cand)
+        except Exception:
+            continue
+        parsed = None
+        if feedparser and body:
+            try:
+                parsed = feedparser.parse(body)
+            except Exception:
+                parsed = None
+        if parsed and parsed.entries:
+            for entry in parsed.entries[:30]:
+                _add_page(entry_stamp(entry), str(getattr(entry, "link", "") or ""))
+            if groups:
+                used_feed = cand
+                print(f"[INFO] article try feed: {used_feed}")
+                break
+
+    if not groups:
+        try:
+            body = fetch_text(feed_url)
+        except Exception:
+            body = ""
+        if body:
+            for page in _collect_article_links(body, feed_url):
+                _add_page(_page_stamp(page), page)
+            if groups:
+                print(f"[INFO] article try page: {feed_url}")
 
     stamps = sorted(groups, reverse=True)
     if not stamps:
@@ -3813,14 +3909,21 @@ def _benchmark_batch(
     if not proxies:
         return []
 
-    process, error = _start_mihomo_for_batch(
-        engine, temp_dir, config_path, controller_url, controller_port, proxies
-    )
-    if process is not None:
-        try:
-            return run_delay_tests(controller_url, proxies)
-        finally:
-            _stop_process(process)
+    work = Path(tempfile.mkdtemp(prefix="batch-", dir=str(temp_dir)))
+    local_config = work / "benchmark.yaml"
+    local_port = find_free_port()
+    local_url = f"http://127.0.0.1:{local_port}"
+    process = None
+    error = ""
+    with _BENCH_SLOTS:
+        process, error = _start_mihomo_for_batch(
+            engine, work, local_config, local_url, local_port, proxies
+        )
+        if process is not None:
+            try:
+                return run_delay_tests(local_url, proxies)
+            finally:
+                _stop_process(process)
 
     if len(proxies) == 1:
         bad = proxies[0]
@@ -3836,20 +3939,32 @@ def _benchmark_batch(
             f"[DROP] name={bad.get('name')} "
             f"server={bad.get('server')}:{bad.get('port')} reason={reason or 'mihomo start failed'}"
         )
-        _DROP_NAMES.append(str(bad.get("name") or ""))
-        global _TEST_DONE
-        _TEST_DONE += 1
+        with _TEST_LOCK:
+            _DROP_NAMES.append(str(bad.get("name") or ""))
+            global _TEST_DONE
+            _TEST_DONE += 1
         return []
 
     mid = max(1, len(proxies) // 2)
     left = proxies[:mid]
     right = proxies[mid:]
     print(f"[WARN] split batch {len(proxies)} -> {len(left)} + {len(right)}")
-    return _benchmark_batch(
-        engine, temp_dir, config_path, controller_url, controller_port, left
-    ) + _benchmark_batch(
-        engine, temp_dir, config_path, controller_url, controller_port, right
-    )
+    parts: list[list[ProxyMetric]] = [[], []]
+
+    def _run(index: int, chunk: list[dict[str, Any]]) -> None:
+        parts[index] = _benchmark_batch(
+            engine, temp_dir, config_path, controller_url, controller_port, chunk
+        )
+
+    workers = [
+        threading.Thread(target=_run, args=(0, left)),
+        threading.Thread(target=_run, args=(1, right)),
+    ]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    return parts[0] + parts[1]
 
 
 def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
@@ -3912,11 +4027,14 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
                 _DROP_NAMES.append(str(proxy.get("name") or ""))
             if metric:
                 metrics.append(metric)
-            _TEST_DONE += 1
-            if completed % 100 == 0 or completed == len(futures):
+            with _TEST_LOCK:
+                _TEST_DONE += 1
+                rest = max(0, _TEST_TOTAL - _TEST_DONE)
+                should_print = completed % 100 == 0 or completed == len(futures)
+            if should_print:
                 print(
                     f"[INFO] tested {completed}/{len(futures)} "
-                    f"kept={len(metrics)} rest={max(0, _TEST_TOTAL - _TEST_DONE)}"
+                    f"kept={len(metrics)} rest={rest}"
                 )
     return metrics
 
