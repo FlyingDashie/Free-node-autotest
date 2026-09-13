@@ -2263,13 +2263,13 @@ def _expand_github_release_assets(
     return kept
 
 
-def _toolkit_download_release(
+def _toolkit_fetch_package(
     page_url: str,
     dest_dir: Path,
     prefer: Any = "",
     require_sha256: bool = False,
 ) -> Path | None:
-    assets = _expand_github_release_assets(
+    assets = _collect_toolkit_candidates(
         page_url,
         prefer=prefer,
         require_sha256=require_sha256,
@@ -3755,7 +3755,7 @@ def find_or_install_mihomo() -> Path:
         arch_tokens = ["armv7", "armv6"]
     else:
         raise RuntimeError(f"unsupported architecture for Mihomo download: {machine}")
-    archive = _toolkit_download_release(
+    archive = _toolkit_fetch_package(
         "https://github.com/MetaCubeX/mihomo",
         install_dir,
         prefer=[os_token, *arch_tokens, "gz", "mihomo"],
