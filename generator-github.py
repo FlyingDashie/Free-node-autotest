@@ -112,7 +112,16 @@ _TEST_TOTAL = 0
 _TEST_DONE = 0
 _TEST_LOCK = threading.Lock()
 _BENCH_SLOTS = threading.Semaphore(3)
+_BRANCH_NEXT = 1
 # Temporary diagnostic prints must use prefix [DEBUG], not [INFO]/[OK]/[WARN].
+
+
+def _alloc_branch() -> str:
+    global _BRANCH_NEXT
+    with _TEST_LOCK:
+        n = _BRANCH_NEXT
+        _BRANCH_NEXT += 1
+        return str(n)
 LATENCY_TIMEOUT_MS = 5000
 MAX_RETRIES = 2
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
@@ -2106,8 +2115,7 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
     listing = ""
     try:
         listing = fetch_text(list_url)
-        if list_url.rstrip("/") != page_url.rstrip("/"):
-            print(f"[INFO] toolkit try page: {list_url}")
+        print(f"[INFO] toolkit try release: {list_url}")
     except Exception:
         listing = ""
     tags: list[tuple[int, str]] = []
@@ -2135,7 +2143,7 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
             body = fetch_text(asset_page)
         except Exception:
             continue
-        print(f"[INFO] toolkit try page: {asset_page}")
+        print(f"[INFO] toolkit try release: {asset_page}")
         for link in _collect_archive_links(body, asset_page):
             lower = link.lower()
             if "/releases/download/" not in lower:
@@ -2697,7 +2705,10 @@ def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
     kind = _toolkit_kind(page_url)
     if kind == "probe":
         kind = _probe_payload(page_url)
-    print(f"[INFO] toolkit try {kind}: {page_url}")
+    if _github_repo_home(page_url):
+        print(f"[INFO] toolkit try repo: {page_url}")
+    elif kind != "release":
+        print(f"[INFO] toolkit try {kind}: {page_url}")
     if kind == "local":
         found = _find_local_package(page_url)
         return [str(found)] if found else []
@@ -2706,7 +2717,22 @@ def _collect_toolkit_candidates(page_url: str, prefer: str = "") -> list[str]:
     if kind == "direct":
         return [page_url]
     if kind == "release":
-        return _expand_github_release_assets(page_url, prefer=prefer)
+        found = _expand_github_release_assets(page_url, prefer=prefer)
+        if found:
+            return found
+        match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
+        if match:
+            home = f"https://github.com/{match.group(1)}/{match.group(2)}"
+            readme = _resolve_github_readme(home)
+            print(f"[INFO] toolkit try page: {readme}")
+            body = ""
+            try:
+                body = fetch_text(readme)
+            except Exception:
+                body = ""
+            links = _collect_archive_links(body, readme)
+            return _rank_package_links(links, prefer=prefer, page_text=body)
+        return []
     body = ""
     try:
         body = fetch_text(page_url)
@@ -3920,7 +3946,11 @@ def _start_mihomo_for_batch(
             stdout, stderr = "", ""
         _stop_process(process)
         message = f"{exc}\n{stderr}\n{stdout}"
-        print(f"[WARN] batch start failed size={len(proxies)} #{branch}" if branch else f"[WARN] batch start failed size={len(proxies)}")
+        print(
+            f"[WARN] batch start failed size={len(proxies)} {{{branch}}}"
+            if branch
+            else f"[WARN] batch start failed size={len(proxies)}"
+        )
         return None, message
 
 
@@ -3963,7 +3993,7 @@ def _benchmark_batch(
         elif len(reason) > 180:
             reason = reason[:177] + "..."
         print(
-            f"[DROP] #{branch} name={bad.get('name')} "
+            f"[DROP] {{{branch}}} name={bad.get('name')} "
             f"server={bad.get('server')}:{bad.get('port')} reason={reason or 'mihomo start failed'}"
         )
         with _TEST_LOCK:
@@ -3975,11 +4005,11 @@ def _benchmark_batch(
     mid = max(1, len(proxies) // 2)
     left = proxies[:mid]
     right = proxies[mid:]
-    left_id = f"{branch}-1"
-    right_id = f"{branch}-2"
+    left_id = _alloc_branch()
+    right_id = _alloc_branch()
     print(
-        f"[WARN] split batch {len(proxies)} #{branch} "
-        f"-> {len(left)} #{left_id} + {len(right)} #{right_id}"
+        f"[WARN] split batch {len(proxies)} {{{branch}}} "
+        f"-> {len(left)} {{{left_id}}} + {len(right)} {{{right_id}}}"
     )
     parts: list[list[ProxyMetric]] = [[], []]
 
@@ -4012,10 +4042,11 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         config_path = temp_dir / "benchmark.yaml"
         controller_port = find_free_port()
         controller_url = f"http://127.0.0.1:{controller_port}"
-        global _DROP_NAMES, _TEST_TOTAL, _TEST_DONE
+        global _DROP_NAMES, _TEST_TOTAL, _TEST_DONE, _BRANCH_NEXT
         _DROP_NAMES = []
         _TEST_TOTAL = len(proxies)
         _TEST_DONE = 0
+        _BRANCH_NEXT = 2
         metrics = _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, list(proxies), branch="1"
         )
@@ -4065,7 +4096,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                 should_print = completed % 100 == 0 or completed == len(futures)
             if should_print:
                 print(
-                    f"[INFO] tested #{branch} {completed}/{len(futures)} "
+                    f"[INFO] {{{branch}}} tested {completed}/{len(futures)} "
                     f"kept={len(metrics)} rest={rest}"
                 )
     return metrics
