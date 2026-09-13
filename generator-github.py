@@ -156,15 +156,12 @@ SOURCE_GROUPS = [
         "primary": "discover:sublink:https://github.com/ShiteThings/extractNodes",
     },
     {
-        "name": "ChromeGO-Merge1",
+        "name": "ChromeGO-Merge",
         "primary": "discover:sublink:https://github.com/shangui999/chromego_merge",
         "also": [
             "discover:sublink:https://github.com/yaney01/chromego",
+            "discover:sublink:https://github.com/Misaka-blog/chromego_merge",
         ],
-    },
-    {
-        "name": "ChromeGO-Merge2",
-        "primary": "discover:sublink:https://github.com/Misaka-blog/chromego_merge",
     },
     {
         "name": "Freesocks",
