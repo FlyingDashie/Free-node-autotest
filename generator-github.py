@@ -3750,17 +3750,17 @@ def _checksum_from_text(text: str, filename: str) -> str:
     return ""
 
 
-def _parse_page_sha256(html: str) -> dict[str, str]:
+def _parse_page_sha256(page_html: str) -> dict[str, str]:
     found: dict[str, str] = {}
     for name, digest in re.findall(
         r'text-bold">([^<]+)</span>[\s\S]{0,2500}?sha256:([0-9a-f]{64})',
-        html or "",
+        page_html or "",
         re.I,
     ):
         found[html.unescape(name).strip().lower()] = digest.lower()
     for name, digest in re.findall(
         r'releases/download/[^"\']+/([^"\'>?]+)["\'][\s\S]{0,2500}?sha256:([0-9a-f]{64})',
-        html or "",
+        page_html or "",
         re.I,
     ):
         found[unquote(name).strip().lower()] = digest.lower()
