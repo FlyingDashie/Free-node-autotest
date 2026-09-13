@@ -1530,6 +1530,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         break
                     if source_found:
                         break
+            _print_hits()
         if toolkit_hits:
             _print_hits()
         live_n = len(source_found)
@@ -1991,8 +1992,14 @@ def _toolkit_kind(url: str) -> str:
         return "edge"
     if "addons.mozilla.org" in host:
         return "firefox"
-    if re.search(r"github\.com/[^/]+/[^/]+", url, re.I) and "/releases" in path and "/releases/download/" not in path:
-        return "release"
+    gh = re.search(r"github\.com/([^/]+)/([^/]+)(/.*)?$", url, re.I)
+    if gh:
+        extra = (gh.group(3) or "").lower()
+        if "/releases/download/" not in extra:
+            if extra in {"", "/", "/releases", "/releases/"}:
+                return "release"
+            if extra.startswith("/releases"):
+                return "release"
     return "probe"
 
 
@@ -3303,7 +3310,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
 
     def _probe_feed(cand: str) -> tuple[str, str]:
         try:
-            text = fetch_text(cand, retries=1, timeout=3)
+            text = fetch_text(cand, retries=1, timeout=8)
         except Exception:
             return cand, ""
         return cand, text or ""
@@ -3894,6 +3901,7 @@ def _start_mihomo_for_batch(
     controller_url: str,
     controller_port: int,
     proxies: list[dict[str, Any]],
+    branch: str = "1",
 ) -> tuple[subprocess.Popen[str] | None, str]:
     write_benchmark_config(config_path, proxies, controller_port)
     process = subprocess.Popen(
@@ -3912,7 +3920,7 @@ def _start_mihomo_for_batch(
             stdout, stderr = "", ""
         _stop_process(process)
         message = f"{exc}\n{stderr}\n{stdout}"
-        print(f"[WARN] batch start failed size={len(proxies)}")
+        print(f"[WARN] batch start failed size={len(proxies)} #{branch}" if branch else f"[WARN] batch start failed size={len(proxies)}")
         return None, message
 
 
@@ -3923,6 +3931,7 @@ def _benchmark_batch(
     controller_url: str,
     controller_port: int,
     proxies: list[dict[str, Any]],
+    branch: str = "1",
 ) -> list[ProxyMetric]:
     if not proxies:
         return []
@@ -3935,11 +3944,11 @@ def _benchmark_batch(
     error = ""
     with _BENCH_SLOTS:
         process, error = _start_mihomo_for_batch(
-            engine, work, local_config, local_url, local_port, proxies
+            engine, work, local_config, local_url, local_port, proxies, branch=branch
         )
         if process is not None:
             try:
-                return run_delay_tests(local_url, proxies)
+                return run_delay_tests(local_url, proxies, branch=branch)
             finally:
                 _stop_process(process)
 
@@ -3954,7 +3963,7 @@ def _benchmark_batch(
         elif len(reason) > 180:
             reason = reason[:177] + "..."
         print(
-            f"[DROP] name={bad.get('name')} "
+            f"[DROP] #{branch} name={bad.get('name')} "
             f"server={bad.get('server')}:{bad.get('port')} reason={reason or 'mihomo start failed'}"
         )
         with _TEST_LOCK:
@@ -3966,17 +3975,22 @@ def _benchmark_batch(
     mid = max(1, len(proxies) // 2)
     left = proxies[:mid]
     right = proxies[mid:]
-    print(f"[WARN] split batch {len(proxies)} -> {len(left)} + {len(right)}")
+    left_id = f"{branch}-1"
+    right_id = f"{branch}-2"
+    print(
+        f"[WARN] split batch {len(proxies)} #{branch} "
+        f"-> {len(left)} #{left_id} + {len(right)} #{right_id}"
+    )
     parts: list[list[ProxyMetric]] = [[], []]
 
-    def _run(index: int, chunk: list[dict[str, Any]]) -> None:
+    def _run(index: int, chunk: list[dict[str, Any]], child: str) -> None:
         parts[index] = _benchmark_batch(
-            engine, temp_dir, config_path, controller_url, controller_port, chunk
+            engine, temp_dir, config_path, controller_url, controller_port, chunk, branch=child
         )
 
     workers = [
-        threading.Thread(target=_run, args=(0, left)),
-        threading.Thread(target=_run, args=(1, right)),
+        threading.Thread(target=_run, args=(0, left, left_id)),
+        threading.Thread(target=_run, args=(1, right, right_id)),
     ]
     for worker in workers:
         worker.start()
@@ -4003,7 +4017,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         _TEST_TOTAL = len(proxies)
         _TEST_DONE = 0
         metrics = _benchmark_batch(
-            engine, temp_dir, config_path, controller_url, controller_port, list(proxies)
+            engine, temp_dir, config_path, controller_url, controller_port, list(proxies), branch="1"
         )
         if _DROP_NAMES:
             tallies: dict[str, int] = {}
@@ -4027,7 +4041,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         return metrics
 
 
-def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
+def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: str = "1") -> list[ProxyMetric]:
     workers = max(1, min(MAX_WORKERS, len(proxies)))
     metrics: list[ProxyMetric] = []
     with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -4051,7 +4065,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]]) -> list[
                 should_print = completed % 100 == 0 or completed == len(futures)
             if should_print:
                 print(
-                    f"[INFO] tested {completed}/{len(futures)} "
+                    f"[INFO] tested #{branch} {completed}/{len(futures)} "
                     f"kept={len(metrics)} rest={rest}"
                 )
     return metrics
