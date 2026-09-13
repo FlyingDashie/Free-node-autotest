@@ -1367,36 +1367,44 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
         source_found: list[dict[str, Any]] = []
         source_seen: set[str] = set()
         used_url = ""
-        used_toolkit = False
+        crg_archive = ""
+        crg_embedded: list[dict[str, Any]] = []
         discover_pages: list[str] = []
         first_pages: list[str] = []
-        toolkit_hits: list[tuple[str, list[str], int]] = []
+        ingest_hits: list[tuple[str, list[str], int]] = []
 
         def _print_hits() -> None:
-            nonlocal toolkit_hits
-            if not toolkit_hits:
+            nonlocal ingest_hits
+            if not ingest_hits:
                 return
             head = set(first_pages)
-            ordered = [row for row in toolkit_hits if row[0] in head] + [
-                row for row in toolkit_hits if row[0] not in head
+            ordered = [row for row in ingest_hits if row[0] in head] + [
+                row for row in ingest_hits if row[0] not in head
             ]
-            _print_toolkit_groups(ordered)
-            toolkit_hits = []
+            _print_ingest_groups(ordered)
+            ingest_hits = []
 
         also_count = len(source.get("also") or [])
         for item_index, item in enumerate(_source_queue(source)):
             if source_found and item_index > also_count:
                 break
-            url, prefer, exclude = _item_spec(item, source)
-            first_hit = bool(source.get("first_hit"))
+            spec = _item_spec(item, source)
+            url = spec["url"]
+            prefer = spec["prefer"]
+            exclude = spec["exclude"]
+            require_sha256 = spec["require_sha256"]
+            first_hit = spec["first_hit"]
+            bare_link = spec["bare_link"]
             merge_all = False
             first_pages = []
+            crg_embedded = []
+            crg_archive = ""
             _SUBLINK_BARE.clear()
             if url.startswith("discover:article:"):
                 candidates = discover_article(
                     url[len("discover:article:"):],
                     prefer=prefer,
-                    bare_link=_bare_link_mode(source),
+                    bare_link=bare_link,
                 )
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES)
@@ -1411,7 +1419,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     page,
                     prefer=prefer,
                     exclude=exclude,
-                    bare_link=_bare_link_mode(source),
+                    bare_link=bare_link,
                 )
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
@@ -1429,7 +1437,14 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     continue
                 if child_l in {"ss-apk", "sr-apk"}:
                     apk_found, apk_url = _discover_toolkit_encrypted_apk(
-                        child_l, source, rest, _APK_FILE_ORDER[child_l]
+                        child_l,
+                        source,
+                        rest,
+                        _APK_FILE_ORDER[child_l],
+                        prefer=prefer,
+                        require_sha256=require_sha256,
+                        user_agent=spec["user_agent"],
+                        referer=spec["referer"],
                     )
                     if apk_found:
                         prefix = source_tag(source)
@@ -1439,27 +1454,26 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         source_found.extend(kept)
                         used_url = apk_url or url
                     continue
-                candidates = _discover_toolkit_crg(
+                candidates, crg_embedded, crg_archive = _discover_toolkit_crg(
                     rest,
                     prefer=prefer,
-                    require_sha256=_flag(source.get("require_sha256")),
+                    require_sha256=require_sha256,
                 )
                 merge_all = not first_hit
-                used_toolkit = True
             else:
                 candidates = [url]
                 print(f"[INFO] source try url: {url}")
-            if used_toolkit and _TOOLKIT_EMBEDDED:
+            if crg_embedded:
                 prefix = source_tag(source)
                 marks, kept_embed = _dedupe_proxies(
-                    _TOOLKIT_EMBEDDED, source_seen, prefix=prefix
+                    crg_embedded, source_seen, prefix=prefix
                 )
                 if marks:
-                    toolkit_hits.append(("embedded://archive-config", marks, len(kept_embed)))
+                    ingest_hits.append(("embedded://archive-config", marks, len(kept_embed)))
                 source_found.extend(kept_embed)
             pending = unique_ordered(candidates)
-            ua = str(source.get("user_agent") or "")
-            ref = str(source.get("referer") or "")
+            ua = spec["user_agent"]
+            ref = spec["referer"]
 
             def _ingest(url: str, text: str) -> bool:
                 nonlocal used_url
@@ -1470,7 +1484,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     return False
                 prefix = source_tag(source)
                 marks, kept = _dedupe_proxies(found, source_seen, prefix=prefix)
-                toolkit_hits.append((url, marks, len(kept)))
+                ingest_hits.append((url, marks, len(kept)))
                 if not kept:
                     return bool(found)
                 source_found.extend(kept)
@@ -1511,7 +1525,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     if text is None:
                         continue
                     _ingest(url, text)
-                if _SUBLINK_BARE and _bare_link_mode(source) != "none" and (
+                if _SUBLINK_BARE and bare_link != "none" and (
                     (not first_hit and len(source_seen) <= 10)
                     or (first_hit and not source_seen)
                 ):
@@ -1520,7 +1534,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         if link not in pending
                     ]
                     if extra:
-                        if toolkit_hits:
+                        if ingest_hits:
                             _print_hits()
                         print(
                             f"[INFO] sublink file_nodes={len(source_seen)} "
@@ -1544,7 +1558,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     if source_found:
                         break
             _print_hits()
-        if toolkit_hits:
+        if ingest_hits:
             _print_hits()
         live_n = len(source_found)
         if live_n < 10:
@@ -1568,8 +1582,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 f"[WARN] source={source_bracket(source)} no proxies found=0 raw=0"
             )
         if source_found:
-            if used_toolkit and _TOOLKIT_ARCHIVE_URL:
-                extra = f" url={_TOOLKIT_ARCHIVE_URL}"
+            if crg_archive:
+                extra = f" url={crg_archive}"
             elif discover_pages:
                 extra = f" url={_aggregate_urls(discover_pages)}"
             elif used_url:
@@ -1600,13 +1614,17 @@ def _source_queue(source: dict[str, Any]) -> list[Any]:
     return items
 
 
-# Reserved source flag: first_hit=True → stop after the first URL that yields nodes
-# (sublink / article / toolkit). Not set on existing sources.
+# Reserved source flag: first_hit=True → stop after the first URL that yields nodes.
+# Not set on existing sources.
 # bare_link: "all" scan every bare URL; "none" never scan bare links.
 
 
-def _bare_link_mode(source: dict[str, Any]) -> str:
-    return str(source.get("bare_link") or "").strip().lower()
+def _pick_field(item: Any, source: dict[str, Any], key: str, default: Any = "") -> Any:
+    if isinstance(item, dict) and key in item:
+        return item[key]
+    if key in source:
+        return source[key]
+    return default
 
 
 def _flag(value: Any, default: bool = False) -> bool:
@@ -1615,13 +1633,18 @@ def _flag(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _item_spec(item: Any, source: dict[str, Any]) -> tuple[str, str, str]:
-    if isinstance(item, dict):
-        url = str(item.get("url") or "")
-        prefer = item["prefer"] if "prefer" in item else source.get("prefer") or ""
-        exclude = str(item["exclude"]) if "exclude" in item else str(source.get("exclude") or "")
-        return url, ",".join(_prefer_tokens(prefer)), exclude
-    return str(item), ",".join(_prefer_tokens(source.get("prefer") or "")), str(source.get("exclude") or "")
+def _item_spec(item: Any, source: dict[str, Any]) -> dict[str, Any]:
+    url = str(item.get("url") or "") if isinstance(item, dict) else str(item or "")
+    return {
+        "url": url,
+        "prefer": ",".join(_prefer_tokens(_pick_field(item, source, "prefer", "") or "")),
+        "exclude": str(_pick_field(item, source, "exclude", "") or ""),
+        "require_sha256": _flag(_pick_field(item, source, "require_sha256", None)),
+        "bare_link": str(_pick_field(item, source, "bare_link", "") or "").strip().lower(),
+        "first_hit": _flag(_pick_field(item, source, "first_hit", None)),
+        "user_agent": str(_pick_field(item, source, "user_agent", "") or ""),
+        "referer": str(_pick_field(item, source, "referer", "") or ""),
+    }
 
 
 def _github_repo_home(url: str) -> tuple[str, str] | None:
@@ -1760,12 +1783,6 @@ def _score_sub_link(url: str, context: str = "", prefer: Any = "", distance: int
             score += max(1000, 100000 - index * 5000)
     score += hits * 20000
     score += max(0, 10000 - min(distance, 10000))
-    if re.search(r"v\d+\.\d+", blob):
-        score += 25000
-    if re.search(r"alpha|beta|nightly|pre-?release|\brc\d*\b", blob):
-        score -= 25000
-    if "compatible" in blob:
-        score -= 15000
     return score
 
 
@@ -1948,8 +1965,6 @@ _TOOLKIT_CONFIG_EXT = {
     ".yaml", ".yml", ".json", ".txt", ".md",
     ".conf", ".cfg", ".list", ".sub",
 }
-_TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
-_TOOLKIT_ARCHIVE_URL = ""
 _DISCOVER_PAGES: list[str] = []
 _SUBLINK_BARE: list[str] = []
 _SHA256_BY_URL: dict[str, str] = {}
@@ -2830,7 +2845,7 @@ def _aggregate_urls(urls: list[str]) -> str:
     return _finish(prefix + ["{" + "|".join(mid_text) + "}"] + suffix)
 
 
-def _print_toolkit_groups(hits: list[tuple[str, list[str], int]]) -> None:
+def _print_ingest_groups(hits: list[tuple[str, list[str], int]]) -> None:
     embedded = [row for row in hits if str(row[0]).startswith("embedded:")]
     remote = [row for row in hits if not str(row[0]).startswith("embedded:")]
     if embedded:
@@ -2907,10 +2922,7 @@ def _discover_toolkit_crg(
     page_url: str,
     prefer: str = "",
     require_sha256: bool = False,
-) -> list[str]:
-    global _TOOLKIT_EMBEDDED, _TOOLKIT_ARCHIVE_URL
-    _TOOLKIT_EMBEDDED = []
-    _TOOLKIT_ARCHIVE_URL = ""
+) -> tuple[list[str], list[dict[str, Any]], str]:
     page_url = page_url.strip()
     work = Path(tempfile.mkdtemp(prefix="toolkit-"))
     try:
@@ -2921,14 +2933,11 @@ def _discover_toolkit_crg(
             require_sha256=require_sha256,
         ):
             urls, embedded = _toolkit_collect_payload(unpack, archive.name)
-            if embedded:
-                _TOOLKIT_EMBEDDED = embedded
             if embedded or urls:
-                _TOOLKIT_ARCHIVE_URL = archive_url
-                return urls
+                return urls, embedded, archive_url
             print(f"[WARN] toolkit crg empty bundle: {archive.name}")
         print(f"[WARN] toolkit crg discovery failed: {page_url}")
-        return []
+        return [], [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -3315,20 +3324,29 @@ def _discover_toolkit_encrypted_apk(
     source: dict[str, Any],
     page_url: str,
     name_order: list[str],
+    prefer: str = "",
+    require_sha256: bool = False,
+    user_agent: str = "",
+    referer: str = "",
 ) -> tuple[list[dict[str, Any]], str]:
     page_url = page_url.strip()
     if not page_url:
         print(f"[WARN] toolkit {kind} missing url")
         return [], ""
-    prefer = str(source.get("prefer") or "apk")
-    ua = str(source.get("user_agent") or "v2rayNG")
-    referer = str(source.get("referer") or "")
+    prefer = prefer or "apk"
+    ua = user_agent or "v2rayNG"
     work = Path(tempfile.mkdtemp(prefix=f"{kind}-"))
     tried = 0
     last_err = ""
     try:
         opened = False
-        for archive, unpack, archive_url in _toolkit_iter_packages(page_url, prefer, work, limit=1):
+        for archive, unpack, archive_url in _toolkit_iter_packages(
+            page_url,
+            prefer=prefer,
+            work=work,
+            limit=1,
+            require_sha256=require_sha256,
+        ):
             opened = True
             prefixes, names, scanned, tokens = _apk_scan(unpack)
             hard_keys = _apk_keys_for(source, scanned)
@@ -3423,7 +3441,7 @@ def _discover_toolkit_encrypted_apk(
                     collected.extend(kept)
                     hit_names.add(fname)
             if collected:
-                _print_toolkit_groups(apk_hits)
+                _print_ingest_groups(apk_hits)
                 return collected, archive_url
         extra = f" tried={tried}"
         if last_err:
