@@ -1807,7 +1807,7 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
                 dist = min(abs(match.start() - pos) for pos in prefer_positions)
             files.append((_score_sub_link(link, match.group(0), prefer=prefer, distance=dist), link))
     files.sort(key=lambda item: item[0], reverse=True)
-    if hint:
+    if prefer_positions:
         bare.sort(key=lambda item: (item[0], -item[1]))
     else:
         bare.sort(key=lambda item: item[1], reverse=True)
