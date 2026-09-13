@@ -144,6 +144,10 @@ SOURCE_GROUPS = [
         "primary": "discover:sublink:https://raw.githubusercontent.com/ShiteThings/extractNodes/refs/heads/main/README.md",
     },
     {
+        "name": "ChromeGO-yaney01",
+        "primary": "discover:sublink:https://raw.githubusercontent.com/yaney01/chromego/refs/heads/main/ReadMe.md",
+    },
+    {
         "name": "ChromeGO-Merge",
         "primary": "discover:sublink:https://github.com/Misaka-blog/chromego_merge/raw/refs/heads/main/README.md",
     },
