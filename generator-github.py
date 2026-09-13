@@ -139,7 +139,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "ChromeGO-工具包",
-        "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang/releases",
+        "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang",
         "prefer": "ChromeGo",
     },
     {
@@ -253,7 +253,7 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Pawdroid-sr-apk",
-        "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android/releases",
+        "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android",
         "prefer": "apk",
     },
     {
@@ -3242,18 +3242,25 @@ _APK_FILE_ORDER = {
 
 def _article_feed_candidates(home: str) -> list[str]:
     parsed = urlparse(str(home or "").strip())
-    path = parsed.path or "/"
-    looks_feed = bool(
-        re.search(r"(?:feed|rss|atom|index\.xml)(?:$|[?#])", path, re.I)
-        or path.endswith(".xml")
+    origin = urlunparse((parsed.scheme or "https", parsed.netloc, "", "", "", ""))
+    if not origin.endswith("/"):
+        origin += "/"
+    suffixes = (
+        "feed",
+        "rss",
+        "atom",
+        "index.xml",
+        "feed.xml",
+        "rss.xml",
+        "atom.xml",
+        "index.rss",
+        "feeds/posts/default",
     )
-    if looks_feed:
-        return [home]
-    roots = [urlunparse((parsed.scheme or "https", parsed.netloc, "", "", "", ""))]
-    if not roots[0].endswith("/"):
-        roots[0] += "/"
-    suffixes = ("feed", "rss", "index.xml", "feed.xml", "rss.xml", "atom.xml")
-    return [urljoin(roots[0], suffix) for suffix in suffixes]
+    cands = [urljoin(origin, suffix) for suffix in suffixes]
+    given = str(home or "").strip()
+    if given and given.rstrip("/") + "/" != origin:
+        cands.append(given)
+    return unique_ordered(cands)
 
 
 def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> list[str]:
@@ -3292,11 +3299,22 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
     except ImportError as exc:
         print(f"[WARN] article feedparser missing: {exc}")
 
-    for cand in _article_feed_candidates(feed_url):
+    feed_cands = _article_feed_candidates(feed_url)
+
+    def _probe_feed(cand: str) -> tuple[str, str]:
         try:
-            body = fetch_text(cand)
+            text = fetch_text(cand, retries=1, timeout=3)
         except Exception:
-            continue
+            return cand, ""
+        return cand, text or ""
+
+    probed: dict[str, str] = {}
+    if feed_cands:
+        with ThreadPoolExecutor(max_workers=len(feed_cands)) as pool:
+            for cand, text in pool.map(_probe_feed, feed_cands):
+                probed[cand] = text
+    for cand in feed_cands:
+        body = probed.get(cand) or ""
         parsed = None
         if feedparser and body:
             try:
