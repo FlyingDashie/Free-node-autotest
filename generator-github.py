@@ -2280,7 +2280,11 @@ def _download_archive(
                 return None
         return local
     name = unquote(Path(urlparse(url).path).name) or "toolkit.bin"
-    if not (_ARCHIVE_EXT_RE.search(name) or _INSTALLER_EXT_RE.search(name)):
+    if not (
+        _ARCHIVE_EXT_RE.search(name)
+        or _INSTALLER_EXT_RE.search(name)
+        or re.search(r"\.(?:gz|bin)$", name, re.I)
+    ):
         name = "toolkit.bin"
     dest = dest_dir / name
     print(f"[INFO] toolkit try download: {url}")
@@ -3692,32 +3696,32 @@ def find_or_install_mihomo() -> Path:
     # 优先使用已有的 Clash Verge 内核
     existing = Path(r"C:\Program Files\Clash Verge\verge-mihomo-alpha.exe")
     if existing.exists():
-        print(f"[OK] using existing proxy engine: {existing}")
+        print(f"[OK] proxy engine ready: {existing.name} starting latency test")
         return existing
 
     for name in ("mihomo", "clash-meta", "clash"):
         found = shutil.which(name)
         if found:
-            print(f"[OK] using proxy engine: {found}")
+            print(f"[OK] proxy engine ready: {Path(found).name} starting latency test")
             return Path(found)
 
     install_dir = Path(tempfile.gettempdir()) / "free-node-autotest-mihomo"
     os.makedirs(str(install_dir), exist_ok=True)
     binary = install_dir / ("mihomo.exe" if os.name == "nt" else "mihomo")
     if binary.exists():
-        print(f"[OK] using cached proxy engine: {binary}")
+        print(f"[OK] proxy engine ready: {binary.name} starting latency test")
         return binary
 
     url, expected_sha256 = select_mihomo_asset(require_sha256=True)
-    print(f"[INFO] downloading proxy engine: {url}")
-    archive = download_file(url, install_dir)
-    if expected_sha256:
-        verify_file_sha256(archive, expected_sha256, label=archive.name)
+    archive = _download_archive(url, install_dir, expected_sha256=expected_sha256)
+    if archive is None:
+        raise RuntimeError("no matching Mihomo release asset found")
     extracted = extract_mihomo_binary(archive, install_dir)
     extracted.chmod(extracted.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    print(f"[OK] proxy engine ready: {binary.name} starting latency test")
     return binary
 
 
