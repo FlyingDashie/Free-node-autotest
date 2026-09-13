@@ -3800,7 +3800,7 @@ def find_or_install_mihomo() -> Path:
     archive = _toolkit_fetch_package(
         "https://github.com/MetaCubeX/mihomo",
         install_dir,
-        prefer=[os_token, *arch_tokens, "mihomo", r"v\d+\."],
+        prefer=[os_token, *arch_tokens, "mihomo", r"v\d+\.", "gz", "zip", "7z"],
         require_sha256=True,
     )
     if archive is None:
