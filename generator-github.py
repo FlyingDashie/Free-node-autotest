@@ -1743,9 +1743,12 @@ def _score_sub_link(url: str, context: str = "", prefer: Any = "", distance: int
         return 0
     blob = f"{url} {context}".lower()
     score = 0
+    hits = 0
     for index, hint in enumerate(tokens):
         if hint and hint in blob:
+            hits += 1
             score += max(1000, 100000 - index * 5000)
+    score += hits * 20000
     score += max(0, 10000 - min(distance, 10000))
     return score
 
@@ -1762,17 +1765,16 @@ def _collect_sub_links(text: str, page_url: str = "", prefer: str = "", exclude:
         re.I,
     )
     exclude_keyword = exclude.strip().lower()
-    hint = prefer.strip().lower()
     prefer_positions = []
-    if hint:
-        lower_text = text.lower()
+    lower_text = text.lower()
+    for hint in _prefer_tokens(prefer):
         start = 0
         while True:
             pos = lower_text.find(hint, start)
             if pos == -1:
                 break
             prefer_positions.append(pos)
-            start = pos + len(hint)
+            start = pos + max(1, len(hint))
     for match in re.finditer(r"https?://[^\s\"'`<>\]\|)]+", text, re.I):
         raw = match.group(0).split("`")[0].rstrip(").,;\"'|")
         link = _blob_to_raw(raw)
@@ -1849,7 +1851,7 @@ def discover_sublink(
             return file_links
         print(f"[WARN] sublink discovery failed: {page_url}")
         return []
-    if prefer.strip():
+    if _prefer_tokens(prefer):
         found = unique_ordered(file_links + bare_links[:3])
         if found:
             return found
@@ -2165,7 +2167,7 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
     if not match:
         return []
     owner, repo = match.group(1), match.group(2)
-    token = (prefer or "").strip().lower()
+    token = prefer
     list_url = f"https://github.com/{owner}/{repo}/releases"
     listing = ""
     try:
@@ -2187,7 +2189,7 @@ def _expand_github_release_assets(page_url: str, prefer: str = "") -> list[str]:
         seen_tags.add(tag)
         dist = _prefer_distance(listing, token, found.start())
         tags.append((_score_sub_link(tag, prefer=token, distance=dist), tag))
-    if "latest" not in seen_tags and not token:
+    if "latest" not in seen_tags and not _prefer_tokens(token):
         tags.append((0, "latest"))
     tags.sort(key=lambda item: item[0], reverse=True)
     ranked: list[tuple[int, str]] = []
