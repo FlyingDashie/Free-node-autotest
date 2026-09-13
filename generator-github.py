@@ -1627,46 +1627,93 @@ def _github_repo_home(url: str) -> tuple[str, str] | None:
     return parts[0], parts[1]
 
 
+def _github_listing_paths(html_text: str, owner: str, repo: str, kind: str) -> list[tuple[str, str]]:
+    pattern = re.compile(
+        rf"/{re.escape(owner)}/{re.escape(repo)}/{kind}/([^/\"'?]+)/([^\"'?]+)",
+        re.I,
+    )
+    rows: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for match in pattern.finditer(html_text or ""):
+        ref = unquote(match.group(1)).strip()
+        path = unquote(match.group(2)).split("#", 1)[0].split("?", 1)[0].strip("/")
+        if not ref or not path or (ref, path) in seen:
+            continue
+        seen.add((ref, path))
+        rows.append((ref, path))
+    return rows
+
+
+def _readme_score(path: str) -> int:
+    name = path.rsplit("/", 1)[-1].lower()
+    if "readme" not in name:
+        return 0
+    if name == "readme.md":
+        return 3
+    if name.startswith("readme."):
+        return 2
+    return 1
+
+
+def _try_readme_raws(owner: str, repo: str, items: list[tuple[str, str]]) -> str:
+    ranked = sorted(
+        (( _readme_score(path), ref, path) for ref, path in items if _readme_score(path)),
+        reverse=True,
+    )
+    for _, ref, path in ranked:
+        raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
+        try:
+            body = fetch_text(raw, retries=1, timeout=10)
+        except Exception:
+            continue
+        if body.strip():
+            return raw
+    return ""
+
+
 def _resolve_github_readme(url: str) -> str:
     home = _github_repo_home(url)
     if not home:
         return url
     owner, repo = home
-    headers = {
-        "User-Agent": resolve_ua("Chrome"),
-        "Accept": "application/vnd.github+json",
-    }
+    page = f"https://github.com/{owner}/{repo}"
+    html_text = ""
     try:
-        session = requests.Session()
-        session.trust_env = False
-        session.verify = False
-        resp = session.get(
-            f"https://api.github.com/repos/{owner}/{repo}/readme",
-            headers=headers,
-            timeout=15,
-        )
-        if resp.status_code < 400:
-            data = resp.json()
-            name = str(data.get("name") or "")
-            download = str(data.get("download_url") or "")
-            if download:
-                return download
-            if name:
-                return f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{name}"
+        html_text = fetch_text(page, retries=1, timeout=15)
     except Exception:
-        pass
+        html_text = ""
+    blobs = _github_listing_paths(html_text, owner, repo, "blob")
+    root_hits = [(ref, path) for ref, path in blobs if "/" not in path]
+    hit = _try_readme_raws(owner, repo, root_hits)
+    if hit:
+        return hit
+    trees = [
+        (ref, path) for ref, path in _github_listing_paths(html_text, owner, repo, "tree")
+        if "/" not in path
+    ]
+    nested: list[tuple[str, str]] = []
+    for ref, path in trees[:20]:
+        try:
+            sub = fetch_text(
+                f"https://github.com/{owner}/{repo}/tree/{ref}/{path}",
+                retries=1,
+                timeout=10,
+            )
+        except Exception:
+            continue
+        nested.extend(_github_listing_paths(sub, owner, repo, "blob"))
+    hit = _try_readme_raws(owner, repo, nested)
+    if hit:
+        return hit
     for ref in ("HEAD", "main", "master"):
         for name in ("README.md", "ReadMe.md", "README.MD", "readme.md", "README"):
             raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{name}"
             try:
-                session = requests.Session()
-                session.trust_env = False
-                session.verify = False
-                resp = session.get(raw, headers={"User-Agent": resolve_ua("Chrome")}, timeout=10)
-                if resp.status_code < 400 and resp.text.strip():
-                    return raw
+                body = fetch_text(raw, retries=1, timeout=10)
             except Exception:
                 continue
+            if body.strip():
+                return raw
     return url
 
 
