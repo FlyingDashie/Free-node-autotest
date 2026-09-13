@@ -121,28 +121,16 @@ SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
         "primary": "discover:sublink:https://end-gfw.com/",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
-            "https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/clash.yaml",
-            "discover:sublink:https://raw.githubusercontent.com/hello-world-1989/cn-news/refs/heads/main/README.md",
-        ],
         "bare_link": "all",
     },
     {
         "name": "大FQ运动-SS密钥",
         "primary": "https://end-gfw.com/ss-key",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together-ss",
-            "https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-together",
-        ],
         "referer": "https://end-gfw.com/",
     },
     {
         "name": "大FQ运动-补充",
         "primary": "discover:sublink:https://github.com/hello-world-1989/cn-news/raw/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/hello-world-1989/v2-sub/main/end-gfw-together-af3e13",
-        ],
         "exclude": "end-gfw.com",
         "bare_link": "all",
     },
@@ -154,17 +142,10 @@ SOURCE_GROUPS = [
     {
         "name": "ChromeGO-ShiteThings",
         "primary": "discover:sublink:https://raw.githubusercontent.com/ShiteThings/extractNodes/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://chg26.makou.cc.cd/",
-        ],
     },
     {
         "name": "ChromeGO-Merge",
         "primary": "discover:sublink:https://github.com/Misaka-blog/chromego_merge/raw/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://chromego-sub.netlify.app/sub/merged_proxies_new.yaml",
-            "https://chromego-sub.netlify.app/sub/base64.txt",
-        ],
     },
     {
         "name": "Freesocks",
@@ -177,11 +158,6 @@ SOURCE_GROUPS = [
     {
         "name": "OpenRunner-RSS",
         "primary": "discover:article:https://free.datiya.com/index.xml",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/sub.yaml",
-            "https://raw.githubusercontent.com/openRunner/clash-freenode/main/clash.yaml",
-            "https://raw.githubusercontent.com/openrunner/clash-freenode/main/clash.yaml",
-        ],
         "bare_link": "none",
     },
     {
@@ -192,9 +168,6 @@ SOURCE_GROUPS = [
     {
         "name": "V2Rayshare-SUB",
         "primary": "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription/raw/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://cdn.jsdelivr.net/gh/firefoxmmx2/v2rayshare_subcription/subscription/mihomo_sub.yaml",
-        ],
     },
     {
         "name": "Mibei77-RSS",
@@ -209,17 +182,10 @@ SOURCE_GROUPS = [
     {
         "name": "Free-clash-v2ray",
         "primary": "discover:sublink:https://raw.githubusercontent.com/free-clash-v2ray/free-clash-v2ray.github.io/main/README.md",
-        "fallbacks": [
-            "https://free-clash-v2ray.github.io/uploads/latest.yaml",
-        ],
     },
     {
         "name": "Pawdroid",
         "primary": "discover:sublink:https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
-            "https://mirror.v2gh.com/https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
-        ],
     },
     {
         "name": "FreeV2-Base64",
@@ -233,84 +199,47 @@ SOURCE_GROUPS = [
     {
         "name": "免费节点1",
         "primary": "discover:sublink:https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml",
-        ],
     },
     {
         "name": "免费节点2",
         "primary": "discover:sublink:https://github.com/ermaozi/get_subscribe/raw/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml",
-        ],
     },
     {
         "name": "免费节点3",
         "primary": "discover:sublink:https://raw.githubusercontent.com/sunmiao4458/free-proxy-airport/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://sunmiao4458.github.io/free-proxy-airport/clash.yaml",
-        ],
     },
     {
         "name": "免费节点4",
         "primary": "discover:sublink:https://raw.githubusercontent.com/mfuu/FreeProxies/refs/heads/master/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/mfuu/FreeProxies/master/sub.yaml",
-        ],
     },
     {
         "name": "免费节点5",
         "primary": "discover:sublink:https://github.com/vxiaov/free_proxies/raw/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://cdn.jsdelivr.net/gh/vxiaov/free_proxies@main/clash/clash.provider.yaml",
-            "https://raw.githubusercontent.com/vxiaov/free_proxies/main/clash/clash.provider.yaml",
-        ],
     },
     {
         "name": "免费节点6",
         "primary": "discover:sublink:https://github.com/anaer/Sub/raw/refs/heads/main/README.MD",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/anaer/Sub/main/clash.yaml",
-            "https://anaer.github.io/Sub/clash.yaml",
-        ],
     },
     {
         "name": "免费节点7",
         "primary": "discover:sublink:https://github.com/snakem982/proxypool/raw/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta-2.yaml",
-        ],
     },
     {
         "name": "免费节点8",
         "primary": "discover:sublink:https://raw.githubusercontent.com/mahdibland/V2RayAggregator/refs/heads/master/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml",
-        ],
     },
     {
         "name": "免费节点9",
         "primary": "discover:sublink:https://raw.githubusercontent.com/w1770946466/Auto_proxy/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
-        ],
         "bare_link": "all",
     },
     {
         "name": "免费节点10",
         "primary": "discover:sublink:https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/PuddinCat/BestClash/refs/heads/main/proxies.yaml",
-        ],
     },
     {
         "name": "免费节点11",
         "primary": "discover:sublink:https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/README.md",
-        "fallbacks": [
-            "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/base64.txt",
-            "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/all.yaml",
-            "https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/mihomo.yaml",
-        ],
     },
     {
         "name": "Pawdroid-sr-apk",
@@ -320,27 +249,15 @@ SOURCE_GROUPS = [
     {
         "name": "Pawdroid-ss-apk",
         "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com/",
-        "fallbacks": [
-            "discover:toolkit:ss-apk:https://github.com/Pawdroid/ShadowShare/releases",
-        ],
         "prefer": "apk",
     },
     {
         "name": "Clashfree",
         "primary": "discover:sublink:https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/README.md",
-        "fallbacks": [
-            {
-                "url": "discover:sublink:https://raw.githubusercontent.com/free-nodes/v2rayfree/refs/heads/main/README.md",
-            },
-            "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub",
-        ],
     },
     {
         "name": "Epodonios",
         "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs/raw/refs/heads/main/README.md",
-        "fallbacks": [
-            "https://github.com/Epodonios/v2ray-configs/raw/main/All_Configs_Sub.txt",
-        ],
     },
     {
         "name": "V2rayclashfree-RSS",
