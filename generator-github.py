@@ -1952,6 +1952,7 @@ _TOOLKIT_EMBEDDED: list[dict[str, Any]] = []
 _TOOLKIT_ARCHIVE_URL = ""
 _DISCOVER_PAGES: list[str] = []
 _SUBLINK_BARE: list[str] = []
+_SHA256_BY_URL: dict[str, str] = {}
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
@@ -2222,6 +2223,7 @@ def _expand_github_release_assets(
         except Exception:
             continue
         print(f"[INFO] toolkit try release: {asset_page}")
+        page_digests = _parse_page_sha256(body)
         for link in _collect_archive_links(body, asset_page):
             lower = link.lower()
             if "/releases/download/" not in lower:
@@ -2238,6 +2240,10 @@ def _expand_github_release_assets(
             if lower.endswith(".sha256") or lower.endswith(".sha256sum") or lower.endswith("checksums.txt"):
                 checksum_links.append(link)
                 continue
+            name = unquote(link.rstrip("/").rsplit("/", 1)[-1]).lower()
+            digest = page_digests.get(name, "")
+            if digest:
+                _SHA256_BY_URL[link] = digest
             loc = body.lower().find(lower[:120])
             dist = _prefer_distance(body, token, loc)
             ranked.append((_score_sub_link(link, prefer=token, distance=dist), link))
@@ -3744,7 +3750,27 @@ def _checksum_from_text(text: str, filename: str) -> str:
     return ""
 
 
+def _parse_page_sha256(html: str) -> dict[str, str]:
+    found: dict[str, str] = {}
+    for name, digest in re.findall(
+        r'text-bold">([^<]+)</span>[\s\S]{0,2500}?sha256:([0-9a-f]{64})',
+        html or "",
+        re.I,
+    ):
+        found[html.unescape(name).strip().lower()] = digest.lower()
+    for name, digest in re.findall(
+        r'releases/download/[^"\']+/([^"\'>?]+)["\'][\s\S]{0,2500}?sha256:([0-9a-f]{64})',
+        html or "",
+        re.I,
+    ):
+        found[unquote(name).strip().lower()] = digest.lower()
+    return found
+
+
 def _lookup_sha256(url: str, extra_checksum_urls: list[str] | None = None) -> str:
+    cached = _SHA256_BY_URL.get(url) or _SHA256_BY_URL.get(url.split("?", 1)[0])
+    if cached:
+        return cached
     name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
     if not name:
         return ""
@@ -3765,6 +3791,7 @@ def _lookup_sha256(url: str, extra_checksum_urls: list[str] | None = None) -> st
         except Exception:
             expected = ""
         if expected:
+            _SHA256_BY_URL[url] = expected
             return expected
     return ""
 
