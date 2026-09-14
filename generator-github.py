@@ -3772,7 +3772,7 @@ def find_or_install_mihomo() -> Path:
             and "mihomo" in item.name.lower()
         )
         extra = f" package={packaged[-1]}" if packaged else ""
-        print(f"[OK] proxy engine ready: {binary.name} starting latency test{extra}")
+        print(f"[OK] proxy engine ready: mihomo starting latency test{extra}")
         return binary
 
     system = platform.system().lower()
@@ -3808,10 +3808,7 @@ def find_or_install_mihomo() -> Path:
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    print(
-        f"[OK] proxy engine ready: {binary.name} starting latency test "
-        f"package={archive.name}"
-    )
+    print(f"[OK] proxy engine ready: mihomo starting latency test package={archive.name}")
     return binary
 
 
