@@ -3764,7 +3764,15 @@ def find_or_install_mihomo() -> Path:
     os.makedirs(str(install_dir), exist_ok=True)
     binary = install_dir / ("mihomo.exe" if os.name == "nt" else "mihomo")
     if binary.exists():
-        print(f"[OK] proxy engine ready: {binary.name} starting latency test")
+        packaged = sorted(
+            item.name
+            for item in install_dir.iterdir()
+            if item.is_file()
+            and item.suffix.lower() in {".gz", ".zip", ".7z"}
+            and "mihomo" in item.name.lower()
+        )
+        extra = f" package={packaged[-1]}" if packaged else ""
+        print(f"[OK] proxy engine ready: {binary.name} starting latency test{extra}")
         return binary
 
     system = platform.system().lower()
@@ -3800,7 +3808,10 @@ def find_or_install_mihomo() -> Path:
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    print(f"[OK] proxy engine ready: {binary.name} starting latency test")
+    print(
+        f"[OK] proxy engine ready: {binary.name} starting latency test "
+        f"package={archive.name}"
+    )
     return binary
 
 
