@@ -113,6 +113,12 @@ _TEST_DONE = 0
 _TEST_LOCK = threading.Lock()
 _BENCH_SLOTS = threading.Semaphore(3)
 _BRANCH_NEXT = 1
+
+
+def _bench_log(msg: str) -> None:
+    with _TEST_LOCK:
+        sys.stdout.write(str(msg) + "\n")
+        sys.stdout.flush()
 # Temporary diagnostic prints must use prefix [DEBUG], not [INFO]/[OK]/[WARN].
 
 
@@ -139,6 +145,10 @@ SOURCE_GROUPS = [
         ],
         "referer": "https://end-gfw.com",
         "bare_link": "all",
+    },
+    {
+        "name": "Free-clash-v2ray",
+        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
     },
     {
         "name": "Pawdroid",
@@ -263,10 +273,6 @@ SOURCE_GROUPS = [
     {
         "name": "Epodonios",
         "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs",
-    },
-    {
-        "name": "Free-clash-v2ray",
-        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
     },
     {
         "name": "V2rayclashfree-RSS",
@@ -4185,7 +4191,7 @@ def _benchmark_batch(
             reason = "invalid REALITY public key"
         elif len(reason) > 180:
             reason = reason[:177] + "..."
-        print(
+        _bench_log(
             f"[DROP] {{{branch}}} name={bad.get('name')} "
             f"server={bad.get('server')}:{bad.get('port')} reason={reason or 'mihomo start failed'}"
         )
@@ -4200,7 +4206,7 @@ def _benchmark_batch(
     right = proxies[mid:]
     left_id = _alloc_branch()
     right_id = _alloc_branch()
-    print(
+    _bench_log(
         f"[WARN] batch start failed size={len(proxies)} {{{branch}}} "
         f"split -> {len(left)} {{{left_id}}} + {len(right)} {{{right_id}}}"
     )
@@ -4288,7 +4294,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                 rest = max(0, _TEST_TOTAL - _TEST_DONE)
                 should_print = completed % 100 == 0 or completed == len(futures)
             if should_print:
-                print(
+                _bench_log(
                     f"[INFO] {{{branch}}} tested {completed}/{len(futures)} "
                     f"kept={len(metrics)} rest={rest}"
                 )
