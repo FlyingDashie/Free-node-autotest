@@ -3751,14 +3751,14 @@ def find_or_install_mihomo() -> Path:
     # 优先使用已有的 Clash Verge 内核
     existing = Path(r"C:\Program Files\Clash Verge\verge-mihomo-alpha.exe")
     if existing.exists():
-        print(f"[OK] proxy engine ready: mihomo starting latency test package={existing.name}")
+        print(f"[OK] proxy engine ready: starting latency test package={existing.name}")
         return existing
 
     for name in ("mihomo", "clash-meta", "clash"):
         found = shutil.which(name)
         if found:
             print(
-                f"[OK] proxy engine ready: mihomo starting latency test "
+                f"[OK] proxy engine ready: starting latency test "
                 f"package={Path(found).name}-PATH"
             )
             return Path(found)
@@ -3775,7 +3775,7 @@ def find_or_install_mihomo() -> Path:
             and "mihomo" in item.name.lower()
         )
         extra = packaged[-1] if packaged else "cached"
-        print(f"[OK] proxy engine ready: mihomo starting latency test package={extra}")
+        print(f"[OK] proxy engine ready: starting latency test package={extra}")
         return binary
 
     system = platform.system().lower()
@@ -3811,7 +3811,7 @@ def find_or_install_mihomo() -> Path:
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    print(f"[OK] proxy engine ready: mihomo starting latency test package={archive.name}")
+    print(f"[OK] proxy engine ready: starting latency test package={archive.name}")
     return binary
 
 
