@@ -1468,7 +1468,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     continue
                 candidates = [url]
                 print(f"[INFO] source try url: {url}")
-                tried_addrs.add(_source_addr_key(url))
             if crg_embedded:
                 prefix = source_tag(source)
                 marks, kept_embed = _dedupe_proxies(
