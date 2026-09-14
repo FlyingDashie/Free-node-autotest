@@ -1368,6 +1368,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
         discover_pages: list[str] = []
         first_pages: list[str] = []
         ingest_hits: list[tuple[str, list[str], int]] = []
+        tried_addrs: set[str] = set()
 
         def _print_hits() -> None:
             nonlocal ingest_hits
@@ -1411,12 +1412,18 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     candidates = unique_ordered(first_pages + list(candidates))
             elif url.startswith("discover:sublink:"):
                 page = url[len("discover:sublink:"):]
-                candidates = discover_sublink(
-                    page,
-                    prefer=prefer,
-                    exclude=exclude,
-                    bare_link=bare_link,
-                )
+                resolved = _resolve_github_readme(_blob_to_raw(page.strip()))
+                if _source_addr_key(page) in tried_addrs or _source_addr_key(resolved) in tried_addrs:
+                    candidates = []
+                else:
+                    candidates = discover_sublink(
+                        page,
+                        prefer=prefer,
+                        exclude=exclude,
+                        bare_link=bare_link,
+                    )
+                    tried_addrs.add(_source_addr_key(page))
+                    tried_addrs.add(_source_addr_key(resolved))
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
                 if merge_all:
@@ -1457,8 +1464,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 )
                 merge_all = not first_hit
             else:
+                if _source_addr_key(url) in tried_addrs:
+                    continue
                 candidates = [url]
                 print(f"[INFO] source try url: {url}")
+                tried_addrs.add(_source_addr_key(url))
             if crg_embedded:
                 prefix = source_tag(source)
                 marks, kept_embed = _dedupe_proxies(
@@ -1467,12 +1477,16 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 if marks:
                     ingest_hits.append(("embedded://archive-config", marks, len(kept_embed)))
                 source_found.extend(kept_embed)
-            pending = unique_ordered(candidates)
+            pending = [
+                item for item in unique_ordered(candidates)
+                if _source_addr_key(item) not in tried_addrs
+            ]
             ua = spec["user_agent"]
             ref = spec["referer"]
 
             def _ingest(url: str, text: str) -> bool:
                 nonlocal used_url
+                tried_addrs.add(_source_addr_key(url))
                 found = extract_proxies(text)
                 if not found:
                     if not merge_all:
@@ -1527,7 +1541,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 ):
                     extra = [
                         link for link in unique_ordered(_SUBLINK_BARE)
-                        if link not in pending
+                        if link not in pending and _source_addr_key(link) not in tried_addrs
                     ]
                     if extra:
                         if ingest_hits:
@@ -1744,6 +1758,17 @@ def _resolve_github_readme(url: str) -> str:
             if body.strip():
                 return raw
     return url
+
+
+def _source_addr_key(link: str) -> str:
+    text = _blob_to_raw(str(link or "").strip()).split("?", 1)[0].rstrip("/")
+    text = re.sub(
+        r"(https://raw\.githubusercontent\.com/[^/]+/[^/]+/)refs/heads/",
+        r"\1",
+        text,
+        flags=re.I,
+    )
+    return text.lower()
 
 
 def _blob_to_raw(link: str) -> str:
