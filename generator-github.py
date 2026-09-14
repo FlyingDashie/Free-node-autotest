@@ -133,21 +133,32 @@ SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
         "primary": "discover:sublink:https://end-gfw.com",
-        "bare_link": "all",
-    },
-    {
-        "name": "大FQ运动-SS密钥",
-        "primary": "https://end-gfw.com/ss-key",
+        "also": [
+            "https://end-gfw.com/ss-key",
+            "discover:sublink:https://github.com/hello-world-1989/cn-news",
+        ],
         "referer": "https://end-gfw.com",
-    },
-    {
-        "name": "大FQ运动-补充",
-        "primary": "discover:sublink:https://github.com/hello-world-1989/cn-news",
-        "exclude": "end-gfw.com",
         "bare_link": "all",
     },
     {
-        "name": "ChromeGO-工具包",
+        "name": "Free-clash-v2ray",
+        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
+    },
+    {
+        "name": "Pawdroid",
+        "primary": "discover:sublink:https://github.com/Pawdroid/Free-servers",
+    },
+    {
+        "name": "FreeV2-Base64",
+        "primary": "https://xmxosfepggzm.503403.xyz",
+    },
+    {
+        "name": "Bocchi2b-Base64",
+        "primary": "https://links.bocchi2b.top/clash",
+        "user_agent": "Chrome",
+    },
+    {
+        "name": "ChromeGO-Toolkit",
         "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang",
         "prefer": "ChromeGo",
     },
@@ -193,23 +204,6 @@ SOURCE_GROUPS = [
         "name": "Yoyapai-RSS",
         "primary": "discover:article:https://yoyapai.com",
         "bare_link": "none",
-    },
-    {
-        "name": "Free-clash-v2ray",
-        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
-    },
-    {
-        "name": "Pawdroid",
-        "primary": "discover:sublink:https://github.com/Pawdroid/Free-servers",
-    },
-    {
-        "name": "FreeV2-Base64",
-        "primary": "https://xmxosfepggzm.503403.xyz",
-    },
-    {
-        "name": "Bocchi2b-Base64",
-        "primary": "https://links.bocchi2b.top/clash",
-        "user_agent": "Chrome",
     },
     {
         "name": "免费节点1",
