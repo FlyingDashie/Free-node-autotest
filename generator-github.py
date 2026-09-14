@@ -147,10 +147,6 @@ SOURCE_GROUPS = [
         "bare_link": "all",
     },
     {
-        "name": "Free-clash-v2ray",
-        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
-    },
-    {
         "name": "Pawdroid",
         "primary": "discover:sublink:https://github.com/Pawdroid/Free-servers",
     },
@@ -273,6 +269,10 @@ SOURCE_GROUPS = [
     {
         "name": "Epodonios",
         "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs",
+    },
+    {
+        "name": "Free-clash-v2ray",
+        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
     },
     {
         "name": "V2rayclashfree-RSS",
