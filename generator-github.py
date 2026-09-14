@@ -1369,6 +1369,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
         first_pages: list[str] = []
         ingest_hits: list[tuple[str, list[str], int]] = []
         tried_addrs: set[str] = set()
+        discovered_pages: set[str] = set()
 
         def _print_hits() -> None:
             nonlocal ingest_hits
@@ -1413,7 +1414,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             elif url.startswith("discover:sublink:"):
                 page = url[len("discover:sublink:"):]
                 resolved = _resolve_github_readme(_blob_to_raw(page.strip()))
-                if _source_addr_key(page) in tried_addrs or _source_addr_key(resolved) in tried_addrs:
+                if (
+                    _source_addr_key(page) in discovered_pages
+                    or _source_addr_key(resolved) in discovered_pages
+                ):
                     candidates = []
                 else:
                     candidates = discover_sublink(
@@ -1422,8 +1426,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         exclude=exclude,
                         bare_link=bare_link,
                     )
-                    tried_addrs.add(_source_addr_key(page))
-                    tried_addrs.add(_source_addr_key(resolved))
+                    discovered_pages.add(_source_addr_key(page))
+                    discovered_pages.add(_source_addr_key(resolved))
                 merge_all = not first_hit
                 discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
                 if merge_all:
