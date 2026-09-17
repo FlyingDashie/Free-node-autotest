@@ -185,7 +185,6 @@ SOURCE_GROUPS = [
         "name": "NekoWarp",
         "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
     },
-
     {
         "name": "1VPN-CRX",
         "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
