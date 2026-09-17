@@ -209,7 +209,7 @@ SOURCE_GROUPS = [
         "bare_link": "none",
     },
     {
-        "name": "1vpn-crx",
+        "name": "1VPN-CRX",
         "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
     },
     {
@@ -258,12 +258,12 @@ SOURCE_GROUPS = [
         "primary": "discover:sublink:https://github.com/kooker/FreeSubsCheck",
     },
     {
-        "name": "Pawdroid-sr-apk",
+        "name": "Pawdroid-SR-APK",
         "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android",
         "prefer": "apk",
     },
     {
-        "name": "Pawdroid-ss-apk",
+        "name": "Pawdroid-SS-APK",
         "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com",
         "prefer": "apk",
     },
