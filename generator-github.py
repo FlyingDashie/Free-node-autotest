@@ -209,8 +209,8 @@ SOURCE_GROUPS = [
         "bare_link": "none",
     },
     {
-        "name": "1VPN-crx",
-        "primary": "discover:toolkit:1VPN-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
+        "name": "1vpn-crx",
+        "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
     },
     {
         "name": "免费节点1",
@@ -2679,6 +2679,7 @@ def _dir_entry_counts(root: Path) -> tuple[int, int]:
 
 
 def _extract_archive(archive: Path, dest_dir: Path) -> bool:
+    label = archive.name
     name = archive.name.lower()
     tool = ""
     apk_mode = name.endswith((".apk", ".xapk", ".apks", ".aab"))
@@ -2691,6 +2692,8 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
         if name.endswith(".crx") or head == b"Cr24":
             archive = _unwrap_crx(archive)
             name = archive.name.lower()
+            if not label.lower().endswith(".crx"):
+                label = Path(label).stem + ".crx"
         if name.endswith((".zip", ".apk", ".xapk", ".apks", ".xpi", ".crx")):
             import zipfile
             with zipfile.ZipFile(archive) as zf:
@@ -2765,11 +2768,11 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                 print(f"[WARN] toolkit unsupported archive: {archive.name}")
                 return False
     except Exception as exc:
-        print(f"[WARN] toolkit extract failed: {archive.name} {exc}")
+        print(f"[WARN] toolkit extract failed: {label} {exc}")
         return False
     files, dirs = _dir_entry_counts(dest_dir)
     print(
-        f"[OK] toolkit extracted archive={archive.name} tool={tool} "
+        f"[OK] toolkit extracted archive={label} tool={tool} "
         f"files={files} dirs={dirs}"
     )
     if apk_mode:
@@ -3127,14 +3130,14 @@ def _discover_toolkit_1vpn_crx(page_url: str) -> tuple[list[dict[str, Any]], str
         for archive, unpack, archive_url in _toolkit_iter_packages(page_url, work=work):
             nodes = _parse_1vpn_crx_bundle(unpack)
             print(
-                f"[OK] toolkit 1VPN-crx scanned hosts={len(nodes)} "
+                f"[OK] toolkit 1vpn-crx scanned hosts={len(nodes)} "
                 f"keys={1 if nodes and nodes[0].get('username') else 0} "
                 f"archive={archive.name}"
             )
             if nodes:
                 return nodes, archive_url
-            print(f"[WARN] toolkit 1VPN-crx empty bundle: {archive.name}")
-        print(f"[WARN] toolkit 1VPN-crx discovery failed: {page_url}")
+            print(f"[WARN] toolkit 1vpn-crx empty bundle: {archive.name}")
+        print(f"[WARN] toolkit 1vpn-crx discovery failed: {page_url}")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
