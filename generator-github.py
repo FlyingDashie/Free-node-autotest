@@ -2614,7 +2614,12 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
     tool = ""
     apk_mode = name.endswith((".apk", ".xapk", ".apks", ".aab"))
     try:
-        if name.endswith(".crx"):
+        head = b""
+        try:
+            head = archive.read_bytes()[:4]
+        except Exception:
+            head = b""
+        if name.endswith(".crx") or head == b"Cr24":
             archive = _unwrap_crx(archive)
             name = archive.name.lower()
         if name.endswith((".zip", ".apk", ".xapk", ".apks", ".xpi", ".crx")):
@@ -2987,45 +2992,6 @@ def _collect_toolkit_candidates(
     return _rank_package_links(links, prefer=prefer, page_text=body)
 
 
-def _chrome_ext_id(page_url: str) -> str:
-    text = str(page_url or "").strip()
-    match = re.search(r"([a-p]{32})", text)
-    return match.group(1).lower() if match else ""
-
-
-def _crx_zip_bytes(data: bytes) -> bytes:
-    import struct
-
-    if data[:4] == b"PK\x03\x04":
-        return data
-    if data[:4] != b"Cr24":
-        offset = data.find(b"PK\x03\x04")
-        return data[offset:] if offset >= 0 else data
-    version = struct.unpack_from("<I", data, 4)[0]
-    if version == 3:
-        header_size = struct.unpack_from("<I", data, 8)[0]
-        return data[12 + header_size :]
-    if version == 2:
-        pubkey_len, sig_len = struct.unpack_from("<II", data, 8)
-        return data[16 + pubkey_len + sig_len :]
-    offset = data.find(b"PK\x03\x04")
-    return data[offset:] if offset >= 0 else data
-
-
-def _crx_download_urls(ext_id: str) -> list[str]:
-    query = (
-        "response=redirect&os=linux&arch=x64&os_arch=x86_64"
-        "&prod=chromiumcrx&prodchannel=&prodversion=131.0.6778.69"
-        "&lang=en-US&acceptformat=crx3"
-        f"&x=id%3D{ext_id}%26installsource%3Dondemand%26uc"
-    )
-    return [
-        f"https://clients2.google.com/service/update2/crx?{query}",
-        f"https://clients2.google.com/service/update2/crx?response=redirect"
-        f"&prodversion=131.0.6778.69&acceptformat=crx3&x=id%3D{ext_id}%26uc",
-    ]
-
-
 def _parse_1vpn_crx_bundle(root: Path) -> list[dict[str, Any]]:
     user_re = re.compile(r'username["\']?\s*[:=]\s*["\']([^"\']+)["\']')
     pass_re = re.compile(r'password["\']?\s*[:=]\s*["\']([^"\']+)["\']')
@@ -3082,48 +3048,20 @@ def _parse_1vpn_crx_bundle(root: Path) -> list[dict[str, Any]]:
 
 def _discover_toolkit_1vpn_crx(page_url: str) -> tuple[list[dict[str, Any]], str]:
     page_url = str(page_url or "").strip()
-    ext_id = _chrome_ext_id(page_url)
-    if not ext_id:
-        print(f"[WARN] toolkit 1VPN-crx missing extension id: {page_url}")
-        return [], ""
-    print(f"[INFO] toolkit try page: {page_url}")
-    work = Path(tempfile.mkdtemp(prefix="toolkit-1vpn-crx-"))
+    work = Path(tempfile.mkdtemp(prefix="toolkit-"))
     try:
-        archive = None
-        used = ""
-        for url in _crx_download_urls(ext_id):
-            archive = _download_archive(url, work)
-            if archive:
-                used = url
-                break
-        if not archive:
-            print(f"[WARN] toolkit 1VPN-crx discovery failed: {page_url}")
-            return [], ""
-        raw = archive.read_bytes()
-        zip_bytes = _crx_zip_bytes(raw)
-        unpack = work / "unpack"
-        unpack.mkdir(parents=True, exist_ok=True)
-        import io
-        import zipfile
-
-        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            zf.extractall(unpack)
-        files = sum(1 for path in unpack.rglob("*") if path.is_file())
-        dirs = sum(1 for path in unpack.rglob("*") if path.is_dir())
-        print(
-            f"[OK] toolkit extracted archive={archive.name} tool=zipfile "
-            f"files={files} dirs={dirs}"
-        )
-        nodes = _parse_1vpn_crx_bundle(unpack)
-        print(
-            f"[OK] toolkit 1VPN-crx scanned hosts={len(nodes)} "
-            f"keys={1 if nodes and nodes[0].get('username') else 0} "
-            f"archive={archive.name}"
-        )
-        if not nodes:
-            print(f"[WARN] toolkit 1VPN-crx discovery failed: {page_url}")
-            return [], used
-        return nodes, used
+        for archive, unpack, archive_url in _toolkit_iter_packages(page_url, work=work):
+            nodes = _parse_1vpn_crx_bundle(unpack)
+            print(
+                f"[OK] toolkit 1VPN-crx scanned hosts={len(nodes)} "
+                f"keys={1 if nodes and nodes[0].get('username') else 0} "
+                f"archive={archive.name}"
+            )
+            if nodes:
+                return nodes, archive_url
+            print(f"[WARN] toolkit 1VPN-crx empty bundle: {archive.name}")
+        print(f"[WARN] toolkit 1VPN-crx discovery failed: {page_url}")
+        return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
