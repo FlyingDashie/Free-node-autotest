@@ -133,7 +133,7 @@ MAX_RETRIES = 2
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
-MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "400"))
+MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "350"))
 DEBUG_ONLY_SOURCE = ""
 
 SOURCE_GROUPS = [
@@ -1621,7 +1621,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             elif discover_pages:
                 extra = f" url={_aggregate_urls(discover_pages)}"
             elif used_url:
-                extra = f" url={used_url.split('?', 1)[0]}"
+                extra = f" url={used_url}"
             else:
                 extra = ""
             print(f"[OK] proxies={len(source_found)} source={source_bracket(source)}{extra}")
