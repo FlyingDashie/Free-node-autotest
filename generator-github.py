@@ -185,6 +185,11 @@ SOURCE_GROUPS = [
         "name": "NekoWarp",
         "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
     },
+
+    {
+        "name": "1VPN-CRX",
+        "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
+    },
     {
         "name": "OpenRunner-RSS",
         "primary": "discover:article:https://free.datiya.com",
@@ -207,10 +212,6 @@ SOURCE_GROUPS = [
         "name": "Yoyapai-RSS",
         "primary": "discover:article:https://yoyapai.com",
         "bare_link": "none",
-    },
-    {
-        "name": "1VPN-CRX",
-        "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
     },
     {
         "name": "免费节点1",
