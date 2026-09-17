@@ -134,6 +134,7 @@ MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
 MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "350"))
+DEBUG_ONLY_SOURCE = ""
 
 SOURCE_GROUPS = [
     {
@@ -206,6 +207,10 @@ SOURCE_GROUPS = [
         "name": "Yoyapai-RSS",
         "primary": "discover:article:https://yoyapai.com",
         "bare_link": "none",
+    },
+    {
+        "name": "1VPN-crx",
+        "primary": "discover:toolkit:1VPN-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
     },
     {
         "name": "免费节点1",
@@ -283,12 +288,18 @@ SOURCE_GROUPS = [
 
 
 _kept_sources: list[dict[str, Any]] = []
+_debug_only = str(DEBUG_ONLY_SOURCE or "").strip()
 for _src in SOURCE_GROUPS:
-    if not str(_src.get("name") or "").strip():
+    _name = str(_src.get("name") or "").strip()
+    if not _name:
         print("[WARN] skip source without name")
+        continue
+    if _debug_only and _name != _debug_only:
         continue
     _kept_sources.append(_src)
 SOURCE_GROUPS = _kept_sources
+if _debug_only:
+    print(f"[DEBUG] only source={_debug_only} kept={len(SOURCE_GROUPS)}")
 
 
 def source_label(source: dict[str, Any]) -> str:
@@ -1439,8 +1450,18 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 toolkit_spec = url[len("discover:toolkit:"):]
                 child, sep, rest = toolkit_spec.partition(":")
                 child_l = child.lower()
-                if child_l not in {"ss-apk", "sr-apk", "crg"} or not rest:
-                    print(f"[WARN] toolkit need ss-apk|sr-apk|crg: {url}")
+                if child_l not in {"ss-apk", "sr-apk", "crg", "1vpn-crx"} or not rest:
+                    print(f"[WARN] toolkit need ss-apk|sr-apk|crg|1vpn-crx: {url}")
+                    continue
+                if child_l == "1vpn-crx":
+                    vpn_found, vpn_url = _discover_toolkit_1vpn_crx(rest)
+                    if vpn_found:
+                        prefix = source_tag(source)
+                        _marks, kept = _dedupe_proxies(
+                            vpn_found, source_seen, prefix=prefix
+                        )
+                        source_found.extend(kept)
+                        used_url = vpn_url or rest
                     continue
                 if child_l in {"ss-apk", "sr-apk"}:
                     apk_found, apk_url = _discover_toolkit_encrypted_apk(
@@ -2964,6 +2985,147 @@ def _collect_toolkit_candidates(
         body = ""
     links = _collect_archive_links(body, page_url)
     return _rank_package_links(links, prefer=prefer, page_text=body)
+
+
+def _chrome_ext_id(page_url: str) -> str:
+    text = str(page_url or "").strip()
+    match = re.search(r"([a-p]{32})", text)
+    return match.group(1).lower() if match else ""
+
+
+def _crx_zip_bytes(data: bytes) -> bytes:
+    import struct
+
+    if data[:4] == b"PK\x03\x04":
+        return data
+    if data[:4] != b"Cr24":
+        offset = data.find(b"PK\x03\x04")
+        return data[offset:] if offset >= 0 else data
+    version = struct.unpack_from("<I", data, 4)[0]
+    if version == 3:
+        header_size = struct.unpack_from("<I", data, 8)[0]
+        return data[12 + header_size :]
+    if version == 2:
+        pubkey_len, sig_len = struct.unpack_from("<II", data, 8)
+        return data[16 + pubkey_len + sig_len :]
+    offset = data.find(b"PK\x03\x04")
+    return data[offset:] if offset >= 0 else data
+
+
+def _crx_download_urls(ext_id: str) -> list[str]:
+    query = (
+        "response=redirect&os=linux&arch=x64&os_arch=x86_64"
+        "&prod=chromiumcrx&prodchannel=&prodversion=131.0.6778.69"
+        "&lang=en-US&acceptformat=crx3"
+        f"&x=id%3D{ext_id}%26installsource%3Dondemand%26uc"
+    )
+    return [
+        f"https://clients2.google.com/service/update2/crx?{query}",
+        f"https://clients2.google.com/service/update2/crx?response=redirect"
+        f"&prodversion=131.0.6778.69&acceptformat=crx3&x=id%3D{ext_id}%26uc",
+    ]
+
+
+def _parse_1vpn_crx_bundle(root: Path) -> list[dict[str, Any]]:
+    user_re = re.compile(r'username["\']?\s*[:=]\s*["\']([^"\']+)["\']')
+    pass_re = re.compile(r'password["\']?\s*[:=]\s*["\']([^"\']+)["\']')
+    host_re = re.compile(
+        r'hostname["\']?\s*:\s*["\']([^"\']+)["\']\s*,\s*port\s*:\s*(\d+)',
+        re.I,
+    )
+    username = ""
+    password = ""
+    hosts: list[tuple[str, int]] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in {".js", ".json", ".txt"}:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        if not username:
+            found_user = user_re.search(text)
+            found_pass = pass_re.search(text)
+            if found_user and found_pass:
+                username = found_user.group(1).strip()
+                password = found_pass.group(1).strip()
+        for host, port_text in host_re.findall(text):
+            try:
+                port = int(port_text)
+            except Exception:
+                continue
+            if 0 < port <= 65535:
+                hosts.append((host.strip(), port))
+    nodes: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
+    for host, port in hosts:
+        key = (host.lower(), port)
+        if key in seen or not host:
+            continue
+        seen.add(key)
+        item: dict[str, Any] = {
+            "name": host.split(".")[0],
+            "type": "http",
+            "server": host,
+            "port": port,
+        }
+        if username and password:
+            item["username"] = username
+            item["password"] = password
+        if port == 443:
+            item["tls"] = True
+        nodes.append(item)
+    return nodes
+
+
+def _discover_toolkit_1vpn_crx(page_url: str) -> tuple[list[dict[str, Any]], str]:
+    page_url = str(page_url or "").strip()
+    ext_id = _chrome_ext_id(page_url)
+    if not ext_id:
+        print(f"[WARN] toolkit 1VPN-crx missing extension id: {page_url}")
+        return [], ""
+    print(f"[INFO] toolkit try page: {page_url}")
+    work = Path(tempfile.mkdtemp(prefix="toolkit-1vpn-crx-"))
+    try:
+        archive = None
+        used = ""
+        for url in _crx_download_urls(ext_id):
+            archive = _download_archive(url, work)
+            if archive:
+                used = url
+                break
+        if not archive:
+            print(f"[WARN] toolkit 1VPN-crx discovery failed: {page_url}")
+            return [], ""
+        raw = archive.read_bytes()
+        zip_bytes = _crx_zip_bytes(raw)
+        unpack = work / "unpack"
+        unpack.mkdir(parents=True, exist_ok=True)
+        import io
+        import zipfile
+
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            zf.extractall(unpack)
+        files = sum(1 for path in unpack.rglob("*") if path.is_file())
+        dirs = sum(1 for path in unpack.rglob("*") if path.is_dir())
+        print(
+            f"[OK] toolkit extracted archive={archive.name} tool=zipfile "
+            f"files={files} dirs={dirs}"
+        )
+        nodes = _parse_1vpn_crx_bundle(unpack)
+        print(
+            f"[OK] toolkit 1VPN-crx scanned hosts={len(nodes)} "
+            f"keys={1 if nodes and nodes[0].get('username') else 0} "
+            f"archive={archive.name}"
+        )
+        if not nodes:
+            print(f"[WARN] toolkit 1VPN-crx discovery failed: {page_url}")
+            return [], used
+        return nodes, used
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def _discover_toolkit_crg(
