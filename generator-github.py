@@ -2230,6 +2230,31 @@ def _firefox_slug(url: str) -> str:
     return unquote(match.group(1)).strip("/") if match else ""
 
 
+def _store_extension_filename(page_url: str) -> str:
+    text = unquote(str(page_url or "").strip())
+    chrome = re.search(
+        r"(?:chromewebstore\.google\.com|chrome\.google\.com/webstore)/detail/([^/]+)/([a-p]{32})",
+        text,
+        re.I,
+    )
+    if chrome:
+        slug = re.sub(r"[^\w.-]+", "-", chrome.group(1), flags=re.A).strip("-._")
+        return f"{slug or chrome.group(2)}.crx"
+    edge = re.search(
+        r"microsoftedge\.microsoft\.com/addons/detail/([^/]+)/([a-z0-9]+)",
+        text,
+        re.I,
+    )
+    if edge:
+        slug = re.sub(r"[^\w.-]+", "-", unquote(edge.group(1)), flags=re.A).strip("-._")
+        return f"{slug or edge.group(2)}.crx"
+    slug = _firefox_slug(text)
+    if slug:
+        safe = re.sub(r"[^\w.-]+", "-", slug, flags=re.A).strip("-._")
+        return f"{safe}.xpi"
+    return ""
+
+
 def _store_package_urls(kind: str, page_url: str) -> list[str]:
     if kind == "chrome":
         ext_id = _chrome_ext_id(page_url)
@@ -2364,16 +2389,54 @@ def _toolkit_fetch_package(
             name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
             print(f"[WARN] toolkit skip no sha256: {name}")
             continue
-        archive = _download_archive(url, dest_dir, expected_sha256=expected)
+        archive = _download_archive(
+            url,
+            dest_dir,
+            expected_sha256=expected,
+            save_as=_store_extension_filename(page_url),
+        )
         if archive is not None:
             return archive
     return None
+
+
+def _toolkit_download_name(url: str, headers: Any = None, head: bytes = b"") -> str:
+    from urllib.parse import urlparse, unquote
+
+    headers = headers or {}
+    disp = str(headers.get("Content-Disposition") or headers.get("content-disposition") or "")
+    match = re.search(r"filename\*?=(?:UTF-8''?)?\"?([^ \";]+)", disp, re.I)
+    if match:
+        name = Path(unquote(match.group(1).strip().strip("\"'"))).name
+        if name:
+            return name
+    path_name = unquote(Path(urlparse(str(url or "")).path).name)
+    if path_name and (
+        _ARCHIVE_EXT_RE.search(path_name)
+        or _INSTALLER_EXT_RE.search(path_name)
+        or re.search(r"\.(?:gz|bin)$", path_name, re.I)
+    ):
+        return path_name
+    blob = unquote(str(url or ""))
+    ext_id = re.search(r"(?:^|[?&x=]|id=)([a-p]{32})(?:$|&|%)", blob, re.I)
+    if not ext_id:
+        ext_id = re.search(r"([a-p]{32})", blob, re.I)
+    if ext_id and ("chrome" in blob.lower() or "crx" in blob.lower() or (head[:4] == b"Cr24")):
+        return f"{ext_id.group(1).lower()}.crx"
+    if head.startswith(b"Cr24"):
+        return "extension.crx"
+    if head.startswith(b"PK\x03\x04"):
+        return "package.zip"
+    if head.startswith(b"7z\xbc\xaf"):
+        return "package.7z"
+    return path_name or "toolkit.bin"
 
 
 def _download_archive(
     url: str,
     dest_dir: Path,
     expected_sha256: str = "",
+    save_as: str = "",
 ) -> Path | None:
     from urllib.parse import urlparse, unquote
     local = _find_local_package(url)
@@ -2386,13 +2449,7 @@ def _download_archive(
                 print(f"[WARN] toolkit sha256 mismatch: {local.name} {exc}")
                 return None
         return local
-    name = unquote(Path(urlparse(url).path).name) or "toolkit.bin"
-    if not (
-        _ARCHIVE_EXT_RE.search(name)
-        or _INSTALLER_EXT_RE.search(name)
-        or re.search(r"\.(?:gz|bin)$", name, re.I)
-    ):
-        name = "toolkit.bin"
+    name = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
     dest = dest_dir / name
     print(f"[INFO] toolkit try download: {url}")
     try:
@@ -2423,8 +2480,20 @@ def _download_archive(
                                     continue
                                 handle.write(chunk)
                                 written += len(chunk)
+                        final_url = str(response.url or url)
+                        resp_headers = dict(response.headers)
                     if total and written < total:
                         raise RuntimeError(f"incomplete download {written}/{total}")
+                    hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(
+                        final_url,
+                        headers=resp_headers,
+                        head=dest.read_bytes()[:8] if dest.exists() else b"",
+                    )
+                    if hint and hint != dest.name:
+                        renamed = dest.with_name(hint)
+                        if renamed.exists() and renamed != dest:
+                            renamed.unlink()
+                        dest = dest.replace(renamed)
                     downloaded = True
                     break
                 except Exception as exc:
@@ -2732,7 +2801,12 @@ def _toolkit_iter_packages(
                 name = unquote(archive_url.rstrip("/").rsplit("/", 1)[-1])
                 print(f"[WARN] toolkit skip no sha256: {name}")
                 continue
-            archive = _download_archive(archive_url, root, expected_sha256=expected)
+            archive = _download_archive(
+                archive_url,
+                root,
+                expected_sha256=expected,
+                save_as=_store_extension_filename(page_url),
+            )
             if not archive:
                 continue
             unpack = root / f"unpack-{index}"
