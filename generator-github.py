@@ -355,12 +355,12 @@ SUPPORTED_PROXY_TYPES = {
 }
 
 REQUIRED_GROUPS = (
+    "MANUAL",
     "URL-TEST",
     "HK-POOL",
     "JP-POOL",
     "US-POOL",
     "FAST-POOL",
-    "FALLBACK",
     "PROXY",
 )
 
@@ -4568,19 +4568,11 @@ def detect_region(name: str) -> str:
     return "OTHER"
 
 
-def region_bonus(region: str) -> int:
-    if region in {"HK", "SG", "JP"}:
-        return 3
-    if region == "US":
-        return 2
-    return 1
-
-
 def health_score(name: str, latency: int, region: str) -> float:
     stability_seed = int(hashlib.sha256(name.encode("utf-8")).hexdigest()[:12], 16)
     stability = random.Random(stability_seed).random()
     latency_term = LATENCY_TIMEOUT_MS / max(int(latency), 1)
-    return latency_term + region_bonus(region) + stability * 0.1
+    return latency_term + stability * 0.1
 
 
 def low_latency_pool(metrics: list[ProxyMetric]) -> list[str]:
@@ -4657,10 +4649,22 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
 
     proxies = [item.proxy for item in metrics]
     all_names = [item.proxy["name"] for item in metrics]
+    scored_names = [
+        item.proxy["name"]
+        for item in sorted(metrics, key=lambda item: item.health_score, reverse=True)
+    ]
     hk_names = names_for_region(metrics, "HK")
     jp_names = names_for_region(metrics, "JP")
     us_names = names_for_region(metrics, "US")
     fast_names = low_latency_pool(metrics)
+    strategy_names = [
+        "MANUAL",
+        "URL-TEST",
+        "HK-POOL",
+        "JP-POOL",
+        "US-POOL",
+        "FAST-POOL",
+    ]
 
     return {
         "mixed-port": 7890,
@@ -4676,9 +4680,14 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
         "proxies": proxies,
         "proxy-groups": [
             {
+                "name": "MANUAL",
+                "type": "select",
+                "proxies": all_names,
+            },
+            {
                 "name": "URL-TEST",
                 "type": "url-test",
-                "proxies": all_names,
+                "proxies": scored_names,
                 "url": TEST_URL,
                 "interval": 120,
             },
@@ -4711,16 +4720,9 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
                 "interval": 120,
             },
             {
-                "name": "FALLBACK",
-                "type": "fallback",
-                "proxies": ["URL-TEST", "HK-POOL", "JP-POOL", "US-POOL"],
-                "url": TEST_URL,
-                "interval": 120,
-            },
-            {
                 "name": "PROXY",
                 "type": "select",
-                "proxies": ["URL-TEST", "FALLBACK"],
+                "proxies": list(strategy_names),
             },
         ],
         "rules": [
