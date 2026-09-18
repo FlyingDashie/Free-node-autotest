@@ -4888,7 +4888,8 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     if len(metrics) <= MAX_LIVE_TOTAL:
         return metrics
     print(
-        f"[INFO] cap live total from {len(metrics)} to {MAX_LIVE_TOTAL} trim large sources first"
+        f"[INFO] cap live total from {len(metrics)} to {MAX_LIVE_TOTAL} "
+        f"floor=5 then health_score pool"
     )
     global _SEP_JUST_PRINTED
     _SEP_JUST_PRINTED = False
@@ -4900,23 +4901,21 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
             grouped[key] = []
             order.append(key)
         grouped[key].append(item)
-    for key in grouped:
-        grouped[key].sort(key=lambda item: item.health_score)
-    need = len(metrics) - MAX_LIVE_TOTAL
+    reserved: list[ProxyMetric] = []
+    pool: list[ProxyMetric] = []
     floor = 5
-    while need > 0:
-        candidates = [key for key in order if len(grouped[key]) > floor]
-        if not candidates:
-            if floor <= 0:
-                break
-            floor -= 1
-            continue
-        key = max(candidates, key=lambda item: len(grouped[item]))
-        grouped[key].pop(0)
-        need -= 1
-    kept: list[ProxyMetric] = []
     for key in order:
-        kept.extend(grouped[key])
+        group = sorted(grouped[key], key=lambda item: item.health_score, reverse=True)
+        take = min(floor, len(group))
+        reserved.extend(group[:take])
+        pool.extend(group[take:])
+    pool.sort(key=lambda item: item.health_score, reverse=True)
+    remain = max(0, MAX_LIVE_TOTAL - len(reserved))
+    kept = reserved + pool[:remain]
+    print(
+        f"[INFO] cap live reserved={len(reserved)} pool={len(pool)} "
+        f"taken={min(remain, len(pool))}"
+    )
     return kept
 
 
