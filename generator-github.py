@@ -355,7 +355,7 @@ SUPPORTED_PROXY_TYPES = {
 
 REQUIRED_GROUPS = (
     "URL-TEST",
-    "MANUAL",
+    "MANUAL-SELECT",
     "HK-POOL",
     "JP-POOL",
     "US-POOL",
@@ -4659,7 +4659,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
     fast_names = low_latency_pool(metrics)
     strategy_names = [
         "URL-TEST",
-        "MANUAL",
+        "MANUAL-SELECT",
         "HK-POOL",
         "JP-POOL",
         "US-POOL",
@@ -4687,7 +4687,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
                 "interval": 120,
             },
             {
-                "name": "MANUAL",
+                "name": "MANUAL-SELECT",
                 "type": "select",
                 "proxies": scored_names,
             },
