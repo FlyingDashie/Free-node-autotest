@@ -98,7 +98,6 @@ PROXIES = None
 # 关闭 SSL 警告（配合 verify=False）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-VERSION = "modified"
 OUTPUT_PATH = Path("output/clash.yaml")
 RAW_PATH = Path("output/raw.yaml")
 HISTORY_DIR = Path("history")
@@ -4216,7 +4215,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
         "unified-delay": True,
         "tcp-concurrent": True,
         "global-client-fingerprint": "chrome",
-        "generated-by": f"free-node-autotest-{VERSION}-raw",
+        "generated-by": "free-node-autotest-raw",
         "generated-at": datetime.now(timezone.utc).isoformat(),
         "proxies": nodes,
         "proxy-groups": [
@@ -4588,7 +4587,8 @@ def names_for_region(metrics: list[ProxyMetric], region: str) -> list[str]:
     if names:
         return names
     if metrics:
-        return [item.proxy["name"] for item in metrics[: min(5, len(metrics))]]
+        ranked = sorted(metrics, key=lambda item: item.health_score, reverse=True)
+        return [item.proxy["name"] for item in ranked[: min(5, len(ranked))]]
     return ["DIRECT"]
 
 
@@ -4675,7 +4675,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
         "unified-delay": True,
         "tcp-concurrent": True,
         "global-client-fingerprint": "chrome",
-        "generated-by": f"free-node-autotest-{VERSION}",
+        "generated-by": "free-node-autotest",
         "generated-at": datetime.now(timezone.utc).isoformat(),
         "proxies": proxies,
         "proxy-groups": [
