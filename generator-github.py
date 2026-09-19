@@ -4357,6 +4357,52 @@ def _start_mihomo_for_batch(
         return None, message
 
 
+def _mihomo_reason(error: str) -> str:
+    blob = re.sub(r"\s+", " ", str(error or "")).strip()
+    fatals = re.findall(r'level=(?:fatal|error)\s+msg="([^"]+)"', blob, re.I)
+    if fatals:
+        reason = fatals[-1]
+    else:
+        msgs = [
+            item
+            for item in re.findall(r'msg="([^"]+)"', blob)
+            if "Start initial configuration" not in item
+        ]
+        reason = msgs[-1] if msgs else blob
+    if "invalid REALITY" in reason:
+        reason = "invalid REALITY public key"
+    elif len(reason) > 180:
+        reason = reason[:177] + "..."
+    return reason
+
+
+def _repair_proxy_from_reason(
+    proxy: dict[str, Any], reason: str
+) -> tuple[dict[str, Any] | None, list[str]]:
+    item = dict(proxy)
+    changed: list[str] = []
+    text = str(reason or "")
+    low = text.lower()
+    if "unset fields: down, up" in low or "unset fields: up, down" in low:
+        if not item.get("up"):
+            item["up"] = "50 Mbps"
+            changed.append("up")
+        if not item.get("down"):
+            item["down"] = "100 Mbps"
+            changed.append("down")
+    if "chacha20-poly1305" in low and "ietf" not in str(item.get("cipher") or "").lower():
+        cipher = str(item.get("cipher") or "")
+        if cipher.replace("_", "-").lower() == "chacha20-poly1305":
+            item["cipher"] = "chacha20-ietf-poly1305"
+            changed.append("cipher")
+    if "dialer-proxy" in low and "not found" in low and "dialer-proxy" in item:
+        item.pop("dialer-proxy", None)
+        changed.append("dialer-proxy")
+    if not changed:
+        return None, []
+    return item, changed
+
+
 def _benchmark_batch(
     engine: Path,
     temp_dir: Path,
@@ -4387,21 +4433,22 @@ def _benchmark_batch(
 
     if len(proxies) == 1:
         bad = proxies[0]
-        blob = re.sub(r"\s+", " ", str(error or "")).strip()
-        fatals = re.findall(r'level=(?:fatal|error)\s+msg="([^"]+)"', blob, re.I)
-        if fatals:
-            reason = fatals[-1]
-        else:
-            msgs = [
-                item
-                for item in re.findall(r'msg="([^"]+)"', blob)
-                if "Start initial configuration" not in item
-            ]
-            reason = msgs[-1] if msgs else blob
-        if "invalid REALITY" in reason:
-            reason = "invalid REALITY public key"
-        elif len(reason) > 180:
-            reason = reason[:177] + "..."
+        reason = _mihomo_reason(error)
+        fixed, fields = _repair_proxy_from_reason(bad, reason)
+        if fixed:
+            _bench_log(
+                f"[INFO] {{{branch}}} retry repair name={bad.get('name')} "
+                f"fields={','.join(fields)}"
+            )
+            process2, error2 = _start_mihomo_for_batch(
+                engine, work, local_config, local_url, local_port, [fixed], branch=branch
+            )
+            if process2 is not None:
+                try:
+                    return run_delay_tests(local_url, [fixed], branch=branch)
+                finally:
+                    _stop_process(process2)
+            reason = _mihomo_reason(error2) or reason
         _bench_log(
             f"[DROP] {{{branch}}} name={bad.get('name')} "
             f"server={bad.get('server')}:{bad.get('port')} reason={reason or 'mihomo start failed'}"
