@@ -4553,7 +4553,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                 should_print = completed % 100 == 0 or completed == len(futures)
             if should_print:
                 _bench_log(
-                    f"[INFO] {{{branch}}} tested {completed}/{len(futures)} "
+                    f"[TEST] {{{branch}}} tested {completed}/{len(futures)} "
                     f"kept={len(metrics)} rest={rest}"
                 )
     return metrics
