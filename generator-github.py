@@ -4437,7 +4437,7 @@ def _benchmark_batch(
         fixed, fields = _repair_proxy_from_reason(bad, reason)
         if fixed:
             _bench_log(
-                f"[INFO] {{{branch}}} retry repair name={bad.get('name')} "
+                f"[REPAIR] {{{branch}}} name={bad.get('name')} "
                 f"fields={','.join(fields)}"
             )
             process2, error2 = _start_mihomo_for_batch(
