@@ -4387,10 +4387,17 @@ def _benchmark_batch(
 
     if len(proxies) == 1:
         bad = proxies[0]
-        reason = re.sub(r"\s+", " ", str(error or "")).strip()
-        match = re.search(r'msg="([^"]+)"', reason)
-        if match:
-            reason = match.group(1)
+        blob = re.sub(r"\s+", " ", str(error or "")).strip()
+        fatals = re.findall(r'level=(?:fatal|error)\s+msg="([^"]+)"', blob, re.I)
+        if fatals:
+            reason = fatals[-1]
+        else:
+            msgs = [
+                item
+                for item in re.findall(r'msg="([^"]+)"', blob)
+                if "Start initial configuration" not in item
+            ]
+            reason = msgs[-1] if msgs else blob
         if "invalid REALITY" in reason:
             reason = "invalid REALITY public key"
         elif len(reason) > 180:
