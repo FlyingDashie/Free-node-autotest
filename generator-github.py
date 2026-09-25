@@ -1421,7 +1421,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             url = spec["url"]
             prefer = spec["prefer"]
             exclude = spec["exclude"]
-            require_sha256 = spec["require_sha256"]
+            verify_hash = spec["verify_hash"]
             first_hit = spec["first_hit"]
             bare_link = spec["bare_link"]
             merge_all = False
@@ -1490,7 +1490,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         rest,
                         _APK_FILE_ORDER[child_l],
                         prefer=prefer,
-                        require_sha256=require_sha256,
+                        verify_hash=verify_hash,
                         user_agent=spec["user_agent"],
                         referer=spec["referer"],
                     )
@@ -1505,7 +1505,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 candidates, crg_embedded, crg_archive = _discover_toolkit_crg(
                     rest,
                     prefer=prefer,
-                    require_sha256=require_sha256,
+                    verify_hash=verify_hash,
                 )
                 merge_all = not first_hit
             else:
@@ -1691,7 +1691,7 @@ def _item_spec(item: Any, source: dict[str, Any]) -> dict[str, Any]:
         "url": url,
         "prefer": ",".join(_prefer_tokens(_pick_field(item, source, "prefer", "") or "")),
         "exclude": str(_pick_field(item, source, "exclude", "") or ""),
-        "require_sha256": _flag(_pick_field(item, source, "require_sha256", None)),
+        "verify_hash": _flag(_pick_field(item, source, "verify_hash", None)),
         "bare_link": str(_pick_field(item, source, "bare_link", "") or "").strip().lower(),
         "first_hit": _flag(_pick_field(item, source, "first_hit", None)),
         "user_agent": str(_pick_field(item, source, "user_agent", "") or ""),
@@ -2060,7 +2060,7 @@ _TOOLKIT_CONFIG_EXT = {
 }
 _DISCOVER_PAGES: list[str] = []
 _SUBLINK_BARE: list[str] = []
-_SHA256_BY_URL: dict[str, str] = {}
+_HASH_BY_URL: dict[str, list[tuple[str, str]]] = {}
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
@@ -2309,7 +2309,7 @@ def _store_package_urls(kind: str, page_url: str) -> list[str]:
 def _expand_github_release_assets(
     page_url: str,
     prefer: str = "",
-    require_sha256: bool = False,
+    verify_hash: bool = False,
 ) -> list[str]:
     match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
     if not match:
@@ -2350,7 +2350,7 @@ def _expand_github_release_assets(
         except Exception:
             continue
         print(f"[INFO] toolkit try release | url={asset_page}")
-        page_digests = _parse_page_sha256(body)
+        page_digests = _parse_page_hashes(body)
         for link in _collect_archive_links(body, asset_page):
             lower = link.lower()
             if "/releases/download/" not in lower:
@@ -2358,19 +2358,19 @@ def _expand_github_release_assets(
             if not (
                 _ARCHIVE_EXT_RE.search(link)
                 or _INSTALLER_EXT_RE.search(link)
-                or re.search(r"\.(?:gz|sha256|sha256sum)(?:$|[?#])", lower)
+                or re.search(r"\.(?:gz|md5|sha1|sha256|sha256sum|sha512|sha512sum)(?:$|[?#])", lower)
             ):
                 continue
             if link in seen:
                 continue
             seen.add(link)
-            if lower.endswith(".sha256") or lower.endswith(".sha256sum") or lower.endswith("checksums.txt"):
+            if re.search(r"\.(?:md5|sha1|sha256|sha256sum|sha512|sha512sum)$", lower) or lower.endswith("checksums.txt"):
                 checksum_links.append(link)
                 continue
             name = unquote(link.rstrip("/").rsplit("/", 1)[-1]).lower()
-            digest = page_digests.get(name, "")
+            digest = page_digests.get(name) or []
             if digest:
-                _SHA256_BY_URL[link] = digest
+                _HASH_BY_URL[link] = list(digest)
             loc = body.lower().find(lower[:120])
             dist = _prefer_distance(body, token, loc)
             ranked.append((_score_sub_link(link, prefer=token, distance=dist), link))
@@ -2378,15 +2378,15 @@ def _expand_github_release_assets(
             break
     ranked.sort(key=lambda item: item[0], reverse=True)
     urls = unique_ordered([url for _, url in ranked])
-    if not require_sha256:
+    if not verify_hash:
         return urls
     kept: list[str] = []
     for url in urls:
-        if _lookup_sha256(url, checksum_links):
+        if _lookup_hashes(url, checksum_links):
             kept.append(url)
         else:
             name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
-            print(f"[WARN] toolkit skip | reason=no sha256 | file={name}")
+            print(f"[WARN] toolkit skip | reason=no hash | file={name}")
     return kept
 
 
@@ -2394,23 +2394,23 @@ def _toolkit_fetch_package(
     page_url: str,
     dest_dir: Path,
     prefer: Any = "",
-    require_sha256: bool = False,
+    verify_hash: bool = False,
 ) -> Path | None:
     assets = _collect_toolkit_candidates(
         page_url,
         prefer=prefer,
-        require_sha256=require_sha256,
+        verify_hash=verify_hash,
     )
     for url in assets:
-        expected = _lookup_sha256(url) if require_sha256 else ""
-        if require_sha256 and not expected:
+        expected = _lookup_hashes(url) if verify_hash else []
+        if verify_hash and not expected:
             name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
-            print(f"[WARN] toolkit skip | reason=no sha256 | file={name}")
+            print(f"[WARN] toolkit skip | reason=no hash | file={name}")
             continue
         archive = _download_archive(
             url,
             dest_dir,
-            expected_sha256=expected,
+            expected_hashes=expected,
             save_as=_store_extension_filename(page_url),
         )
         if archive is not None:
@@ -2453,18 +2453,17 @@ def _toolkit_download_name(url: str, headers: Any = None, head: bytes = b"") -> 
 def _download_archive(
     url: str,
     dest_dir: Path,
-    expected_sha256: str = "",
+    expected_hashes: list[tuple[str, str]] | None = None,
     save_as: str = "",
 ) -> Path | None:
     from urllib.parse import urlparse, unquote
     local = _find_local_package(url)
     if local is not None:
         print(f"[OK] toolkit using local | file={local} | bytes={local.stat().st_size}")
-        if expected_sha256:
+        if expected_hashes:
             try:
-                verify_file_sha256(local, expected_sha256, label=local.name)
-            except Exception as exc:
-                print(f"[WARN] toolkit sha256 mismatch | reason={format_reason(exc, 'mismatch')} | file={local.name}")
+                verify_file_hashes(local, expected_hashes, label=local.name)
+            except Exception:
                 return None
         return local
     name = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
@@ -2524,11 +2523,10 @@ def _download_archive(
         if not downloaded:
             raise last_error or RuntimeError("download failed")
         print(f"[OK] toolkit downloaded | file={dest.name} | bytes={written}")
-        if expected_sha256:
+        if expected_hashes:
             try:
-                verify_file_sha256(dest, expected_sha256, label=dest.name)
-            except Exception as exc:
-                print(f"[WARN] toolkit sha256 mismatch | reason={format_reason(exc, 'mismatch')} | file={dest.name}")
+                verify_file_hashes(dest, expected_hashes, label=dest.name)
+            except Exception:
                 dest.unlink(missing_ok=True)
                 return None
         return dest
@@ -2790,7 +2788,7 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
         return False
     files, dirs = _dir_entry_counts(dest_dir)
     print(
-        f"[OK] toolkit extracted archive={label} | tool={tool} "
+        f"[OK] toolkit extracted | archive={label} | tool={tool} "
         f"| files={files} | dirs={dirs}"
     )
     if apk_mode:
@@ -2803,11 +2801,11 @@ def _toolkit_iter_packages(
     prefer: str = "",
     work: Path | None = None,
     limit: int | None = None,
-    require_sha256: bool = False,
+    verify_hash: bool = False,
 ):
     page_url = str(page_url or "").strip()
     archives = unique_ordered(
-        _collect_toolkit_candidates(page_url, prefer=prefer, require_sha256=require_sha256)
+        _collect_toolkit_candidates(page_url, prefer=prefer, verify_hash=verify_hash)
     )
     if limit is not None:
         archives = archives[:limit]
@@ -2817,15 +2815,15 @@ def _toolkit_iter_packages(
     root = work or Path(tempfile.mkdtemp(prefix="toolkit-"))
     try:
         for index, archive_url in enumerate(archives):
-            expected = _lookup_sha256(archive_url) if require_sha256 else ""
-            if require_sha256 and not expected:
+            expected = _lookup_hashes(archive_url) if verify_hash else []
+            if verify_hash and not expected:
                 name = unquote(archive_url.rstrip("/").rsplit("/", 1)[-1])
-                print(f"[WARN] toolkit skip | reason=no sha256 | file={name}")
+                print(f"[WARN] toolkit skip | reason=no hash | file={name}")
                 continue
             archive = _download_archive(
                 archive_url,
                 root,
-                expected_sha256=expected,
+                expected_hashes=expected,
                 save_as=_store_extension_filename(page_url),
             )
             if not archive:
@@ -2905,7 +2903,7 @@ def _toolkit_collect_payload(root: Path, archive_name: str = "") -> tuple[list[s
     tag = f" archive={archive_name}" if archive_name else ""
     if urls or embedded:
         print(
-            f"[OK] toolkit discovered subs={len(urls)} "
+            f"[OK] toolkit discovered | subs={len(urls)} "
             f"| embedded={len(embedded)}{(' |' + tag) if tag else ''}"
         )
     return urls, embedded
@@ -3041,7 +3039,7 @@ def _print_ingest_groups(hits: list[tuple[str, list[str], int]]) -> None:
 def _collect_toolkit_candidates(
     page_url: str,
     prefer: str = "",
-    require_sha256: bool = False,
+    verify_hash: bool = False,
 ) -> list[str]:
     kind = _toolkit_kind(page_url)
     if kind == "probe":
@@ -3061,7 +3059,7 @@ def _collect_toolkit_candidates(
         found = _expand_github_release_assets(
             page_url,
             prefer=prefer,
-            require_sha256=require_sha256,
+            verify_hash=verify_hash,
         )
         if found:
             return found
@@ -3148,9 +3146,9 @@ def _discover_toolkit_1vpn_crx(page_url: str) -> tuple[list[dict[str, Any]], str
         for archive, unpack, archive_url in _toolkit_iter_packages(page_url, work=work):
             nodes = _parse_1vpn_crx_bundle(unpack)
             print(
-                f"[OK] toolkit 1vpn-crx scanned hosts={len(nodes)} "
-                f"keys={1 if nodes and nodes[0].get('username') else 0} "
-                f"archive={archive.name}"
+                f"[OK] toolkit 1vpn-crx scanned | hosts={len(nodes)} "
+                f"| keys={1 if nodes and nodes[0].get('username') else 0} "
+                f"| archive={archive.name}"
             )
             if nodes:
                 return nodes, archive_url
@@ -3164,7 +3162,7 @@ def _discover_toolkit_1vpn_crx(page_url: str) -> tuple[list[dict[str, Any]], str
 def _discover_toolkit_crg(
     page_url: str,
     prefer: str = "",
-    require_sha256: bool = False,
+    verify_hash: bool = False,
 ) -> tuple[list[str], list[dict[str, Any]], str]:
     page_url = page_url.strip()
     work = Path(tempfile.mkdtemp(prefix="toolkit-"))
@@ -3173,7 +3171,7 @@ def _discover_toolkit_crg(
             page_url,
             prefer,
             work,
-            require_sha256=require_sha256,
+            verify_hash=verify_hash,
         ):
             urls, embedded = _toolkit_collect_payload(unpack, archive.name)
             if embedded or urls:
@@ -3568,7 +3566,7 @@ def _discover_toolkit_encrypted_apk(
     page_url: str,
     name_order: list[str],
     prefer: str = "",
-    require_sha256: bool = False,
+    verify_hash: bool = False,
     user_agent: str = "",
     referer: str = "",
 ) -> tuple[list[dict[str, Any]], str]:
@@ -3588,13 +3586,13 @@ def _discover_toolkit_encrypted_apk(
             prefer=prefer,
             work=work,
             limit=1,
-            require_sha256=require_sha256,
+            verify_hash=verify_hash,
         ):
             opened = True
             prefixes, names, scanned, tokens = _apk_scan(unpack)
             hard_keys = _apk_keys_for(source, scanned)
             print(
-                f"[OK] toolkit {kind} scanned prefixes={len(prefixes)} "
+                f"[OK] toolkit {kind} scanned | prefixes={len(prefixes)} "
                 f"| files={len(names)} | keys={len(hard_keys)} | archive={archive.name}"
             )
             if not prefixes:
@@ -3980,15 +3978,15 @@ def find_or_install_mihomo() -> Path:
     # 优先使用已有的 Clash Verge 内核
     existing = Path(r"C:\Program Files\Clash Verge\verge-mihomo-alpha.exe")
     if existing.exists():
-        print(f"[OK] proxy engine ready | starting latency test | package={existing.name}")
+        print(f"[OK] proxy engine ready, starting latency test | package={existing.name}")
         return existing
 
     for name in ("mihomo", "clash-meta", "clash"):
         found = shutil.which(name)
         if found:
             print(
-                f"[OK] proxy engine ready | starting latency test "
-                f"package={Path(found).name}-PATH"
+                f"[OK] proxy engine ready, starting latency test "
+                f"| package={Path(found).name}-PATH"
             )
             return Path(found)
 
@@ -4004,7 +4002,7 @@ def find_or_install_mihomo() -> Path:
             and "mihomo" in item.name.lower()
         )
         extra = packaged[-1] if packaged else "cached"
-        print(f"[OK] proxy engine ready | starting latency test | package={extra}")
+        print(f"[OK] proxy engine ready, starting latency test | package={extra}")
         return binary
 
     system = platform.system().lower()
@@ -4031,7 +4029,7 @@ def find_or_install_mihomo() -> Path:
         "https://github.com/MetaCubeX/mihomo",
         install_dir,
         prefer=[os_token, *arch_tokens, "mihomo", r"v\d+\.", "gz", "zip", "7z"],
-        require_sha256=True,
+        verify_hash=True,
     )
     if archive is None:
         raise RuntimeError("no matching Mihomo release asset found")
@@ -4040,7 +4038,7 @@ def find_or_install_mihomo() -> Path:
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    print(f"[OK] proxy engine ready | starting latency test | package={archive.name}")
+    print(f"[OK] proxy engine ready, starting latency test | package={archive.name}")
     return binary
 
 
@@ -4056,53 +4054,120 @@ def _fetch_checksum_text(url: str) -> str:
     return response.text
 
 
-def _checksum_from_text(text: str, filename: str) -> str:
+_HASH_LEN = {32: "md5", 40: "sha1", 64: "sha256", 96: "sha384", 128: "sha512"}
+
+
+def _hash_algo(digest: str) -> str:
+    item = str(digest or "").strip().lower()
+    return _HASH_LEN.get(len(item), "")
+
+
+def _hash_pair(digest: str) -> tuple[str, str] | None:
+    item = str(digest or "").strip().lower()
+    algo = _hash_algo(item)
+    if not algo or not re.fullmatch(r"[0-9a-f]+", item):
+        return None
+    return algo, item
+
+
+def _merge_hash_pairs(rows: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    seen: set[tuple[str, str]] = set()
+    out: list[tuple[str, str]] = []
+    for algo, digest in rows:
+        key = (algo, digest)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def _checksums_from_text(text: str, filename: str) -> list[tuple[str, str]]:
     needle = filename.lower()
-    for line in text.splitlines():
+    found: list[tuple[str, str]] = []
+    labeled = re.findall(
+        r"(md5|sha-?1|sha-?256|sha-?384|sha-?512)\s*[:=]\s*([0-9a-f]{32,128})",
+        text or "",
+        re.I,
+    )
+    for raw_algo, digest in labeled:
+        pair = _hash_pair(digest)
+        if pair:
+            found.append(pair)
+    for line in (text or "").splitlines():
         parts = line.strip().split()
-        if len(parts) >= 2 and parts[-1].lstrip("*").lower().endswith(needle):
-            candidate = parts[0].strip().lower()
-            if re.fullmatch(r"[0-9a-f]{64}", candidate):
-                return candidate
-        if len(parts) >= 1 and re.fullmatch(r"[0-9a-f]{64}", parts[0].strip().lower()):
-            if needle in line.lower():
-                return parts[0].strip().lower()
-    text = text.strip().lower()
-    if re.fullmatch(r"[0-9a-f]{64}", text):
-        return text
-    return ""
+        if len(parts) >= 2:
+            left = _hash_pair(parts[0])
+            right = _hash_pair(parts[-1])
+            name_hit = needle in line.lower() or parts[-1].lstrip("*").lower().endswith(needle)
+            if left and name_hit:
+                found.append(left)
+            elif right and name_hit:
+                found.append(right)
+        elif len(parts) == 1:
+            pair = _hash_pair(parts[0])
+            if pair and (not needle or needle in line.lower()):
+                found.append(pair)
+    compact = (text or "").strip()
+    pair = _hash_pair(compact)
+    if pair:
+        found.append(pair)
+    return _merge_hash_pairs(found)
 
 
-def _parse_page_sha256(page_html: str) -> dict[str, str]:
-    found: dict[str, str] = {}
+def _parse_page_hashes(page_html: str) -> dict[str, list[tuple[str, str]]]:
+    found: dict[str, list[tuple[str, str]]] = {}
+
+    def _add(name: str, digest: str) -> None:
+        pair = _hash_pair(digest)
+        key = html.unescape(unquote(name)).strip().lower()
+        if not pair or not key:
+            return
+        found.setdefault(key, [])
+        if pair not in found[key]:
+            found[key].append(pair)
+
+    blob = page_html or ""
     for name, digest in re.findall(
-        r'text-bold">([^<]+)</span>[\s\S]{0,2500}?sha256:([0-9a-f]{64})',
-        page_html or "",
+        r'text-bold">([^<]+)</span>[\s\S]{0,2500}?(?:md5|sha-?1|sha-?256|sha-?384|sha-?512)\s*:?\s*([0-9a-f]{32,128})',
+        blob,
         re.I,
     ):
-        found[html.unescape(name).strip().lower()] = digest.lower()
+        _add(name, digest)
     for name, digest in re.findall(
-        r'releases/download/[^"\']+/([^"\'>?]+)["\'][\s\S]{0,2500}?sha256:([0-9a-f]{64})',
-        page_html or "",
+        r'releases/download/[^"\']+/([^"\'>?]+)["\'][\s\S]{0,2500}?(?:md5|sha-?1|sha-?256|sha-?384|sha-?512)\s*:?\s*([0-9a-f]{32,128})',
+        blob,
         re.I,
     ):
-        found[unquote(name).strip().lower()] = digest.lower()
+        _add(name, digest)
     return found
 
 
-def _lookup_sha256(url: str, extra_checksum_urls: list[str] | None = None) -> str:
-    cached = _SHA256_BY_URL.get(url) or _SHA256_BY_URL.get(url.split("?", 1)[0])
-    if cached:
-        return cached
+def _lookup_hashes(url: str, extra_checksum_urls: list[str] | None = None) -> list[tuple[str, str]]:
+    cached = _HASH_BY_URL.get(url) or _HASH_BY_URL.get(url.split("?", 1)[0])
+    collected: list[tuple[str, str]] = list(cached or [])
     name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
     if not name:
-        return ""
+        return _merge_hash_pairs(collected)
     folder = url.rsplit("/", 1)[0]
-    candidates = [url + suffix for suffix in (".sha256", ".sha256sum")]
+    candidates = [
+        url + suffix
+        for suffix in (".md5", ".sha1", ".sha256", ".sha256sum", ".sha512", ".sha512sum")
+    ]
     candidates.extend(extra_checksum_urls or [])
     candidates.extend(
         f"{folder}/{item}"
-        for item in ("checksums.txt", "sha256sums.txt", "checksums", "sha256sums")
+        for item in (
+            "checksums.txt",
+            "checksums",
+            "MD5SUMS",
+            "SHA1SUMS",
+            "SHA256SUMS",
+            "SHA512SUMS",
+            "sha256sums.txt",
+            "sha256sums",
+            "md5sums.txt",
+        )
     )
     seen: set[str] = set()
     for checksum_url in candidates:
@@ -4110,25 +4175,48 @@ def _lookup_sha256(url: str, extra_checksum_urls: list[str] | None = None) -> st
             continue
         seen.add(checksum_url)
         try:
-            expected = _checksum_from_text(_fetch_checksum_text(checksum_url), name)
+            rows = _checksums_from_text(_fetch_checksum_text(checksum_url), name)
         except Exception:
-            expected = ""
-        if expected:
-            _SHA256_BY_URL[url] = expected
-            return expected
-    return ""
+            rows = []
+        collected.extend(rows)
+    merged = _merge_hash_pairs(collected)
+    if merged:
+        _HASH_BY_URL[url] = merged
+    return merged
 
 
-def verify_file_sha256(path: Path, expected: str, label: str = "") -> None:
-    expected = expected.strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{64}", expected):
-        raise RuntimeError(f"invalid sha256 value: {expected}")
-    actual = hashlib.sha256(path.read_bytes()).hexdigest().lower()
-    if actual != expected:
-        path.unlink(missing_ok=True)
-        raise RuntimeError(f"sha256 mismatch expected={expected} actual={actual}")
+def verify_file_hashes(
+    path: Path,
+    expected: list[tuple[str, str]] | None,
+    label: str = "",
+) -> None:
+    rows = _merge_hash_pairs(list(expected or []))
+    if not rows:
+        raise RuntimeError("no hash")
+    data = path.read_bytes()
     mark = label or path.name
-    print(f"[OK] toolkit sha256 verified | file={mark} | sha256={actual}")
+    last = "hash failed"
+    for algo, want in rows:
+        try:
+            actual = hashlib.new(algo, data).hexdigest().lower()
+        except Exception as exc:
+            last = str(exc)
+            print(
+                f"[WARN] toolkit hash mismatch | file={mark} | type={algo} "
+                f"| provided={want} | local= | reason={format_reason(exc)}"
+            )
+            continue
+        if actual == want:
+            print(f"[OK] toolkit hash verified | file={mark} | {algo}={actual}")
+            return
+        last = f"{algo} mismatch"
+        print(
+            f"[WARN] toolkit hash mismatch | file={mark} | type={algo} "
+            f"| provided={want} | local={actual}"
+        )
+    path.unlink(missing_ok=True)
+    print(f"[WARN] toolkit hash failed | file={mark}")
+    raise RuntimeError(last)
 
 
 def download_file(url: str, directory: Path) -> Path:
