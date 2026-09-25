@@ -4057,24 +4057,24 @@ def _fetch_checksum_text(url: str) -> str:
 _HASH_LEN = {32: "md5", 40: "sha1", 64: "sha256", 96: "sha384", 128: "sha512"}
 
 
-def _hash_algo(digest: str) -> str:
+def _hash_type(digest: str) -> str:
     item = str(digest or "").strip().lower()
     return _HASH_LEN.get(len(item), "")
 
 
 def _hash_pair(digest: str) -> tuple[str, str] | None:
     item = str(digest or "").strip().lower()
-    algo = _hash_algo(item)
-    if not algo or not re.fullmatch(r"[0-9a-f]+", item):
+    htype = _hash_type(item)
+    if not htype or not re.fullmatch(r"[0-9a-f]+", item):
         return None
-    return algo, item
+    return htype, item
 
 
 def _merge_hash_pairs(rows: list[tuple[str, str]]) -> list[tuple[str, str]]:
     seen: set[tuple[str, str]] = set()
     out: list[tuple[str, str]] = []
-    for algo, digest in rows:
-        key = (algo, digest)
+    for htype, digest in rows:
+        key = (htype, digest)
         if key in seen:
             continue
         seen.add(key)
@@ -4090,7 +4090,7 @@ def _checksums_from_text(text: str, filename: str) -> list[tuple[str, str]]:
         text or "",
         re.I,
     )
-    for raw_algo, digest in labeled:
+    for raw_type, digest in labeled:
         pair = _hash_pair(digest)
         if pair:
             found.append(pair)
@@ -4196,22 +4196,22 @@ def verify_file_hashes(
     data = path.read_bytes()
     mark = label or path.name
     last = "hash failed"
-    for algo, want in rows:
+    for htype, want in rows:
         try:
-            actual = hashlib.new(algo, data).hexdigest().lower()
+            actual = hashlib.new(htype, data).hexdigest().lower()
         except Exception as exc:
             last = str(exc)
             print(
-                f"[WARN] toolkit hash mismatch | file={mark} | type={algo} "
+                f"[WARN] toolkit hash mismatch | file={mark} | type={htype} "
                 f"| provided={want} | local= | reason={format_reason(exc)}"
             )
             continue
         if actual == want:
-            print(f"[OK] toolkit hash verified | file={mark} | {algo}={actual}")
+            print(f"[OK] toolkit hash verified | file={mark} | {htype}={actual}")
             return
-        last = f"{algo} mismatch"
+        last = f"{htype} mismatch"
         print(
-            f"[WARN] toolkit hash mismatch | file={mark} | type={algo} "
+            f"[WARN] toolkit hash mismatch | file={mark} | type={htype} "
             f"| provided={want} | local={actual}"
         )
     path.unlink(missing_ok=True)
