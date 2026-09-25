@@ -1512,7 +1512,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 if _source_addr_key(url) in tried_addrs:
                     continue
                 candidates = [url]
-                print(f"[INFO] source try url | url={url}")
+                print(f"[INFO] source try link | url={url}")
             if crg_embedded:
                 prefix = source_tag(source)
                 marks, kept_embed = _dedupe_proxies(
