@@ -78,9 +78,9 @@ if _have_rar_tool():
     _missing_optional = [name for name in _missing_optional if name != "rarfile"]
 if _missing_required or _missing_optional:
     if _missing_required:
-        print("[WARN] required packages missing: " + ", ".join(_missing_required))
+        print("[WARN] required packages missing | names=" + ", ".join(_missing_required))
     if _missing_optional:
-        print("[WARN] optional packages missing: " + ", ".join(_missing_optional))
+        print("[WARN] optional packages missing | names=" + ", ".join(_missing_optional))
     print(
         "[WARN] install with: pip install "
         + " ".join(_missing_required + _missing_optional)
@@ -1471,7 +1471,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 child, sep, rest = toolkit_spec.partition(":")
                 child_l = child.lower()
                 if child_l not in {"ss-apk", "sr-apk", "crg", "1vpn-crx"} or not rest:
-                    print(f"[WARN] toolkit need ss-apk|sr-apk|crg|1vpn-crx: {url}")
+                    print(f"[WARN] toolkit need kind | reason=ss-apk|sr-apk|crg|1vpn-crx | url={url}")
                     continue
                 if child_l == "1vpn-crx":
                     vpn_found, vpn_url = _discover_toolkit_1vpn_crx(rest)
@@ -1512,7 +1512,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 if _source_addr_key(url) in tried_addrs:
                     continue
                 candidates = [url]
-                print(f"[INFO] source try url: {url}")
+                print(f"[INFO] source try url | url={url}")
             if crg_embedded:
                 prefix = source_tag(source)
                 marks, kept_embed = _dedupe_proxies(
@@ -1534,7 +1534,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 found = extract_proxies(text)
                 if not found:
                     if not merge_all:
-                        print(f"[WARN] source try failed: reason=empty | url={url}")
+                        print(f"[WARN] source try failed | reason=empty | url={url}")
                     return False
                 prefix = source_tag(source)
                 marks, kept = _dedupe_proxies(found, source_seen, prefix=prefix)
@@ -1605,7 +1605,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     try:
                         text = fetch_text(url, user_agent=ua, referer=ref)
                     except Exception as exc:
-                        print(f"[WARN] source try failed: reason={format_reason(exc)} | url={url}")
+                        print(f"[WARN] source try failed | reason={format_reason(exc)} | url={url}")
                         continue
                     if _ingest(url, text):
                         break
@@ -1648,7 +1648,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     write_raw_backup(collected)
     sanitized = sanitize_and_deduplicate(collected)
     if MAX_CANDIDATES > 0 and len(sanitized) > MAX_CANDIDATES:
-        print(f"[WARN] limiting candidates from {len(sanitized)} to {MAX_CANDIDATES}")
+        print(f"[WARN] limiting candidates | from={len(sanitized)} | to={MAX_CANDIDATES}")
         sanitized = sanitized[:MAX_CANDIDATES]
     collected_counts: dict[str, int] = {}
     for proxy in collected:
@@ -1956,13 +1956,13 @@ def discover_sublink(
     given = _blob_to_raw(page_url.strip())
     page_url = _resolve_github_readme(given)
     if _github_repo_home(given):
-        print(f"[INFO] sublink try repo: {given}")
+        print(f"[INFO] sublink try repo | url={given}")
     _DISCOVER_PAGES = [page_url]
-    print(f"[INFO] sublink try page: {page_url}")
+    print(f"[INFO] sublink try page | url={page_url}")
     try:
         body = fetch_text(page_url)
     except Exception as exc:
-        print(f"[WARN] sublink discovery failed: reason={format_reason(exc)} | url={page_url}")
+        print(f"[WARN] sublink discovery failed | reason={format_reason(exc)} | url={page_url}")
         return []
     file_links, bare_links, ranked = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
     mode = str(bare_link or "").strip().lower()
@@ -1970,25 +1970,25 @@ def discover_sublink(
         found = unique_ordered(file_links + bare_links)
         if found:
             return found
-        print(f"[WARN] sublink discovery failed: reason=no links | url={page_url}")
+        print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
         return []
     if mode == "none":
         if file_links:
             return file_links
-        print(f"[WARN] sublink discovery failed: reason=no links | url={page_url}")
+        print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
         return []
     if _prefer_tokens(prefer):
         found = unique_ordered(file_links + bare_links[:3])
         if found:
             return found
-        print(f"[WARN] sublink discovery failed: reason=no links | url={page_url}")
+        print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
         return []
     if file_links:
         _SUBLINK_BARE.extend(bare_links)
         return file_links
     if bare_links:
         return bare_links
-    print(f"[WARN] sublink discovery failed: reason=no links | url={page_url}")
+    print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
     return []
 
 
@@ -2320,7 +2320,7 @@ def _expand_github_release_assets(
     listing = ""
     try:
         listing = fetch_text(list_url)
-        print(f"[INFO] toolkit try release: {list_url}")
+        print(f"[INFO] toolkit try release | url={list_url}")
     except Exception:
         listing = ""
     tags: list[tuple[int, str]] = []
@@ -2349,7 +2349,7 @@ def _expand_github_release_assets(
             body = fetch_text(asset_page)
         except Exception:
             continue
-        print(f"[INFO] toolkit try release: {asset_page}")
+        print(f"[INFO] toolkit try release | url={asset_page}")
         page_digests = _parse_page_sha256(body)
         for link in _collect_archive_links(body, asset_page):
             lower = link.lower()
@@ -2386,7 +2386,7 @@ def _expand_github_release_assets(
             kept.append(url)
         else:
             name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
-            print(f"[WARN] toolkit skip no sha256: {name}")
+            print(f"[WARN] toolkit skip | reason=no sha256 | file={name}")
     return kept
 
 
@@ -2405,7 +2405,7 @@ def _toolkit_fetch_package(
         expected = _lookup_sha256(url) if require_sha256 else ""
         if require_sha256 and not expected:
             name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
-            print(f"[WARN] toolkit skip no sha256: {name}")
+            print(f"[WARN] toolkit skip | reason=no sha256 | file={name}")
             continue
         archive = _download_archive(
             url,
@@ -2459,17 +2459,17 @@ def _download_archive(
     from urllib.parse import urlparse, unquote
     local = _find_local_package(url)
     if local is not None:
-        print(f"[OK] toolkit using local: file={local} | bytes={local.stat().st_size}")
+        print(f"[OK] toolkit using local | file={local} | bytes={local.stat().st_size}")
         if expected_sha256:
             try:
                 verify_file_sha256(local, expected_sha256, label=local.name)
             except Exception as exc:
-                print(f"[WARN] toolkit sha256 mismatch: reason={format_reason(exc, 'mismatch')} | file={local.name}")
+                print(f"[WARN] toolkit sha256 mismatch | reason={format_reason(exc, 'mismatch')} | file={local.name}")
                 return None
         return local
     name = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
     dest = dest_dir / name
-    print(f"[INFO] toolkit try download: {url}")
+    print(f"[INFO] toolkit try download | url={url}")
     try:
         session = requests.Session()
         session.trust_env = False
@@ -2517,23 +2517,23 @@ def _download_archive(
                 except Exception as exc:
                     last_error = exc
                     dest.unlink(missing_ok=True)
-                    print(f"[WARN] toolkit download retry: reason={format_reason(exc)} | attempt={attempt}/3")
+                    print(f"[WARN] toolkit download retry | reason={format_reason(exc)} | attempt={attempt}/3")
                     time.sleep(attempt)
             if downloaded:
                 break
         if not downloaded:
             raise last_error or RuntimeError("download failed")
-        print(f"[OK] toolkit downloaded: file={dest.name} | bytes={written}")
+        print(f"[OK] toolkit downloaded | file={dest.name} | bytes={written}")
         if expected_sha256:
             try:
                 verify_file_sha256(dest, expected_sha256, label=dest.name)
             except Exception as exc:
-                print(f"[WARN] toolkit sha256 mismatch: reason={format_reason(exc, 'mismatch')} | file={dest.name}")
+                print(f"[WARN] toolkit sha256 mismatch | reason={format_reason(exc, 'mismatch')} | file={dest.name}")
                 dest.unlink(missing_ok=True)
                 return None
         return dest
     except Exception as exc:
-        print(f"[WARN] toolkit try failed: reason={format_reason(exc)} | url={url}")
+        print(f"[WARN] toolkit try failed | reason={format_reason(exc)} | url={url}")
         dest.unlink(missing_ok=True)
         return None
 
@@ -2738,7 +2738,7 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                 try:
                     import py7zr
                 except ImportError as exc:
-                    print(f"[WARN] toolkit py7zr missing: {exc}")
+                    print(f"[WARN] toolkit py7zr missing | reason={format_reason(exc)}")
                     return False
                 with py7zr.SevenZipFile(archive, "r") as zf:
                     zf.extractall(path=dest_dir)
@@ -2767,7 +2767,7 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                 try:
                     import rarfile
                 except ImportError as exc:
-                    print(f"[WARN] toolkit rarfile missing: {exc}")
+                    print(f"[WARN] toolkit rarfile missing | reason={format_reason(exc)}")
                     return False
                 with rarfile.RarFile(archive) as rf:
                     rf.extractall(dest_dir)
@@ -2783,10 +2783,10 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                 if result.returncode == 0:
                     tool = Path(seven).name
             if not tool:
-                print(f"[WARN] toolkit unsupported archive: {archive.name}")
+                print(f"[WARN] toolkit unsupported archive | file={archive.name}")
                 return False
     except Exception as exc:
-        print(f"[WARN] toolkit extract failed: reason={format_reason(exc)} | archive={label}")
+        print(f"[WARN] toolkit extract failed | reason={format_reason(exc)} | archive={label}")
         return False
     files, dirs = _dir_entry_counts(dest_dir)
     print(
@@ -2820,7 +2820,7 @@ def _toolkit_iter_packages(
             expected = _lookup_sha256(archive_url) if require_sha256 else ""
             if require_sha256 and not expected:
                 name = unquote(archive_url.rstrip("/").rsplit("/", 1)[-1])
-                print(f"[WARN] toolkit skip no sha256: {name}")
+                print(f"[WARN] toolkit skip | reason=no sha256 | file={name}")
                 continue
             archive = _download_archive(
                 archive_url,
@@ -2836,7 +2836,7 @@ def _toolkit_iter_packages(
                 continue
             nested = _extract_nested_packages(unpack)
             if nested:
-                print(f"[OK] toolkit nested unpacked={len(nested)}")
+                print(f"[OK] toolkit nested unpacked | count={len(nested)}")
             yield archive, unpack, archive_url
     finally:
         if own_work:
@@ -3047,9 +3047,9 @@ def _collect_toolkit_candidates(
     if kind == "probe":
         kind = _probe_payload(page_url)
     if _github_repo_home(page_url):
-        print(f"[INFO] toolkit try repo: {page_url}")
+        print(f"[INFO] toolkit try repo | url={page_url}")
     elif kind != "release":
-        print(f"[INFO] toolkit try {kind}: {page_url}")
+        print(f"[INFO] toolkit try {kind} | url={page_url}")
     if kind == "local":
         found = _find_local_package(page_url)
         return [str(found)] if found else []
@@ -3069,7 +3069,7 @@ def _collect_toolkit_candidates(
         if match:
             home = f"https://github.com/{match.group(1)}/{match.group(2)}"
             readme = _resolve_github_readme(home)
-            print(f"[INFO] toolkit try page: {readme}")
+            print(f"[INFO] toolkit try page | url={readme}")
             body = ""
             try:
                 body = fetch_text(readme)
@@ -3154,8 +3154,8 @@ def _discover_toolkit_1vpn_crx(page_url: str) -> tuple[list[dict[str, Any]], str
             )
             if nodes:
                 return nodes, archive_url
-            print(f"[WARN] toolkit 1vpn-crx discovery failed: reason=empty bundle | archive={archive.name}")
-        print(f"[WARN] toolkit 1vpn-crx discovery failed: reason=empty bundle | url={page_url}")
+            print(f"[WARN] toolkit 1vpn-crx discovery failed | reason=empty bundle | archive={archive.name}")
+        print(f"[WARN] toolkit 1vpn-crx discovery failed | reason=empty bundle | url={page_url}")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -3178,8 +3178,8 @@ def _discover_toolkit_crg(
             urls, embedded = _toolkit_collect_payload(unpack, archive.name)
             if embedded or urls:
                 return urls, embedded, archive_url
-            print(f"[WARN] toolkit crg discovery failed: reason=empty bundle | archive={archive.name}")
-        print(f"[WARN] toolkit crg discovery failed: reason=empty bundle | url={page_url}")
+            print(f"[WARN] toolkit crg discovery failed | reason=empty bundle | archive={archive.name}")
+        print(f"[WARN] toolkit crg discovery failed | reason=empty bundle | url={page_url}")
         return [], [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -3574,7 +3574,7 @@ def _discover_toolkit_encrypted_apk(
 ) -> tuple[list[dict[str, Any]], str]:
     page_url = page_url.strip()
     if not page_url:
-        print(f"[WARN] toolkit {kind} missing url")
+        print(f"[WARN] toolkit {kind} missing | reason=no url")
         return [], ""
     prefer = prefer or "apk"
     ua = user_agent or "v2rayNG"
@@ -3690,9 +3690,9 @@ def _discover_toolkit_encrypted_apk(
         if last_err:
             extra += f" last={last_err[:80]}"
         if not opened:
-            print(f"[WARN] toolkit {kind} discovery failed: reason=no archive | url={page_url}")
+            print(f"[WARN] toolkit {kind} discovery failed | reason=no archive | url={page_url}")
         else:
-            print(f"[WARN] toolkit {kind} discovery failed: reason={format_reason(None, last_err or 'failed')} | url={page_url}")
+            print(f"[WARN] toolkit {kind} discovery failed | reason={format_reason(None, last_err or 'failed')} | url={page_url}")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -3761,7 +3761,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
         import feedparser as _feedparser
         feedparser = _feedparser
     except ImportError as exc:
-        print(f"[WARN] article feedparser missing: {exc}")
+        print(f"[WARN] article feedparser missing | reason={format_reason(exc)}")
 
     feed_cands = _article_feed_candidates(feed_url)
 
@@ -3790,7 +3790,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
                 _add_page(entry_stamp(entry), str(getattr(entry, "link", "") or ""))
             if groups:
                 used_feed = cand
-                print(f"[INFO] article try feed: {used_feed}")
+                print(f"[INFO] article try feed | url={used_feed}")
                 break
 
     if not groups:
@@ -3802,11 +3802,11 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
             for page in _collect_article_links(body, feed_url):
                 _add_page(_page_stamp(page), page)
             if groups:
-                print(f"[INFO] article try page: {feed_url}")
+                print(f"[INFO] article try page | url={feed_url}")
 
     stamps = sorted(groups, reverse=True)
     if not stamps:
-        print(f"[WARN] article discovery failed: reason=no article links | url={feed_url}")
+        print(f"[WARN] article discovery failed | reason=no article links | url={feed_url}")
         return []
 
     for stamp in stamps:
@@ -3827,7 +3827,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
             if ok:
                 _DISCOVER_PAGES = [page]
                 return found
-    print(f"[WARN] article discovery failed: reason=no article links | url={feed_url}")
+    print(f"[WARN] article discovery failed | reason=no article links | url={feed_url}")
     return []
 
 
@@ -3980,14 +3980,14 @@ def find_or_install_mihomo() -> Path:
     # 优先使用已有的 Clash Verge 内核
     existing = Path(r"C:\Program Files\Clash Verge\verge-mihomo-alpha.exe")
     if existing.exists():
-        print(f"[OK] proxy engine ready: starting latency test | package={existing.name}")
+        print(f"[OK] proxy engine ready | starting latency test | package={existing.name}")
         return existing
 
     for name in ("mihomo", "clash-meta", "clash"):
         found = shutil.which(name)
         if found:
             print(
-                f"[OK] proxy engine ready: starting latency test "
+                f"[OK] proxy engine ready | starting latency test "
                 f"package={Path(found).name}-PATH"
             )
             return Path(found)
@@ -4004,7 +4004,7 @@ def find_or_install_mihomo() -> Path:
             and "mihomo" in item.name.lower()
         )
         extra = packaged[-1] if packaged else "cached"
-        print(f"[OK] proxy engine ready: starting latency test | package={extra}")
+        print(f"[OK] proxy engine ready | starting latency test | package={extra}")
         return binary
 
     system = platform.system().lower()
@@ -4040,7 +4040,7 @@ def find_or_install_mihomo() -> Path:
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    print(f"[OK] proxy engine ready: starting latency test | package={archive.name}")
+    print(f"[OK] proxy engine ready | starting latency test | package={archive.name}")
     return binary
 
 
@@ -4128,7 +4128,7 @@ def verify_file_sha256(path: Path, expected: str, label: str = "") -> None:
         path.unlink(missing_ok=True)
         raise RuntimeError(f"sha256 mismatch expected={expected} actual={actual}")
     mark = label or path.name
-    print(f"[OK] toolkit sha256 verified: file={mark} | sha256={actual}")
+    print(f"[OK] toolkit sha256 verified | file={mark} | sha256={actual}")
 
 
 def download_file(url: str, directory: Path) -> Path:
@@ -4484,7 +4484,7 @@ def _benchmark_batch(
     left_id = _alloc_branch()
     right_id = _alloc_branch()
     _bench_log(
-        f"[WARN] batch start failed: size={len(proxies)} | branch={{{branch}}} "
+        f"[WARN] batch start failed | size={len(proxies)} {{{branch}}} "
         f"| split={len(left)} {{{left_id}}} + {len(right)} {{{right_id}}}"
     )
     parts: list[list[ProxyMetric]] = [[], []]
@@ -4687,7 +4687,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            print(f"[WARN] clash backup unreadable: reason={format_reason(exc)} | file={path.name}")
+            print(f"[WARN] clash backup unreadable | reason={format_reason(exc)} | file={path.name}")
             continue
         items = data.get("proxies") if isinstance(data, dict) else None
         if not isinstance(items, list) or not items:
@@ -4708,7 +4708,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
             )
         if metrics:
             print(
-                f"[INFO] reused previous clash proxies={len(metrics)} "
+                f"[INFO] reused previous clash | proxies={len(metrics)} "
                 f"file={path.name} stamp={stamp}"
             )
             return metrics
@@ -5026,7 +5026,7 @@ def main() -> None:
         try:
             metrics = benchmark_proxies(candidates)
         except Exception as exc:
-            print(f"[WARN] real latency benchmark unavailable: {exc}")
+            print(f"[WARN] real latency benchmark unavailable | reason={format_reason(exc)}")
 
     if not metrics:
         metrics = load_existing_metrics()
