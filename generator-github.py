@@ -4544,7 +4544,7 @@ def _benchmark_batch(
         fixed, fields = _repair_proxy_from_reason(bad, reason)
         if fixed:
             _bench_log(
-                f"[REPAIR] {{{branch}}} name={bad.get('name')} "
+                f"[REPAIR] name={bad.get('name')} {{{branch}}} "
                 f"| fields={','.join(fields)}"
             )
             process2, error2 = _start_mihomo_for_batch(
@@ -4557,7 +4557,7 @@ def _benchmark_batch(
                     _stop_process(process2)
             reason = _mihomo_reason(error2) or reason
         _bench_log(
-            f"[DROP] {{{branch}}} name={bad.get('name')} "
+            f"[DROP] name={bad.get('name')} {{{branch}}} "
             f"| server={bad.get('server')}:{bad.get('port')} | reason={reason or 'mihomo start failed'}"
         )
         with _TEST_LOCK:
