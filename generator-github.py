@@ -298,7 +298,7 @@ for _src in SOURCE_GROUPS:
     _kept_sources.append(_src)
 SOURCE_GROUPS = _kept_sources
 if _debug_only:
-    print(f"[DEBUG] only source={_debug_only} kept={len(SOURCE_GROUPS)}")
+    print(f"[DEBUG] only source={_debug_only} | kept={len(SOURCE_GROUPS)}")
 
 
 def source_label(source: dict[str, Any]) -> str:
@@ -475,6 +475,27 @@ def fetch_text(
                 if attempt < retries:
                     time.sleep(min(1, attempt))
     raise RuntimeError(f"failed to fetch {url}: {last_error}")
+
+
+def format_reason(exc: object | None = None, fallback: str = "") -> str:
+    text = str(exc if exc is not None else fallback or "failed")
+    code = re.search(r"\b([45]\d\d)\b", text)
+    if code:
+        return f"http {code.group(1)}"
+    low = text.lower()
+    if "timed out" in low or "timeout" in low:
+        return "read timed out"
+    if "name or service not known" in low or "getaddrinfo" in low:
+        return "dns failed"
+    if "connection refused" in low:
+        return "connection refused"
+    if "ssl" in low or "certificate" in low:
+        return "tls failed"
+    if fallback:
+        return fallback
+    compact = re.sub(r"failed to fetch \S+:\s*", "", text)
+    compact = re.sub(r"\s+", " ", compact).strip()
+    return (compact[:80] or "failed")
 
 
 def maybe_base64_decode(text: str) -> str:
@@ -1513,7 +1534,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 found = extract_proxies(text)
                 if not found:
                     if not merge_all:
-                        print(f"[WARN] source={source_bracket(source)} empty url={url}")
+                        print(f"[WARN] source try failed: reason=empty | url={url}")
                     return False
                 prefix = source_tag(source)
                 marks, kept = _dedupe_proxies(found, source_seen, prefix=prefix)
@@ -1571,7 +1592,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                             _print_hits()
                         print(
                             f"[INFO] sublink file_nodes={len(source_seen)} "
-                            f"bare links={len(extra)}"
+                            f"| bare links={len(extra)}"
                         )
                         extra_bodies = _fetch_pool(extra)
                         for url in extra:
@@ -1584,7 +1605,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     try:
                         text = fetch_text(url, user_agent=ua, referer=ref)
                     except Exception as exc:
-                        print(f"[WARN] source={source_bracket(source)} skipped url={url} error={exc}")
+                        print(f"[WARN] source try failed: reason={format_reason(exc)} | url={url}")
                         continue
                     if _ingest(url, text):
                         break
@@ -1601,29 +1622,27 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             if reuse and raw_n:
                 kind = "no proxies" if live_n == 0 else "few proxies"
                 print(
-                    f"[WARN] source={source_bracket(source)} {kind} "
-                    f"found={live_n} raw={raw_n}"
+                    f"[WARN] {kind} | found={live_n} | raw={raw_n}"
                 )
                 _marks, kept = _dedupe_proxies(previous, source_seen)
                 source_found.extend(kept)
                 print(
-                    f"[INFO] source={source_bracket(source)} reused previous raw "
-                    f"file={raw_name} stamp={raw_stamp}"
+                    f"[INFO] reused previous raw | file={raw_name} | stamp={raw_stamp}"
                 )
         if not source_found:
             print(
-                f"[WARN] source={source_bracket(source)} no proxies found=0 raw=0"
+                f"[WARN] no proxies | found=0 | raw=0"
             )
         if source_found:
             if crg_archive:
-                extra = f" url={crg_archive}"
+                extra = f" | url={crg_archive}"
             elif discover_pages:
-                extra = f" url={_aggregate_urls(discover_pages)}"
+                extra = f" | url={_aggregate_urls(discover_pages)}"
             elif used_url:
-                extra = f" url={used_url}"
+                extra = f" | url={used_url}"
             else:
                 extra = ""
-            print(f"[OK] proxies={len(source_found)} source={source_bracket(source)}{extra}")
+            print(f"[OK] proxies={len(source_found)} | source={source_bracket(source)}{extra}")
         collected.extend(source_found)
 
     write_raw_backup(collected)
@@ -1943,7 +1962,7 @@ def discover_sublink(
     try:
         body = fetch_text(page_url)
     except Exception as exc:
-        print(f"[WARN] sublink page failed: {page_url} {exc}")
+        print(f"[WARN] sublink discovery failed: reason={format_reason(exc)} | url={page_url}")
         return []
     file_links, bare_links, ranked = _collect_sub_links(body, page_url, prefer=prefer, exclude=exclude)
     mode = str(bare_link or "").strip().lower()
@@ -1951,25 +1970,25 @@ def discover_sublink(
         found = unique_ordered(file_links + bare_links)
         if found:
             return found
-        print(f"[WARN] sublink discovery failed: {page_url}")
+        print(f"[WARN] sublink discovery failed: reason=no links | url={page_url}")
         return []
     if mode == "none":
         if file_links:
             return file_links
-        print(f"[WARN] sublink discovery failed: {page_url}")
+        print(f"[WARN] sublink discovery failed: reason=no links | url={page_url}")
         return []
     if _prefer_tokens(prefer):
         found = unique_ordered(file_links + bare_links[:3])
         if found:
             return found
-        print(f"[WARN] sublink discovery failed: {page_url}")
+        print(f"[WARN] sublink discovery failed: reason=no links | url={page_url}")
         return []
     if file_links:
         _SUBLINK_BARE.extend(bare_links)
         return file_links
     if bare_links:
         return bare_links
-    print(f"[WARN] sublink discovery failed: {page_url}")
+    print(f"[WARN] sublink discovery failed: reason=no links | url={page_url}")
     return []
 
 
@@ -2440,12 +2459,12 @@ def _download_archive(
     from urllib.parse import urlparse, unquote
     local = _find_local_package(url)
     if local is not None:
-        print(f"[OK] toolkit using local: {local} bytes={local.stat().st_size}")
+        print(f"[OK] toolkit using local: file={local} | bytes={local.stat().st_size}")
         if expected_sha256:
             try:
                 verify_file_sha256(local, expected_sha256, label=local.name)
             except Exception as exc:
-                print(f"[WARN] toolkit sha256 mismatch: {local.name} {exc}")
+                print(f"[WARN] toolkit sha256 mismatch: reason={format_reason(exc, 'mismatch')} | file={local.name}")
                 return None
         return local
     name = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
@@ -2498,23 +2517,23 @@ def _download_archive(
                 except Exception as exc:
                     last_error = exc
                     dest.unlink(missing_ok=True)
-                    print(f"[WARN] toolkit download retry {attempt}/3: {exc}")
+                    print(f"[WARN] toolkit download retry: reason={format_reason(exc)} | attempt={attempt}/3")
                     time.sleep(attempt)
             if downloaded:
                 break
         if not downloaded:
             raise last_error or RuntimeError("download failed")
-        print(f"[OK] toolkit downloaded: {dest.name} bytes={written}")
+        print(f"[OK] toolkit downloaded: file={dest.name} | bytes={written}")
         if expected_sha256:
             try:
                 verify_file_sha256(dest, expected_sha256, label=dest.name)
             except Exception as exc:
-                print(f"[WARN] toolkit sha256 mismatch: {dest.name} {exc}")
+                print(f"[WARN] toolkit sha256 mismatch: reason={format_reason(exc, 'mismatch')} | file={dest.name}")
                 dest.unlink(missing_ok=True)
                 return None
         return dest
     except Exception as exc:
-        print(f"[WARN] toolkit download failed: {url} {exc}")
+        print(f"[WARN] toolkit try failed: reason={format_reason(exc)} | url={url}")
         dest.unlink(missing_ok=True)
         return None
 
@@ -2767,12 +2786,12 @@ def _extract_archive(archive: Path, dest_dir: Path) -> bool:
                 print(f"[WARN] toolkit unsupported archive: {archive.name}")
                 return False
     except Exception as exc:
-        print(f"[WARN] toolkit extract failed: {label} {exc}")
+        print(f"[WARN] toolkit extract failed: reason={format_reason(exc)} | archive={label}")
         return False
     files, dirs = _dir_entry_counts(dest_dir)
     print(
-        f"[OK] toolkit extracted archive={label} tool={tool} "
-        f"files={files} dirs={dirs}"
+        f"[OK] toolkit extracted archive={label} | tool={tool} "
+        f"| files={files} | dirs={dirs}"
     )
     if apk_mode:
         _prune_extracted(dest_dir, True)
@@ -2887,7 +2906,7 @@ def _toolkit_collect_payload(root: Path, archive_name: str = "") -> tuple[list[s
     if urls or embedded:
         print(
             f"[OK] toolkit discovered subs={len(urls)} "
-            f"embedded={len(embedded)}{tag}"
+            f"| embedded={len(embedded)}{(' |' + tag) if tag else ''}"
         )
     return urls, embedded
 
@@ -3001,7 +3020,7 @@ def _print_ingest_groups(hits: list[tuple[str, list[str], int]]) -> None:
     if embedded:
         marks = [mark for _, group, _ in embedded for mark in group]
         new_total = sum(new for _, _, new in embedded)
-        print(f"[OK] proxies={len(set(marks))} new={new_total} embedded=archive-config")
+        print(f"[OK] proxies={len(set(marks))} | new={new_total} | embedded=archive-config")
     buckets: dict[tuple[str, int], list[tuple[str, list[str], int]]] = {}
     order: list[tuple[str, int]] = []
     for url, marks, new in remote:
@@ -3016,7 +3035,7 @@ def _print_ingest_groups(hits: list[tuple[str, list[str], int]]) -> None:
         marks = [mark for _, group, _ in rows for mark in group]
         new_total = sum(new for _, _, new in rows)
         label = _aggregate_urls([url for url, _, _ in rows])
-        print(f"[OK] proxies={len(set(marks))} new={new_total} url={label}")
+        print(f"[OK] proxies={len(set(marks))} | new={new_total} | url={label}")
 
 
 def _collect_toolkit_candidates(
@@ -3135,8 +3154,8 @@ def _discover_toolkit_1vpn_crx(page_url: str) -> tuple[list[dict[str, Any]], str
             )
             if nodes:
                 return nodes, archive_url
-            print(f"[WARN] toolkit 1vpn-crx empty bundle: {archive.name}")
-        print(f"[WARN] toolkit 1vpn-crx discovery failed: {page_url}")
+            print(f"[WARN] toolkit 1vpn-crx discovery failed: reason=empty bundle | archive={archive.name}")
+        print(f"[WARN] toolkit 1vpn-crx discovery failed: reason=empty bundle | url={page_url}")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -3159,8 +3178,8 @@ def _discover_toolkit_crg(
             urls, embedded = _toolkit_collect_payload(unpack, archive.name)
             if embedded or urls:
                 return urls, embedded, archive_url
-            print(f"[WARN] toolkit crg empty bundle: {archive.name}")
-        print(f"[WARN] toolkit crg discovery failed: {page_url}")
+            print(f"[WARN] toolkit crg discovery failed: reason=empty bundle | archive={archive.name}")
+        print(f"[WARN] toolkit crg discovery failed: reason=empty bundle | url={page_url}")
         return [], [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -3576,7 +3595,7 @@ def _discover_toolkit_encrypted_apk(
             hard_keys = _apk_keys_for(source, scanned)
             print(
                 f"[OK] toolkit {kind} scanned prefixes={len(prefixes)} "
-                f"files={len(names)} keys={len(hard_keys)} archive={archive.name}"
+                f"| files={len(names)} | keys={len(hard_keys)} | archive={archive.name}"
             )
             if not prefixes:
                 continue
@@ -3671,9 +3690,9 @@ def _discover_toolkit_encrypted_apk(
         if last_err:
             extra += f" last={last_err[:80]}"
         if not opened:
-            print(f"[WARN] toolkit {kind} no archive url page={page_url}")
+            print(f"[WARN] toolkit {kind} discovery failed: reason=no archive | url={page_url}")
         else:
-            print(f"[WARN] toolkit {kind} discovery failed{extra}")
+            print(f"[WARN] toolkit {kind} discovery failed: reason={format_reason(None, last_err or 'failed')} | url={page_url}")
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -3787,7 +3806,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
 
     stamps = sorted(groups, reverse=True)
     if not stamps:
-        print(f"[WARN] article discovery failed: {feed_url}")
+        print(f"[WARN] article discovery failed: reason=no article links | url={feed_url}")
         return []
 
     for stamp in stamps:
@@ -3808,7 +3827,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
             if ok:
                 _DISCOVER_PAGES = [page]
                 return found
-    print(f"[WARN] article discovery failed: {feed_url}")
+    print(f"[WARN] article discovery failed: reason=no article links | url={feed_url}")
     return []
 
 
@@ -3961,7 +3980,7 @@ def find_or_install_mihomo() -> Path:
     # 优先使用已有的 Clash Verge 内核
     existing = Path(r"C:\Program Files\Clash Verge\verge-mihomo-alpha.exe")
     if existing.exists():
-        print(f"[OK] proxy engine ready: starting latency test package={existing.name}")
+        print(f"[OK] proxy engine ready: starting latency test | package={existing.name}")
         return existing
 
     for name in ("mihomo", "clash-meta", "clash"):
@@ -3985,7 +4004,7 @@ def find_or_install_mihomo() -> Path:
             and "mihomo" in item.name.lower()
         )
         extra = packaged[-1] if packaged else "cached"
-        print(f"[OK] proxy engine ready: starting latency test package={extra}")
+        print(f"[OK] proxy engine ready: starting latency test | package={extra}")
         return binary
 
     system = platform.system().lower()
@@ -4021,7 +4040,7 @@ def find_or_install_mihomo() -> Path:
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    print(f"[OK] proxy engine ready: starting latency test package={archive.name}")
+    print(f"[OK] proxy engine ready: starting latency test | package={archive.name}")
     return binary
 
 
@@ -4109,7 +4128,7 @@ def verify_file_sha256(path: Path, expected: str, label: str = "") -> None:
         path.unlink(missing_ok=True)
         raise RuntimeError(f"sha256 mismatch expected={expected} actual={actual}")
     mark = label or path.name
-    print(f"[OK] toolkit sha256 verified: {mark} sha256={actual}")
+    print(f"[OK] toolkit sha256 verified: file={mark} | sha256={actual}")
 
 
 def download_file(url: str, directory: Path) -> Path:
@@ -4235,7 +4254,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     global _SEP_JUST_PRINTED
     _SEP_JUST_PRINTED = False
     print_sep()
-    print(f"[INFO] raw backup written path={RAW_PATH} proxies={len(nodes)}")
+    print(f"[INFO] raw backup written | path={RAW_PATH} | proxies={len(nodes)}")
 
 
 def history_file_stamp(name: str) -> str:
@@ -4438,7 +4457,7 @@ def _benchmark_batch(
         if fixed:
             _bench_log(
                 f"[REPAIR] {{{branch}}} name={bad.get('name')} "
-                f"fields={','.join(fields)}"
+                f"| fields={','.join(fields)}"
             )
             process2, error2 = _start_mihomo_for_batch(
                 engine, work, local_config, local_url, local_port, [fixed], branch=branch
@@ -4451,7 +4470,7 @@ def _benchmark_batch(
             reason = _mihomo_reason(error2) or reason
         _bench_log(
             f"[DROP] {{{branch}}} name={bad.get('name')} "
-            f"server={bad.get('server')}:{bad.get('port')} reason={reason or 'mihomo start failed'}"
+            f"| server={bad.get('server')}:{bad.get('port')} | reason={reason or 'mihomo start failed'}"
         )
         with _TEST_LOCK:
             _DROP_NAMES.append(str(bad.get("name") or ""))
@@ -4465,8 +4484,8 @@ def _benchmark_batch(
     left_id = _alloc_branch()
     right_id = _alloc_branch()
     _bench_log(
-        f"[WARN] batch start failed size={len(proxies)} {{{branch}}} "
-        f"split -> {len(left)} {{{left_id}}} + {len(right)} {{{right_id}}}"
+        f"[WARN] batch start failed: size={len(proxies)} | branch={{{branch}}} "
+        f"| split={len(left)} {{{left_id}}} + {len(right)} {{{right_id}}}"
     )
     parts: list[list[ProxyMetric]] = [[], []]
 
@@ -4520,7 +4539,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
             text = " | ".join(bits)
             if len(text) > 400:
                 text = text[:397] + "..."
-            print(f"[INFO] dropped={len(_DROP_NAMES)} {text}")
+            print(f"[INFO] dropped={len(_DROP_NAMES)} | {text}")
         _DROP_NAMES = []
         _SEP_JUST_PRINTED = False
         print_sep()
@@ -4553,8 +4572,8 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                 should_print = completed % 100 == 0 or completed == len(futures)
             if should_print:
                 _bench_log(
-                    f"[TEST] {{{branch}}} tested {completed}/{len(futures)} "
-                    f"kept={len(metrics)} rest={rest}"
+                    f"[TEST] {{{branch}}} tested={completed}/{len(futures)} "
+                    f"| kept={len(metrics)} | rest={rest}"
                 )
     return metrics
 
@@ -4668,7 +4687,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            print(f"[WARN] clash backup unreadable file={path.name} error={exc}")
+            print(f"[WARN] clash backup unreadable: reason={format_reason(exc)} | file={path.name}")
             continue
         items = data.get("proxies") if isinstance(data, dict) else None
         if not isinstance(items, list) or not items:
@@ -4910,7 +4929,7 @@ def dedupe_metrics_by_core(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
             best[key] = item
     dropped = len(metrics) - len(best)
     if dropped:
-        print(f"[INFO] core-dedupe dropped {dropped} same-host variants, kept higher health_score")
+        print(f"[INFO] core-dedupe | dropped={dropped} | by=health_score")
     return [best[key] for key in order]
 
 
@@ -4929,7 +4948,7 @@ def limit_metrics_per_source(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
         group = grouped[key]
         if len(group) > MAX_LIVE_PER_SOURCE:
             print(
-                f"[INFO] cap live source={key} from {len(group)} to {MAX_LIVE_PER_SOURCE} by health_score"
+                f"[INFO] cap live | source={key} | from={len(group)} | to={MAX_LIVE_PER_SOURCE}"
             )
             global _SEP_JUST_PRINTED
             _SEP_JUST_PRINTED = False
@@ -4942,8 +4961,8 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     if len(metrics) <= MAX_LIVE_TOTAL:
         return metrics
     print(
-        f"[INFO] cap live total from {len(metrics)} to {MAX_LIVE_TOTAL} "
-        f"floor=5 then health_score pool"
+        f"[INFO] cap live total | from={len(metrics)} | to={MAX_LIVE_TOTAL} "
+        f"| floor=5 | by=health_score"
     )
     global _SEP_JUST_PRINTED
     _SEP_JUST_PRINTED = False
@@ -4967,8 +4986,8 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     remain = max(0, MAX_LIVE_TOTAL - len(reserved))
     kept = reserved + pool[:remain]
     print(
-        f"[INFO] cap live reserved={len(reserved)} pool={len(pool)} "
-        f"taken={min(remain, len(pool))}"
+        f"[INFO] cap live | reserved={len(reserved)} | pool={len(pool)} "
+        f"| taken={min(remain, len(pool))}"
     )
     return kept
 
@@ -4993,7 +5012,7 @@ def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric])
     print(f"[SUMMARY] total_nodes={total_nodes}")
     print(f"[SUMMARY] legal_candidates={candidates}")
     print(f"[SUMMARY] passed_latency_test={len(metrics)}")
-    print(f"[SUMMARY] region_HK={hk_count} region_JP={jp_count} region_US={us_count}")
+    print(f"[SUMMARY] region_HK={hk_count} | region_JP={jp_count} | region_US={us_count}")
     print(f"[SUMMARY] avg_latency_ms={avg_latency}")
     print(f"[SUMMARY] output={OUTPUT_PATH}")
 
