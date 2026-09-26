@@ -2348,6 +2348,25 @@ def _store_package_urls(kind: str, page_url: str) -> list[str]:
     return []
 
 
+
+def _github_tag_source_asset(url: str, name: str, tag: str) -> bool:
+    lower = str(url or "").lower()
+    if "/archive/refs/" in lower:
+        return True
+    base = unquote(str(name or "")).split("?")[0].lower()
+    tag_l = str(tag or "").lower()
+    compact = tag_l[1:] if tag_l.startswith("v") else tag_l
+    return base in {
+        f"{tag_l}.zip",
+        f"{tag_l}.tar.gz",
+        f"{tag_l}.tgz",
+        f"v{compact}.zip",
+        f"v{compact}.tar.gz",
+        f"{compact}.zip",
+        f"{compact}.tar.gz",
+    }
+
+
 def _expand_github_release_assets(
     page_url: str,
     prefer: str = "",
@@ -2383,8 +2402,10 @@ def _expand_github_release_assets(
         tags.append((15000, "latest"))
     tags.sort(key=lambda item: item[0], reverse=True)
     ranked: list[tuple[int, str]] = []
+    source_ranked: list[tuple[int, str]] = []
     seen: set[str] = set()
     checksum_links: list[str] = []
+    prefer_on = bool(_prefer_tokens(token))
     for _, tag in tags:
         asset_page = f"https://github.com/{owner}/{repo}/releases/expanded_assets/{tag}"
         try:
@@ -2395,7 +2416,13 @@ def _expand_github_release_assets(
         page_digests = _parse_page_hashes(body)
         for link in _collect_archive_links(body, asset_page):
             lower = link.lower()
+            name = unquote(link.rstrip("/").rsplit("/", 1)[-1]).lower()
+            source_hit = _github_tag_source_asset(link, name, tag)
             if "/releases/download/" not in lower and "/archive/refs/" not in lower:
+                continue
+            if source_hit and (not prefer_on or ranked):
+                continue
+            if "/releases/download/" not in lower and not (prefer_on and source_hit and not ranked):
                 continue
             if not (
                 _ARCHIVE_EXT_RE.search(link)
@@ -2409,15 +2436,20 @@ def _expand_github_release_assets(
             if re.search(r"\.(?:md5|sha1|sha256|sha256sum|sha512|sha512sum)$", lower) or lower.endswith("checksums.txt"):
                 checksum_links.append(link)
                 continue
-            name = unquote(link.rstrip("/").rsplit("/", 1)[-1]).lower()
             digest = page_digests.get(name) or []
             if digest:
                 _HASH_BY_URL[link] = list(digest)
             loc = body.lower().find(lower[:120])
             dist = _prefer_distance(body, token, loc)
-            ranked.append((_score_sub_link(link, prefer=token, distance=dist), link))
+            item = (_score_sub_link(link, prefer=token, distance=dist), link)
+            if source_hit:
+                source_ranked.append(item)
+            else:
+                ranked.append(item)
         if ranked:
             break
+    if not ranked and prefer_on:
+        ranked = source_ranked
     ranked.sort(key=lambda item: item[0], reverse=True)
     urls = unique_ordered([url for _, url in ranked])
     if not verify_hash:
@@ -4018,24 +4050,40 @@ def find_free_port() -> int:
 
 
 
+def _centroid_pair(item: Any) -> tuple[float, float] | None:
+    if not isinstance(item, dict):
+        return None
+    pair = item.get("latlng") or item.get("latlon") or item.get("coords")
+    if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+        try:
+            return (float(pair[0]), float(pair[1]))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
 def _parse_centroid_text(text: str) -> dict[str, tuple[float, float]]:
     try:
         data = json.loads(text)
     except Exception:
         return {}
     out: dict[str, tuple[float, float]] = {}
-    if not isinstance(data, dict):
-        return out
-    for code, item in data.items():
-        iso = str(code or "").strip().upper()
-        pair = None
-        if isinstance(item, dict):
-            pair = item.get("latlng") or item.get("latlon") or item.get("coords")
-        if isinstance(pair, (list, tuple)) and len(pair) >= 2:
-            try:
-                out[iso] = (float(pair[0]), float(pair[1]))
-            except (TypeError, ValueError):
+    if isinstance(data, dict):
+        items = data.items()
+    elif isinstance(data, list):
+        items = []
+        for item in data:
+            if not isinstance(item, dict):
                 continue
+            code = item.get("cca2") or item.get("iso2") or item.get("code") or item.get("alpha2")
+            items.append((code, item))
+    else:
+        return out
+    for code, item in items:
+        iso = str(code or "").strip().upper()
+        pair = _centroid_pair(item)
+        if iso and pair:
+            out[iso] = pair
     return out
 
 
@@ -4057,9 +4105,6 @@ def _toolkit_named_file(package: Path | None, dest_dir: Path, name: str) -> Path
                 _extract_archive(package, unpacked)
             found = list(unpacked.rglob(name))
             if found:
-                print(
-                    f"[OK] toolkit extracted | file={found[0].name} | archive={package.name}"
-                )
                 return found[0]
         if package.is_file() and package.suffix.lower() == Path(name).suffix.lower():
             return package
@@ -4109,11 +4154,11 @@ def prepare_geo_score() -> None:
                 pass
     if not _GEO_COORDS:
         package = _toolkit_fetch_package(
-            "https://github.com/annexare/Countries",
+            "https://github.com/mledoze/countries",
             work,
-            prefer=["countries.min.json"],
+            prefer=["countries.json"],
         )
-        json_path = _toolkit_named_file(package, work, "countries.min.json")
+        json_path = _toolkit_named_file(package, work, "countries.json")
         _ensure_geo_coords(json_path)
         if json_path is not None and json_path.is_file():
             files.append(json_path.name)
