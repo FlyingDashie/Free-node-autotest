@@ -106,26 +106,20 @@ jobs:
         run: |
           # 1. 覆盖仓库根目录的最新文件
           cp output/clash.yaml ./clash.yaml
-          
-          # 2. 备份本次生成的文件到 history 目录（按时间命名）
-          cp output/clash.yaml "history/${INV}-clash-${RUN_TIME}.yaml"
-          if [ -f output/raw.yaml ]; then
-            cp output/raw.yaml "history/${INV}-raw-${RUN_TIME}.yaml"
-          else
-            echo "output/raw.yaml 不存在，本轮不写 raw 备份"
-          fi
-          
+
+          # 2. raw/clash/scored 由 generator-github.py 直接写入 history
           # 2.5 旧文件名改成 INV-kind-HHMM-YYYYMMDD.ext
           python3 - <<'PY'
           from pathlib import Path
           import re
 
           hist = Path("history")
-          target_re = re.compile(r"^\d+-(?:run|log|clash|raw)-\d{4}-20\d{6}\.(?:log|yaml)$")
+          kinds = r"run|log|clash|raw|scored"
+          target_re = re.compile(rf"^\d+-(?:{kinds})-\d{{4}}-20\d{{6}}\.(?:log|yaml)$")
           patterns = [
-              re.compile(r"^(?P<inv>\d+)-(?P<date>20\d{6})-(?P<hm>\d{4})-(?P<kind>run|log|clash|raw)\.(?P<ext>log|yaml)$"),
-              re.compile(r"^(?P<inv>\d+)-(?P<kind>run|log|clash|raw)-(?P<date>20\d{6})-(?P<hm>\d{4})\.(?P<ext>log|yaml)$"),
-              re.compile(r"^(?P<kind>run|log|clash|raw)-(?P<date>20\d{6})-(?P<hm>\d{4})\.(?P<ext>log|yaml)$"),
+              re.compile(rf"^(?P<inv>\d+)-(?P<date>20\d{{6}})-(?P<hm>\d{{4}})-(?P<kind>{kinds})\.(?P<ext>log|yaml)$"),
+              re.compile(rf"^(?P<inv>\d+)-(?P<kind>{kinds})-(?P<date>20\d{{6}})-(?P<hm>\d{{4}})\.(?P<ext>log|yaml)$"),
+              re.compile(rf"^(?P<kind>{kinds})-(?P<date>20\d{{6}})-(?P<hm>\d{{4}})\.(?P<ext>log|yaml)$"),
           ]
           if hist.is_dir():
               for p in list(hist.iterdir()):
