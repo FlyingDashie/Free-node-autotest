@@ -4041,17 +4041,19 @@ def _parse_centroid_text(text: str) -> dict[str, tuple[float, float]]:
     return out
 
 
-def _geo_package_file(package: Path | None, name: str) -> Path | None:
-    if package is None:
-        return None
-    if package.is_file() and package.name.lower() == name.lower():
-        return package
-    if package.is_file() and package.suffix.lower() == Path(name).suffix.lower():
-        return package
-    if package.is_dir():
-        found = list(package.rglob(name))
-        if found:
-            return found[0]
+def _toolkit_named_file(package: Path | None, dest_dir: Path, name: str) -> Path | None:
+    if package is not None:
+        if package.is_file() and package.name.lower() == name.lower():
+            return package
+        if package.is_file() and package.suffix.lower() == Path(name).suffix.lower():
+            return package
+        if package.is_dir():
+            found = list(package.rglob(name))
+            if found:
+                return found[0]
+    local = dest_dir / name
+    if local.exists():
+        return local
     return None
 
 
@@ -4083,11 +4085,8 @@ def prepare_geoip() -> None:
             "https://github.com/MetaCubeX/meta-rules-dat",
             work,
             prefer=["country.mmdb"],
-            verify_hash=False,
         )
-        mmdb_path = _geo_package_file(package, "country.mmdb")
-        if mmdb_path is None and (work / "country.mmdb").exists():
-            mmdb_path = work / "country.mmdb"
+        mmdb_path = _toolkit_named_file(package, work, "country.mmdb")
         if mmdb_path is not None:
             try:
                 import maxminddb
@@ -4100,9 +4099,8 @@ def prepare_geoip() -> None:
             "https://github.com/annexare/Countries",
             work,
             prefer=["countries.min.json"],
-            verify_hash=False,
         )
-        json_path = _geo_package_file(package, "countries.min.json")
+        json_path = _toolkit_named_file(package, work, "countries.min.json")
         _ensure_geo_coords(json_path)
         if json_path is not None and json_path.is_file():
             files.append(json_path.name)
@@ -4163,20 +4161,20 @@ def find_or_install_mihomo() -> Path:
         arch_tokens = ["armv7", "armv6"]
     else:
         raise RuntimeError(f"unsupported architecture for Mihomo download: {machine}")
-    archive = _toolkit_fetch_package(
+    package = _toolkit_fetch_package(
         "https://github.com/MetaCubeX/mihomo",
         install_dir,
         prefer=[os_token, *arch_tokens, "mihomo", r"v\d+\.", "gz", "zip", "7z"],
         verify_hash=True,
     )
-    if archive is None:
+    if package is None:
         raise RuntimeError("no matching Mihomo release asset found")
-    extracted = extract_mihomo_binary(archive, install_dir)
+    extracted = extract_mihomo_binary(package, install_dir)
     extracted.chmod(extracted.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    print(f"[OK] proxy engine ready, starting latency test | package={archive.name}")
+    print(f"[OK] proxy engine ready, starting latency test | package={package.name}")
     return binary
 
 
