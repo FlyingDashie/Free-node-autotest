@@ -6,6 +6,7 @@ import hashlib
 import html
 import importlib.util
 import json
+import math
 import os
 import platform
 import random
@@ -30,6 +31,7 @@ _REQUIRED_PACKAGES = {
     "requests": "requests",
     "urllib3": "urllib3",
     "yaml": "PyYAML",
+    "maxminddb": "maxminddb",
 }
 _OPTIONAL_PACKAGES = {
     "feedparser": "feedparser",
@@ -91,6 +93,7 @@ if _missing_required:
 import requests
 import urllib3
 import yaml
+import maxminddb
 
 # 代理设置（Clash 的 HTTP 端口）
 PROXIES = None
@@ -369,6 +372,7 @@ class ProxyMetric:
     proxy: dict[str, Any]
     latency: int
     region: str
+    geo_region: str
     health_score: float
 
 
@@ -381,6 +385,18 @@ UA_PRESETS = {
         "Chrome/120.0.0.0 Safari/537.36"
     ),
 }
+
+
+
+def format_size(num: int | float) -> str:
+    n = float(num)
+    if n < 1024:
+        return f"{int(n)}B"
+    if n < 1024 * 1024:
+        val = n / 1024
+        return f"{val:.1f}KB".replace(".0KB", "KB")
+    val = n / (1024 * 1024)
+    return f"{val:.1f}MB".replace(".0MB", "MB")
 
 
 def resolve_ua(name: str = "") -> str:
@@ -2038,7 +2054,7 @@ _BROWSER_PKG_RE = re.compile(
 )
 _INSTALLER_EXT_RE = re.compile(
     r"\.(?:apk|xapk|apks|aab|crx|xpi|nex|exe|msi|msix|appx|"
-    r"dmg|pkg|deb|rpm|ipa|cab)(?:$|[?#).,;\"'])",
+    r"dmg|pkg|deb|rpm|ipa|cab|mmdb|dat|metadb|db)(?:$|[?#).,;\"'])",
     re.I,
 )
 _TOOLKIT_SKIP_HOST_RE = re.compile(
@@ -2459,7 +2475,7 @@ def _download_archive(
     from urllib.parse import urlparse, unquote
     local = _find_local_package(url)
     if local is not None:
-        print(f"[OK] toolkit using local | file={local} | bytes={local.stat().st_size}")
+        print(f"[OK] toolkit using local | file={local} | size={format_size(local.stat().st_size)}")
         if expected_hashes:
             try:
                 verify_file_hashes(local, expected_hashes, label=local.name)
@@ -2522,7 +2538,7 @@ def _download_archive(
                 break
         if not downloaded:
             raise last_error or RuntimeError("download failed")
-        print(f"[OK] toolkit downloaded | file={dest.name} | bytes={written}")
+        print(f"[OK] toolkit downloaded | file={dest.name} | size={format_size(written)}")
         if expected_hashes:
             try:
                 verify_file_hashes(dest, expected_hashes, label=dest.name)
@@ -3974,6 +3990,43 @@ def find_free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+
+_GEOIP_READER = None
+
+
+def prepare_geoip() -> None:
+    global _GEOIP_READER
+    if _GEOIP_READER is not None:
+        return
+    work = Path(tempfile.gettempdir()) / "free-node-autotest-geoip"
+    os.makedirs(str(work), exist_ok=True)
+    package = _toolkit_fetch_package(
+        "https://github.com/MetaCubeX/meta-rules-dat",
+        work,
+        prefer=["country.mmdb"],
+        verify_hash=False,
+    )
+    path = None
+    if package and package.is_file() and package.suffix.lower() == ".mmdb":
+        path = package
+    elif package and package.is_dir():
+        found = list(package.rglob("country.mmdb"))
+        path = found[0] if found else None
+    if path is None:
+        local = work / "country.mmdb"
+        if local.exists():
+            path = local
+    if path is None:
+        print("[WARN] geoip unavailable | reason=no package")
+        return
+    try:
+        _GEOIP_READER = maxminddb.open_database(str(path))
+    except Exception as exc:
+        print(f"[WARN] geoip unavailable | reason={format_reason(exc)}")
+        return
+    print(f"[OK] geoip ready | file={path.name}")
+
+
 def find_or_install_mihomo() -> Path:
     # 优先使用已有的 Clash Verge 内核
     existing = Path(r"C:\Program Files\Clash Verge\verge-mihomo-alpha.exe")
@@ -4598,6 +4651,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
     if not proxies:
         return []
 
+    prepare_geoip()
     engine = find_or_install_mihomo()
     _SEP_JUST_PRINTED = False
     print_sep()
@@ -4679,9 +4733,173 @@ def test_single_proxy(controller_url: str, proxy: dict[str, Any]) -> ProxyMetric
     latency = int(data.get("delay", 0))
     if latency <= 0 or latency > LATENCY_TIMEOUT_MS:
         return None
+    return build_proxy_metric(proxy, latency)
+
+
+
+_GEO_ANCHOR = (28.99775, 126.90985)  # midpoint of Hong Kong and Tokyo
+_GEOIP_READER = None
+_GEO_DECAY_KM = 2000.0
+_GEO_WEIGHT = 0.3
+_GEO_ANYCAST = (
+    "cloudflare", "1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4",
+    "google.com", "gstatic", "googleapis", "fastly", "akamai",
+    "cloudfront.net", "edgekey.net", "workers.dev", "pages.dev",
+    "azureedge.net", "trafficmanager.net",
+)
+_GEO_COORDS = {
+    "HK": (22.3193, 114.1694),
+    "JP": (35.6762, 139.6503),
+    "SG": (1.3521, 103.8198),
+    "KR": (37.5665, 126.9780),
+    "TW": (25.0330, 121.5654),
+    "CN": (23.1291, 113.2644),
+    "US": (37.7749, -122.4194),
+    "DE": (50.1109, 8.6821),
+    "GB": (51.5074, -0.1278),
+    "NL": (52.3676, 4.9041),
+    "FR": (48.8566, 2.3522),
+    "AU": (-33.8688, 151.2093),
+}
+_GEO_HOST_MARKS = (
+    ("HK", ("hkg", "hongkong", "hong-kong", ".hk")),
+    ("JP", ("nrt", "hnd", "kix", "fuk", "tyo", "tokyo", "osaka", "japan", ".jp")),
+    ("SG", ("sin", "singapore", ".sg")),
+    ("KR", ("icn", "sel", "seoul", "korea", ".kr")),
+    ("TW", ("tpe", "taiwan", ".tw")),
+    ("CN", ("szx", "can", "sha", "pek", "shenzhen", "guangzhou", ".cn")),
+    ("US", ("sfo", "lax", "sjc", "sea", "iad", "ewr", "nyc", "dfw", "ord", "usa", ".us")),
+    ("DE", ("fra", "frankfurt", ".de")),
+    ("GB", ("lhr", "lon", "london", ".uk", ".gb")),
+    ("NL", ("ams", "amsterdam", ".nl")),
+    ("FR", ("cdg", "paris", ".fr")),
+    ("AU", ("syd", "sydney", ".au")),
+)
+_GEO_GROUP = {"HK", "JP", "US", "SG"}
+
+
+def _proxy_hosts(proxy: dict[str, Any]) -> list[str]:
+    hosts: list[str] = []
+    for key in ("server", "servername", "sni", "host"):
+        value = str(proxy.get(key) or "").strip().lower()
+        if value:
+            hosts.append(value)
+    for opt_key in ("ws-opts", "ws_opts", "reality-opts", "reality_opts", "grpc-opts", "http-opts"):
+        opts = proxy.get(opt_key)
+        if not isinstance(opts, dict):
+            continue
+        for key in ("servername", "host", "sni"):
+            value = str(opts.get(key) or "").strip().lower()
+            if value:
+                hosts.append(value)
+        headers = opts.get("headers")
+        if isinstance(headers, dict):
+            value = str(headers.get("Host") or headers.get("host") or "").strip().lower()
+            if value:
+                hosts.append(value)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in hosts:
+        item = item.split("/")[0].split(":")[0].strip(".")
+        if item and item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
+
+
+def _geo_is_anycast(host: str) -> bool:
+    return any(mark in host for mark in _GEO_ANYCAST)
+
+
+def _iso_geo(iso: str) -> tuple[str, tuple[float, float] | None]:
+    code = str(iso or "").strip().upper()
+    if code in {"UK"}:
+        code = "GB"
+    coords = _GEO_COORDS.get(code)
+    group = code if code in _GEO_GROUP else "OTHER"
+    return group, coords
+
+
+def _lookup_ip_geo(addr: str) -> tuple[str, tuple[float, float] | None] | None:
+    reader = _GEOIP_READER
+    if reader is None:
+        return None
+    try:
+        rec = reader.get(addr)
+    except Exception:
+        return None
+    if not rec:
+        return None
+    country = rec.get("country") if isinstance(rec, dict) else None
+    iso = ""
+    if isinstance(country, dict):
+        iso = str(country.get("iso_code") or "")
+    if not iso and isinstance(rec, dict):
+        iso = str(rec.get("iso_code") or rec.get("code") or "")
+    if not iso:
+        return None
+    return _iso_geo(iso)
+
+
+def detect_geo(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None]:
+    server = str(proxy.get("server") or "").strip()
+    if server and not _geo_is_anycast(server.lower()):
+        try:
+            import ipaddress
+            ipaddress.ip_address(server)
+            hit = _lookup_ip_geo(server)
+            if hit:
+                return hit
+        except ValueError:
+            pass
+    for host in _proxy_hosts(proxy):
+        if _geo_is_anycast(host):
+            continue
+        for code, marks in _GEO_HOST_MARKS:
+            hit = False
+            for mark in marks:
+                if mark.startswith("."):
+                    if host == mark[1:] or host.endswith(mark):
+                        hit = True
+                        break
+                elif re.search(rf"(?:^|[.-]){re.escape(mark)}(?:$|[.-])", host):
+                    hit = True
+                    break
+            if hit:
+                coords = _GEO_COORDS.get(code)
+                group = code if code in _GEO_GROUP else "OTHER"
+                return group, coords
+    return "OTHER", None
+
+
+def _haversine_km(src: tuple[float, float], dst: tuple[float, float]) -> float:
+    radius = 6371.0
+    lat1, lon1 = math.radians(src[0]), math.radians(src[1])
+    lat2, lon2 = math.radians(dst[0]), math.radians(dst[1])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    return 2 * radius * math.asin(min(1.0, math.sqrt(h)))
+
+
+def geo_distance_weight(coords: tuple[float, float] | None) -> float:
+    if not coords:
+        return 0.0
+    dist = _haversine_km(_GEO_ANCHOR, coords)
+    return math.exp(-dist / _GEO_DECAY_KM)
+
+
+def build_proxy_metric(proxy: dict[str, Any], latency: int) -> ProxyMetric:
+    name = str(proxy.get("name") or "")
     region = detect_region(name)
-    score = health_score(name, latency, region)
-    return ProxyMetric(proxy=proxy, latency=latency, region=region, health_score=score)
+    geo_region, coords = detect_geo(proxy)
+    return ProxyMetric(
+        proxy=proxy,
+        latency=latency,
+        region=region,
+        geo_region=geo_region,
+        health_score=health_score(name, latency, coords),
+    )
 
 
 def detect_region(name: str) -> str:
@@ -4728,11 +4946,11 @@ def detect_region(name: str) -> str:
     return "OTHER"
 
 
-def health_score(name: str, latency: int, region: str) -> float:
+def health_score(name: str, latency: int, coords: tuple[float, float] | None = None) -> float:
     stability_seed = int(hashlib.sha256(name.encode("utf-8")).hexdigest()[:12], 16)
     stability = random.Random(stability_seed).random()
     latency_term = LATENCY_TIMEOUT_MS / max(int(latency), 1)
-    return latency_term + stability * 0.1
+    return latency_term + _GEO_WEIGHT * geo_distance_weight(coords) + stability * 0.1
 
 
 def low_latency_pool(metrics: list[ProxyMetric]) -> list[str]:
@@ -4744,7 +4962,11 @@ def low_latency_pool(metrics: list[ProxyMetric]) -> list[str]:
 
 
 def names_for_region(metrics: list[ProxyMetric], region: str) -> list[str]:
-    names = [item.proxy["name"] for item in metrics if item.region == region]
+    names = [
+        item.proxy["name"]
+        for item in metrics
+        if item.region == region or item.geo_region == region
+    ]
     if names:
         return names
     if metrics:
@@ -4755,7 +4977,7 @@ def names_for_region(metrics: list[ProxyMetric], region: str) -> list[str]:
 
 def build_direct_fallback_metric() -> ProxyMetric:
     proxy = {"name": "DIRECT-FALLBACK", "type": "direct", "udp": True}
-    return ProxyMetric(proxy=proxy, latency=LATENCY_TIMEOUT_MS, region="OTHER", health_score=0.0)
+    return ProxyMetric(proxy=proxy, latency=LATENCY_TIMEOUT_MS, region="OTHER", geo_region="OTHER", health_score=0.0)
 
 
 def load_existing_metrics() -> list[ProxyMetric]:
@@ -4785,15 +5007,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
             if not isinstance(proxy, dict):
                 continue
             name = str(proxy.get("name", ""))
-            region = detect_region(name)
-            metrics.append(
-                ProxyMetric(
-                    proxy=dict(proxy),
-                    latency=LATENCY_TIMEOUT_MS,
-                    region=region,
-                    health_score=health_score(name, LATENCY_TIMEOUT_MS, region),
-                )
-            )
+            metrics.append(build_proxy_metric(dict(proxy), LATENCY_TIMEOUT_MS))
         if metrics:
             print(
                 f"[INFO] reused previous clash | proxies={len(metrics)} "
@@ -5093,9 +5307,9 @@ def print_sep() -> None:
 
 def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric]) -> None:
     print_sep()
-    hk_count = sum(1 for item in metrics if item.region == "HK")
-    jp_count = sum(1 for item in metrics if item.region == "JP")
-    us_count = sum(1 for item in metrics if item.region == "US")
+    hk_count = sum(1 for item in metrics if item.region == "HK" or item.geo_region == "HK")
+    jp_count = sum(1 for item in metrics if item.region == "JP" or item.geo_region == "JP")
+    us_count = sum(1 for item in metrics if item.region == "US" or item.geo_region == "US")
     avg_latency = round(sum(item.latency for item in metrics) / len(metrics), 2) if metrics else 0
     print(f"[SUMMARY] total_nodes={total_nodes}")
     print(f"[SUMMARY] legal_candidates={candidates}")
