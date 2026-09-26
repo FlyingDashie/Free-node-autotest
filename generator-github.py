@@ -2349,6 +2349,18 @@ def _store_package_urls(kind: str, page_url: str) -> list[str]:
 
 
 
+def _prefer_strong_asset(url: str, prefer: Any) -> bool:
+    tokens = _prefer_tokens(prefer)
+    if not tokens:
+        return True
+    blob = unquote(str(url or "")).lower()
+    named = [tok for tok in tokens if "." in tok]
+    if named:
+        return any(_prefer_spans(tok, blob) for tok in named)
+    hits = sum(1 for tok in tokens if _prefer_spans(tok, blob))
+    return hits >= min(2, len(tokens))
+
+
 def _github_tag_source_asset(url: str, name: str, tag: str) -> bool:
     lower = str(url or "").lower()
     if "/archive/refs/" in lower:
@@ -2420,9 +2432,9 @@ def _expand_github_release_assets(
             source_hit = _github_tag_source_asset(link, name, tag)
             if "/releases/download/" not in lower and "/archive/refs/" not in lower:
                 continue
-            if source_hit and (not prefer_on or ranked):
+            if "/releases/download/" not in lower and not source_hit:
                 continue
-            if "/releases/download/" not in lower and not (prefer_on and source_hit and not ranked):
+            if source_hit and not prefer_on:
                 continue
             if not (
                 _ARCHIVE_EXT_RE.search(link)
@@ -2446,16 +2458,32 @@ def _expand_github_release_assets(
                 source_ranked.append(item)
             else:
                 ranked.append(item)
-        if ranked:
+        if ranked or source_ranked:
             break
-    if not ranked and prefer_on:
-        ranked = source_ranked
-    ranked.sort(key=lambda item: item[0], reverse=True)
-    urls = unique_ordered([url for _, url in ranked])
+    official = sorted(ranked, key=lambda item: item[0], reverse=True)
+    source = sorted(source_ranked, key=lambda item: item[0], reverse=True)
+    official_urls = unique_ordered([url for _, url in official])
+    source_urls = unique_ordered([url for _, url in source]) if prefer_on else []
+    strong = any(_prefer_strong_asset(url, token) for url in official_urls)
+    if strong:
+        urls = unique_ordered(official_urls + source_urls)
+    elif source_urls:
+        urls = unique_ordered(source_urls + official_urls)
+    else:
+        urls = official_urls
     if not verify_hash:
         return urls
     kept: list[str] = []
     for url in urls:
+        source_hit = _github_tag_source_asset(
+            url,
+            unquote(url.rstrip("/").rsplit("/", 1)[-1]),
+            "",
+        )
+        if source_hit:
+            if url not in kept:
+                kept.append(url)
+            continue
         if _lookup_hashes(url, checksum_links):
             kept.append(url)
         else:
