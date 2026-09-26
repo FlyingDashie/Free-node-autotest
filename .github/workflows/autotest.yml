@@ -38,9 +38,31 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests pyyaml urllib3 feedparser beautifulsoup4 py7zr rarfile pycryptodome
+          python3 - <<'PY'
+          import ast
+          import pathlib
+          import subprocess
+          import sys
+
+          path = pathlib.Path("generator-github.py")
+          tree = ast.parse(path.read_text(encoding="utf-8"))
+          pkgs = []
+          for node in tree.body:
+              if not isinstance(node, ast.Assign):
+                  continue
+              names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+              if not any(name in {"_REQUIRED_PACKAGES", "_OPTIONAL_PACKAGES"} for name in names):
+                  continue
+              data = ast.literal_eval(node.value)
+              pkgs.extend(str(item) for item in data.values())
+          pkgs = sorted(set(pkgs))
+          if not pkgs:
+              raise SystemExit("no packages declared in generator-github.py")
+          print("pip install " + " ".join(pkgs))
+          subprocess.check_call([sys.executable, "-m", "pip", "install", *pkgs])
+          PY
           sudo apt-get update
-          sudo apt-get install -y p7zip-full unrar || sudo apt-get install -y p7zip-full py7zr
+          sudo apt-get install -y p7zip-full unrar || sudo apt-get install -y p7zip-full
 
       - name: Apply extra env
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.extra_env != ''
