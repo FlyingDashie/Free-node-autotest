@@ -4429,6 +4429,7 @@ def dump_yaml(data: Any) -> str:
         allow_unicode=True,
         sort_keys=False,
         default_flow_style=False,
+        width=10**9,
     )
 
 
