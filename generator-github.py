@@ -377,13 +377,14 @@ SUPPORTED_PROXY_TYPES = {
 }
 
 REQUIRED_GROUPS = (
+    "PROXY",
+    "CN-SITE",
     "URL-TEST",
     "MANUAL-SELECT",
     "HK-POOL",
     "JP-POOL",
     "US-POOL",
     "FAST-POOL",
-    "PROXY",
 )
 
 
@@ -1683,7 +1684,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
 
     _SEP_JUST_PRINTED = False
     print_sep()
-    prepare_geoip()
+    prepare_geo_score()
     _SEP_JUST_PRINTED = False
     print_sep()
     write_raw_backup(collected)
@@ -4017,9 +4018,6 @@ def find_free_port() -> int:
 
 
 
-_GEOIP_READER = None
-
-
 def _parse_centroid_text(text: str) -> dict[str, tuple[float, float]]:
     try:
         data = json.loads(text)
@@ -4071,16 +4069,17 @@ def _ensure_geo_coords(json_path: Path | None = None) -> None:
         _GEO_COORDS = _parse_centroid_text(text)
 
 
-def prepare_geoip() -> None:
+def prepare_geo_score() -> None:
     global _GEOIP_READER
     if _GEOIP_READER is not None and _GEO_COORDS:
         return
-    work = Path(tempfile.gettempdir()) / "free-node-autotest-geoip"
+    if importlib.util.find_spec("maxminddb") is None:
+        print("[INFO] geo score skipped | reason=maxminddb missing")
+        return
+    work = Path(tempfile.gettempdir()) / "free-node-autotest-geo-score"
     os.makedirs(str(work), exist_ok=True)
-    mmdb_path = None
-    json_path = None
     files: list[str] = []
-    if importlib.util.find_spec("maxminddb") is not None and _GEOIP_READER is None:
+    if _GEOIP_READER is None:
         package = _toolkit_fetch_package(
             "https://github.com/MetaCubeX/meta-rules-dat",
             work,
@@ -4093,7 +4092,7 @@ def prepare_geoip() -> None:
                 _GEOIP_READER = maxminddb.open_database(str(mmdb_path))
                 files.append(mmdb_path.name)
             except Exception:
-                mmdb_path = None
+                pass
     if not _GEO_COORDS:
         package = _toolkit_fetch_package(
             "https://github.com/annexare/Countries",
@@ -4105,9 +4104,7 @@ def prepare_geoip() -> None:
         if json_path is not None and json_path.is_file():
             files.append(json_path.name)
     names = ", ".join(files) if files else "-"
-    print(
-        f"[OK] geo ready | files={names} | centroids={len(_GEO_COORDS)}"
-    )
+    print(f"[OK] geo score ready | files={names} | centroids={len(_GEO_COORDS)}")
 
 
 def find_or_install_mihomo() -> Path:
@@ -5207,6 +5204,16 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
         "proxies": proxies,
         "proxy-groups": [
             {
+                "name": "PROXY",
+                "type": "select",
+                "proxies": list(strategy_names),
+            },
+            {
+                "name": "CN-SITE",
+                "type": "select",
+                "proxies": ["PROXY", "DIRECT"],
+            },
+            {
                 "name": "URL-TEST",
                 "type": "url-test",
                 "proxies": all_names,
@@ -5246,14 +5253,9 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
                 "url": TEST_URL,
                 "interval": 120,
             },
-            {
-                "name": "PROXY",
-                "type": "select",
-                "proxies": list(strategy_names),
-            },
         ],
         "rules": [
-            "GEOIP,CN,DIRECT",
+            "GEOIP,CN,CN-SITE",
             "MATCH,PROXY",
         ],
     }
@@ -5278,7 +5280,7 @@ def validate_config(config: dict[str, Any]) -> None:
         raise RuntimeError(f"generated config missing groups: {missing}")
     rules = config.get("rules", [])
     for rule in (
-        "GEOIP,CN,DIRECT",
+        "GEOIP,CN,CN-SITE",
         "MATCH,PROXY",
     ):
         if rule not in rules:
