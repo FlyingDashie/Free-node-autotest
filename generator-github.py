@@ -3078,47 +3078,6 @@ def _print_ingest_groups(hits: list[tuple[str, list[str], int]]) -> None:
 
 
 
-def _github_repo_prefer_files(page_url: str, prefer: Any = "") -> list[str]:
-    match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
-    if not match:
-        return []
-    owner, repo = match.group(1), match.group(2)
-    names = [Path(str(tok)).name for tok in _prefer_tokens(prefer) if "." in str(tok)]
-    if not names:
-        return []
-    pages = [
-        f"https://github.com/{owner}/{repo}",
-        f"https://github.com/{owner}/{repo}/tree/master",
-        f"https://github.com/{owner}/{repo}/tree/main",
-    ]
-    found: list[str] = []
-    seen: set[str] = set()
-    blob_re = re.compile(r"/blob/([^/]+)/([^\"'\s>]+)", re.I)
-    for page in pages:
-        try:
-            print(f"[INFO] toolkit try page | url={page}")
-            body = fetch_text(page)
-        except Exception:
-            continue
-        for link in _collect_archive_links(body, page):
-            low = unquote(link).lower()
-            if any(name.lower() in low for name in names) and link not in seen:
-                seen.add(link)
-                found.append(link)
-        for hit in blob_re.finditer(body):
-            branch, rel = hit.group(1), unquote(hit.group(2))
-            base = Path(rel).name.lower()
-            if not any(base == name.lower() for name in names):
-                continue
-            raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{rel}"
-            if raw not in seen:
-                seen.add(raw)
-                found.append(raw)
-        if found:
-            break
-    return found
-
-
 def _collect_toolkit_candidates(
     page_url: str,
     prefer: str = "",
@@ -3144,11 +3103,8 @@ def _collect_toolkit_candidates(
             prefer=prefer,
             verify_hash=verify_hash,
         )
-        extra = _github_repo_prefer_files(page_url, prefer)
         if found:
-            return unique_ordered(found + extra)
-        if extra:
-            return extra
+            return found
         match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
         if match:
             home = f"https://github.com/{match.group(1)}/{match.group(2)}"
@@ -3160,7 +3116,6 @@ def _collect_toolkit_candidates(
             except Exception:
                 body = ""
             links = _collect_archive_links(body, readme)
-            links.extend(_github_repo_prefer_files(home, prefer))
             return _rank_package_links(links, prefer=prefer, page_text=body)
         return []
     body = ""
