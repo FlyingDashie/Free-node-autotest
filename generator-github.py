@@ -2395,7 +2395,7 @@ def _expand_github_release_assets(
         page_digests = _parse_page_hashes(body)
         for link in _collect_archive_links(body, asset_page):
             lower = link.lower()
-            if "/releases/download/" not in lower:
+            if "/releases/download/" not in lower and "/archive/refs/" not in lower:
                 continue
             if not (
                 _ARCHIVE_EXT_RE.search(link)
@@ -4043,12 +4043,26 @@ def _toolkit_named_file(package: Path | None, dest_dir: Path, name: str) -> Path
     if package is not None:
         if package.is_file() and package.name.lower() == name.lower():
             return package
-        if package.is_file() and package.suffix.lower() == Path(name).suffix.lower():
-            return package
         if package.is_dir():
             found = list(package.rglob(name))
             if found:
                 return found[0]
+        if package.is_file() and (
+            _ARCHIVE_EXT_RE.search(package.name)
+            or package.suffix.lower() in {".zip", ".gz", ".tgz"}
+        ):
+            unpacked = dest_dir / f"{package.stem}_unpacked"
+            os.makedirs(str(unpacked), exist_ok=True)
+            if not any(unpacked.iterdir()):
+                _extract_archive(package, unpacked)
+            found = list(unpacked.rglob(name))
+            if found:
+                print(
+                    f"[OK] toolkit extracted | file={found[0].name} | archive={package.name}"
+                )
+                return found[0]
+        if package.is_file() and package.suffix.lower() == Path(name).suffix.lower():
+            return package
     local = dest_dir / name
     if local.exists():
         return local
@@ -4103,6 +4117,8 @@ def prepare_geo_score() -> None:
         _ensure_geo_coords(json_path)
         if json_path is not None and json_path.is_file():
             files.append(json_path.name)
+            src = package.name if package is not None else json_path.name
+            print(f"[OK] toolkit found | file={json_path.name} | from={src}")
     names = ", ".join(files) if files else "-"
     print(f"[OK] geo score ready | files={names} | centroids={len(_GEO_COORDS)}")
 
