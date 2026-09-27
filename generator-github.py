@@ -3942,6 +3942,10 @@ def unique_ordered(items: list[str]) -> list[str]:
     return result
 
 
+def _export_proxy(proxy: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in proxy.items() if not str(key).startswith("_")}
+
+
 def sanitize_and_deduplicate(proxies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen_fingerprints: set[str] = set()
     seen_names: set[str] = set()
@@ -4008,6 +4012,7 @@ def normalize_proxy(raw: dict[str, Any], index: int) -> dict[str, Any] | None:
             proxy.pop("obfs-host", None)
 
     name = str(proxy.get("name", "")).strip() or f"node-{index}"
+    proxy["_geo_name"] = name
     name = name.replace("🇨🇳", "🇹🇼").replace("中国", "")
     server = str(proxy.get("server", "")).strip()
     if not server:
@@ -4547,7 +4552,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
         "global-client-fingerprint": "chrome",
         "generated-by": "free-node-autotest-raw",
         "generated-at": datetime.now(timezone.utc).isoformat(),
-        "proxies": nodes,
+        "proxies": [_export_proxy(item) if isinstance(item, dict) else item for item in nodes],
         "proxy-groups": [
             {
                 "name": "URL-TEST",
@@ -4581,6 +4586,7 @@ def write_scored_history(
         delay = int(latencies.get(name, 0) or 0)
         _group, coords, code, via = detect_geo(item)
         parts = health_score_parts(name, delay, coords)
+        item.pop("_geo_name", None)
         item["name"] = (
             f"{name} | score={parts['score']:.2f} "
             f"| latency={parts['latency']:.2f} "
@@ -5029,7 +5035,7 @@ def _iso_geo(iso: str) -> tuple[str, tuple[float, float] | None, str]:
     code = str(iso or "").strip().upper()
     if code in {"UK"}:
         code = "GB"
-    if code == "CN":
+    if code in {"CN", "RU", "IR"}:
         return "OTHER", None, code
     coords = _GEO_COORDS.get(code)
     group = code if code in _GEO_GROUP else "OTHER"
@@ -5078,6 +5084,7 @@ def _name_iso_hits(name: str) -> list[tuple[int, str]]:
         ("TR", r"土耳其|\bTR\b|Turkey|\U0001f1f9\U0001f1f7"),
         ("SE", r"瑞典|\bSE\b|Sweden|\U0001f1f8\U0001f1ea"),
         ("FI", r"芬兰|芬蘭|\bFI\b|Finland|\U0001f1eb\U0001f1ee"),
+        ("IR", r"伊朗|\bIR\b|Iran|\U0001f1ee\U0001f1f7"),
         ("CN", r"中国|中國|\bCN\b|China|\U0001f1e8\U0001f1f3"),
     )
     hits: list[tuple[int, str]] = []
@@ -5140,7 +5147,7 @@ def _detect_geo_addr(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | 
 
 def detect_geo(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, str, str]:
     addr_group, addr_coords, addr_code, addr_via = _detect_geo_addr(proxy)
-    name_code = _name_iso(str(proxy.get("name") or ""))
+    name_code = _name_iso(str(proxy.get("_geo_name") or proxy.get("name") or ""))
     cands: list[tuple[float, str, tuple[float, float] | None, str, str]] = []
     if name_code:
         group, coords, code = _iso_geo(name_code)
@@ -5173,7 +5180,7 @@ def geo_distance_weight(coords: tuple[float, float] | None) -> float:
 
 def build_proxy_metric(proxy: dict[str, Any], latency: int) -> ProxyMetric:
     name = str(proxy.get("name") or "")
-    region = detect_region(name)
+    region = detect_region(str(proxy.get("_geo_name") or name))
     geo_region, coords, _geo_code, _via = detect_geo(proxy)
     return ProxyMetric(
         proxy=proxy,
@@ -5288,7 +5295,7 @@ def build_config(metrics: list[ProxyMetric]) -> dict[str, Any]:
     if not metrics:
         metrics = [build_direct_fallback_metric()]
 
-    proxies = [item.proxy for item in metrics]
+    proxies = [_export_proxy(item.proxy) if isinstance(item.proxy, dict) else item.proxy for item in metrics]
     all_names = [item.proxy["name"] for item in metrics]
     scored_names = [
         item.proxy["name"]
