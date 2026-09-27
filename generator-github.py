@@ -2423,7 +2423,6 @@ def _expand_github_release_assets(
     seen: set[str] = set()
     checksum_links: list[str] = []
     prefer_on = bool(_prefer_tokens(token))
-    listed_at = time.time()
     for _, tag in tags:
         asset_page = f"https://github.com/{owner}/{repo}/releases/expanded_assets/{tag}"
         try:
@@ -2479,10 +2478,6 @@ def _expand_github_release_assets(
         urls = official_urls
     global _LAST_CHECKSUM_LINKS
     _LAST_CHECKSUM_LINKS = list(checksum_links)
-    print(
-        f"[INFO] toolkit release listed | files={len(urls)} "
-        f"| checksums={len(checksum_links)} | time={time.time()-listed_at:.1f}s"
-    )
     return urls
 
 
