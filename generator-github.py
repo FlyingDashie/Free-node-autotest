@@ -5058,7 +5058,56 @@ def _lookup_ip_geo(addr: str) -> tuple[str, tuple[float, float] | None, str] | N
     return group, coords, code
 
 
-def detect_geo(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, str, str]:
+def _name_iso_hits(name: str) -> list[tuple[int, str]]:
+    text = str(name or "")
+    patterns = (
+        ("HK", r"香港|\bHK\b|Hong\s*Kong|\U0001f1ed\U0001f1f0"),
+        ("JP", r"日本|\bJP\b|Japan|Tokyo|\U0001f1ef\U0001f1f5"),
+        ("SG", r"新加坡|\bSG\b|Singapore|\U0001f1f8\U0001f1ec"),
+        ("KR", r"韩国|韓國|\bKR\b|Korea|Seoul|\U0001f1f0\U0001f1f7"),
+        ("TW", r"台湾|台灣|\bTW\b|Taiwan|\U0001f1f9\U0001f1fc"),
+        ("US", r"美国|美國|\bUSA\b|\bUS\b|United\s*States|America|\U0001f1fa\U0001f1f8"),
+        ("DE", r"德国|德國|\bDE\b|Germany|Frankfurt|\U0001f1e9\U0001f1ea"),
+        ("GB", r"英国|英國|\bUK\b|\bGB\b|London|\U0001f1ec\U0001f1e7"),
+        ("NL", r"荷兰|荷蘭|\bNL\b|Netherlands|Amsterdam|\U0001f1f3\U0001f1f1"),
+        ("FR", r"法国|法國|\bFR\b|France|Paris|\U0001f1eb\U0001f1f7"),
+        ("CA", r"加拿大|\bCA\b|Canada|\U0001f1e8\U0001f1e6"),
+        ("AU", r"澳洲|澳大利亚|澳洲|\bAU\b|Australia|\U0001f1e6\U0001f1fa"),
+        ("RU", r"俄罗斯|俄羅斯|\bRU\b|Russia|\U0001f1f7\U0001f1fa"),
+        ("IN", r"印度|\bIN\b|India|\U0001f1ee\U0001f1f3"),
+        ("TR", r"土耳其|\bTR\b|Turkey|\U0001f1f9\U0001f1f7"),
+        ("SE", r"瑞典|\bSE\b|Sweden|\U0001f1f8\U0001f1ea"),
+        ("FI", r"芬兰|芬蘭|\bFI\b|Finland|\U0001f1eb\U0001f1ee"),
+        ("CN", r"中国|中國|\bCN\b|China|\U0001f1e8\U0001f1f3"),
+    )
+    hits: list[tuple[int, str]] = []
+    for code, pat in patterns:
+        for m in re.finditer(pat, text, re.I):
+            hits.append((m.start(), code))
+    hits.sort()
+    return hits
+
+
+def _name_iso(name: str) -> str:
+    text = str(name or "")
+    hits = _name_iso_hits(text)
+    if not hits:
+        return ""
+    hop = list(re.finditer(r"→|->|=>|➔|➡|➜|/\s*to\s*|中转|中轉", text, re.I))
+    if hop:
+        cut = hop[-1].end()
+        after = [code for pos, code in hits if pos >= cut]
+        after = [code for code in after if code != "CN"] or after
+        if after:
+            return after[-1]
+    codes = [code for _pos, code in hits]
+    dest = [code for code in codes if code != "CN"]
+    if dest:
+        return dest[-1]
+    return codes[-1]
+
+
+def _detect_geo_addr(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, str, str]:
     server = str(proxy.get("server") or "").strip()
     if server and not _geo_is_anycast(server.lower()):
         try:
@@ -5087,6 +5136,22 @@ def detect_geo(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, 
                 group, coords, code = _iso_geo(code)
                 return group, coords, code, "host"
     return "OTHER", None, "-", "none"
+
+
+def detect_geo(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, str, str]:
+    addr_group, addr_coords, addr_code, addr_via = _detect_geo_addr(proxy)
+    name_code = _name_iso(str(proxy.get("name") or ""))
+    cands: list[tuple[float, str, tuple[float, float] | None, str, str]] = []
+    if name_code:
+        group, coords, code = _iso_geo(name_code)
+        cands.append((geo_distance_weight(coords), group, coords, code, "name"))
+    if addr_code and addr_code not in {"", "-"}:
+        cands.append((geo_distance_weight(addr_coords), addr_group, addr_coords, addr_code, addr_via))
+    if not cands:
+        return "OTHER", None, "-", "none"
+    cands.sort(key=lambda item: item[0], reverse=True)
+    _w, group, coords, code, via = cands[0]
+    return group, coords, code, via
 
 
 def _haversine_km(src: tuple[float, float], dst: tuple[float, float]) -> float:
