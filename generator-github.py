@@ -4604,7 +4604,7 @@ def write_scored_history(
             f"| time={delay}ms "
             f"| geo={parts['geo']:.2f} "
             f"| adj={parts['adj']:+.2f} "
-            f"| stab={parts['stab']:.2f} "
+            f"| stab={parts['stab']:.4f} "
             f"| iso={code} | via={via} "
             f"| km={parts['km']:.0f} | w={parts['w']:.3f} "
             f"| {name}"
