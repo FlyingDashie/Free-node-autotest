@@ -166,7 +166,13 @@ MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
 MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "400"))
-DEBUG_ONLY_SOURCE = ""
+DEBUG_ONLY_SOURCES = [
+    "ChromeGO-Toolkit",
+    "1VPN-CRX",
+    "Pawdroid-SR-APK",
+    "Pawdroid-SS-APK",
+]
+_FILE_SCAN_WORKERS = 50
 
 SOURCE_GROUPS = [
     {
@@ -323,18 +329,22 @@ SOURCE_GROUPS = [
 
 
 _kept_sources: list[dict[str, Any]] = []
-_debug_only = str(DEBUG_ONLY_SOURCE or "").strip()
+_debug_only = [
+    str(item).strip()
+    for item in (DEBUG_ONLY_SOURCES if isinstance(DEBUG_ONLY_SOURCES, (list, tuple)) else [DEBUG_ONLY_SOURCES])
+    if str(item).strip()
+]
 for _src in SOURCE_GROUPS:
     _name = str(_src.get("name") or "").strip()
     if not _name:
         print("[WARN] skip source without name")
         continue
-    if _debug_only and _name != _debug_only:
+    if _debug_only and _name not in _debug_only:
         continue
     _kept_sources.append(_src)
 SOURCE_GROUPS = _kept_sources
 if _debug_only:
-    print(f"[DEBUG] only source={_debug_only} | kept={len(SOURCE_GROUPS)}")
+    print(f"[DEBUG] only sources={','.join(_debug_only)} | kept={len(SOURCE_GROUPS)}")
 
 
 _RUN_IDS: tuple[str, str, str] | None = None
@@ -2578,6 +2588,9 @@ def _download_archive(
 ) -> Path | None:
     from urllib.parse import urlparse, unquote
     local = _find_local_package(url)
+    if local is None and _debug_only:
+        name_hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
+        local = _find_local_package(name_hint)
     if local is not None:
         print(f"[OK] toolkit using local | file={local} | size={format_size(local.stat().st_size)}")
         if expected_hashes:
@@ -2961,16 +2974,14 @@ def _toolkit_iter_packages(
 
 def _collect_toolkit_sub_urls(root: Path) -> list[str]:
     url_re = re.compile(r"https?://[^\s\"'<>]+", re.I)
-    found: list[str] = []
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if path.suffix.lower() not in _TOOLKIT_TEXT_EXT:
-            continue
+    files = [path for path in root.rglob("*") if path.is_file()]
+
+    def _from_file(path: Path) -> list[str]:
+        found: list[str] = []
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
-            continue
+            return found
         for raw in url_re.findall(text):
             link = raw.rstrip("\\").rstrip(").,;]")
             if not link.startswith("http"):
@@ -2979,10 +2990,13 @@ def _collect_toolkit_sub_urls(root: Path) -> list[str]:
                 continue
             if _ARCHIVE_EXT_RE.search(link):
                 continue
-            parsed = urlparse(link)
+            try:
+                parsed = urlparse(link)
+            except ValueError:
+                continue
             host = parsed.netloc.lower()
-            path = parsed.path.lower()
-            if host in {"github.com", "www.github.com"} and "/raw/" not in path:
+            path_text = parsed.path.lower()
+            if host in {"github.com", "www.github.com"} and "/raw/" not in path_text:
                 continue
             if re.search(
                 r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|exe|dmg|apk|msi|iso|md)(?:$|[?#])",
@@ -2993,25 +3007,35 @@ def _collect_toolkit_sub_urls(root: Path) -> list[str]:
             if re.search(r"\.(?:yaml|yml|json|txt)(?:$|[?#])", link, re.I):
                 found.append(link)
                 continue
-            if "raw.githubusercontent.com" in host or "/raw/" in path:
+            if "raw.githubusercontent.com" in host or "/raw/" in path_text:
                 found.append(link)
+        return found
+
+    found: list[str] = []
+    if files:
+        workers = max(1, min(_FILE_SCAN_WORKERS, len(files)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for chunk in pool.map(_from_file, files):
+                found.extend(chunk)
     return unique_ordered(found)
 
 
 def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if path.suffix.lower() not in _TOOLKIT_CONFIG_EXT:
-            continue
+    files = [path for path in root.rglob("*") if path.is_file()]
+
+    def _from_file(path: Path) -> list[dict[str, Any]]:
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
-            continue
-        nodes = extract_proxies(text)
-        if nodes:
-            found.extend(nodes)
+            return []
+        return extract_proxies(text)
+
+    if files:
+        workers = max(1, min(_FILE_SCAN_WORKERS, len(files)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for chunk in pool.map(_from_file, files):
+                found.extend(chunk)
     return found
 
 
@@ -3214,28 +3238,36 @@ def _parse_1vpn_crx_bundle(root: Path) -> list[dict[str, Any]]:
     username = ""
     password = ""
     hosts: list[tuple[str, int]] = []
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if path.suffix.lower() not in {".js", ".json", ".txt"}:
-            continue
+    files = [path for path in root.rglob("*") if path.is_file()]
+
+    def _from_file(path: Path) -> tuple[str, str, list[tuple[str, int]]]:
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
-            continue
-        if not username:
-            found_user = user_re.search(text)
-            found_pass = pass_re.search(text)
-            if found_user and found_pass:
-                username = found_user.group(1).strip()
-                password = found_pass.group(1).strip()
+            return "", "", []
+        user = passwd = ""
+        found_user = user_re.search(text)
+        found_pass = pass_re.search(text)
+        if found_user and found_pass:
+            user = found_user.group(1).strip()
+            passwd = found_pass.group(1).strip()
+        found_hosts: list[tuple[str, int]] = []
         for host, port_text in host_re.findall(text):
             try:
                 port = int(port_text)
             except Exception:
                 continue
             if 0 < port <= 65535:
-                hosts.append((host.strip(), port))
+                found_hosts.append((host.strip(), port))
+        return user, passwd, found_hosts
+
+    if files:
+        workers = max(1, min(_FILE_SCAN_WORKERS, len(files)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for user, passwd, found_hosts in pool.map(_from_file, files):
+                if user and passwd and not username:
+                    username, password = user, passwd
+                hosts.extend(found_hosts)
     nodes: list[dict[str, Any]] = []
     seen: set[tuple[str, int]] = set()
     for host, port in hosts:
@@ -3497,10 +3529,7 @@ def _apk_scan_one(
 
 
 def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
-    files: list[Path] = []
-    for path in root.rglob("*"):
-        if path.is_file() and _apk_scan_file(path):
-            files.append(path)
+    files: list[Path] = [path for path in root.rglob("*") if path.is_file()]
 
     def _rank(path: Path) -> tuple[int, int]:
         name = path.name.lower()
@@ -3508,11 +3537,13 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
             size = path.stat().st_size
         except OSError:
             size = 0
-        if "libapp" in name:
+        if _apk_scan_file(path):
             return (0, size)
-        if path.suffix.lower() == ".so":
+        if "libapp" in name:
             return (1, size)
-        return (2, size)
+        if path.suffix.lower() == ".so":
+            return (2, size)
+        return (3, size)
 
     files.sort(key=_rank)
     prefixes: list[str] = []
@@ -3520,7 +3551,7 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
     tokens: list[str] = []
     scored: list[tuple[int, bytes]] = []
     if files:
-        workers = max(1, min(8, len(files)))
+        workers = max(1, min(_FILE_SCAN_WORKERS, len(files)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for pre, nam, sco, tok in pool.map(_apk_scan_one, files):
                 prefixes.extend(pre)
