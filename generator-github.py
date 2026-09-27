@@ -4603,6 +4603,7 @@ def write_scored_history(
             f"| latency={parts['latency']:.2f} "
             f"| time={delay}ms "
             f"| geo={parts['geo']:.2f} "
+            f"| adj={parts['adj']:+.2f} "
             f"| stab={parts['stab']:.2f} "
             f"| iso={code} | via={via} "
             f"| km={parts['km']:.0f} | w={parts['w']:.3f} "
@@ -5231,6 +5232,7 @@ def health_score_parts(
     code = str(iso or "").strip().upper()
     if code == "UK":
         code = "GB"
+    adj = 0.0
     if code in _GEO_BLOCK:
         weight = 0.0
         geo_term = 0.0
@@ -5238,20 +5240,22 @@ def health_score_parts(
     else:
         weight = geo_distance_weight(coords)
         geo_term = _GEO_WEIGHT * weight
-        geo_term *= float(_GEO_ISO_MUL.get(code, 1.0))
-        geo_term += float(_GEO_ISO_ADD.get(code, 0.0))
+        adjusted = geo_term * float(_GEO_ISO_MUL.get(code, 1.0))
+        adjusted += float(_GEO_ISO_ADD.get(code, 0.0))
+        adj = adjusted - geo_term
         dist = _haversine_km(_GEO_ANCHOR, coords) if coords else 0.0
     stab_term = stability * 0.1
-    total = latency_term + geo_term + stab_term
+    total = latency_term + geo_term + adj + stab_term
     if int(latency) <= 0:
         total -= 100.0
     if code in _GEO_BLOCK:
         total -= 5.0
-        geo_term -= 5.0
+        adj -= 5.0
     return {
         "score": total,
         "latency": latency_term,
         "geo": geo_term,
+        "adj": adj,
         "stab": stab_term,
         "km": dist,
         "w": weight,
