@@ -4599,14 +4599,14 @@ def write_scored_history(
         parts = health_score_parts(name, delay, coords, iso=code)
         item.pop("_geo_name", None)
         item["name"] = (
-            f"score={parts['score']:.2f} "
-            f"| latency={parts['latency']:.2f} "
+            f"score={parts['score']:.4f} "
+            f"| latency={parts['latency']:.4f} "
             f"| time={delay}ms "
-            f"| geo={parts['geo']:.2f} "
-            f"| adj={parts['adj']:+.2f} "
+            f"| geo={parts['geo']:.4f} "
+            f"| adj={parts['adj']:+.4f} "
             f"| stab={parts['stab']:.4f} "
             f"| iso={code} | via={via} "
-            f"| km={parts['km']:.0f} | w={parts['w']:.3f} "
+            f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
             f"| {name}"
         )
         ranked.append((parts["score"], item))
