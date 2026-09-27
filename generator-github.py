@@ -20,7 +20,8 @@ import tempfile
 import threading
 import time
 import zipfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+import multiprocessing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1096,6 +1097,18 @@ def extract_client_json_proxies(text: str) -> list[dict[str, Any]]:
     return found
 
 
+def _extract_proxies_pool(texts: list[str]) -> list[list[dict[str, Any]]]:
+    if not texts:
+        return []
+    if len(texts) < 4:
+        return [extract_proxies(item) for item in texts]
+    workers = _scan_worker_count(len(texts))
+    ctx = multiprocessing.get_context("fork")
+    chunk = max(1, len(texts) // workers)
+    with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+        return list(pool.map(extract_proxies, texts, chunksize=chunk))
+
+
 def extract_proxies(text: str) -> list[dict[str, Any]]:
     decoded = maybe_base64_decode(text)
     stripped = decoded.strip()
@@ -1609,10 +1622,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             ua = spec["user_agent"]
             ref = spec["referer"]
 
-            def _ingest(url: str, text: str) -> bool:
+            def _ingest(url: str, text: str, found: list[dict[str, Any]] | None = None) -> bool:
                 nonlocal used_url
                 tried_addrs.add(_source_addr_key(url))
-                found = extract_proxies(text)
+                if found is None:
+                    found = extract_proxies(text)
                 if not found:
                     if not merge_all:
                         print(f"[WARN] source try failed | reason=empty | url={url}")
@@ -1655,11 +1669,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     return got
 
                 bodies = _fetch_pool(pending)
-                for url in pending:
-                    text = bodies.get(url)
-                    if text is None:
-                        continue
-                    _ingest(url, text)
+                ready = [url for url in pending if url in bodies]
+                parsed = _extract_proxies_pool([bodies[url] for url in ready])
+                for url, found in zip(ready, parsed):
+                    _ingest(url, bodies[url], found)
                 if _SUBLINK_BARE and bare_link != "none" and (
                     (not first_hit and len(source_seen) <= 10)
                     or (first_hit and not source_seen)
@@ -1676,11 +1689,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                             f"| bare links={len(extra)}"
                         )
                         extra_bodies = _fetch_pool(extra)
-                        for url in extra:
-                            text = extra_bodies.get(url)
-                            if text is None:
-                                continue
-                            _ingest(url, text)
+                        extra_ready = [url for url in extra if url in extra_bodies]
+                        extra_parsed = _extract_proxies_pool([extra_bodies[url] for url in extra_ready])
+                        for url, found in zip(extra_ready, extra_parsed):
+                            _ingest(url, extra_bodies[url], found)
             else:
                 for url in pending:
                     try:
@@ -2134,8 +2146,8 @@ _TOOLKIT_SKIP_HOST_RE = re.compile(
     re.I,
 )
 _TOOLKIT_TEXT_EXT = {
-    ".bat", ".cmd", ".ps1", ".psm1",
-    ".sh", ".bash", ".zsh", ".fish", ".command",
+    ".bat", ".cmd", ".ps1", ".ps2", ".psm1",
+    ".sh", ".bash", ".zsh", ".fish", ".command", ".vbs",
     ".txt", ".url", ".md", ".ini", ".conf", ".cfg", ".config",
     ".js", ".log", ".nfo", ".rst",
     ".yaml", ".yml", ".json", ".toml", ".xml", ".plist",
@@ -2144,6 +2156,8 @@ _TOOLKIT_TEXT_EXT = {
 _TOOLKIT_CONFIG_EXT = {
     ".yaml", ".yml", ".json", ".txt", ".md",
     ".conf", ".cfg", ".list", ".sub",
+    ".bat", ".cmd", ".ps1", ".ps2", ".psm1",
+    ".sh", ".bash", ".zsh", ".fish", ".command", ".vbs",
 }
 _DISCOVER_PAGES: list[str] = []
 _SUBLINK_BARE: list[str] = []
@@ -2973,6 +2987,26 @@ def _toolkit_iter_packages(
             shutil.rmtree(root, ignore_errors=True)
 
 
+def _name_matches_exts(name: str, allowed: set[str]) -> bool:
+    low = str(name or "").lower()
+    for ext in sorted(allowed, key=len, reverse=True):
+        start = 0
+        while True:
+            idx = low.find(ext, start)
+            if idx < 0:
+                break
+            end = idx + len(ext)
+            if end == len(low) or not low[end].isalnum():
+                return True
+            start = idx + 1
+    return False
+
+
+def _scan_worker_count(nfiles: int) -> int:
+    cores = os.cpu_count() or 2
+    return max(1, min(_FILE_SCAN_WORKERS, cores, nfiles))
+
+
 def _file_looks_text(path: Path) -> bool:
     try:
         chunk = path.read_bytes()[:8192]
@@ -2990,74 +3024,80 @@ def _file_looks_text(path: Path) -> bool:
     return printable / max(len(sample), 1) >= 0.85
 
 
-def _collect_toolkit_sub_urls(root: Path) -> list[str]:
-    url_re = re.compile(r"https?://[^\s\"'<>]+", re.I)
-    files = [path for path in root.rglob("*") if path.is_file()]
-
-    def _from_file(path: Path) -> list[str]:
-        found: list[str] = []
-        if not _file_looks_text(path):
-            return found
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            return found
-        for raw in url_re.findall(text):
-            link = raw.rstrip("\\").rstrip(").,;]")
-            if not link.startswith("http"):
-                continue
-            if _TOOLKIT_SKIP_HOST_RE.search(link):
-                continue
-            if _ARCHIVE_EXT_RE.search(link):
-                continue
-            try:
-                parsed = urlparse(link)
-            except ValueError:
-                continue
-            host = parsed.netloc.lower()
-            path_text = parsed.path.lower()
-            if host in {"github.com", "www.github.com"} and "/raw/" not in path_text:
-                continue
-            if re.search(
-                r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|exe|dmg|apk|msi|iso|md)(?:$|[?#])",
-                link,
-                re.I,
-            ):
-                continue
-            if re.search(r"\.(?:yaml|yml|json|txt)(?:$|[?#])", link, re.I):
-                found.append(link)
-                continue
-            if "raw.githubusercontent.com" in host or "/raw/" in path_text:
-                found.append(link)
+def _toolkit_urls_from_file(path: Path) -> list[str]:
+    found: list[str] = []
+    if not _name_matches_exts(path.name, _TOOLKIT_TEXT_EXT):
         return found
+    if not _file_looks_text(path):
+        return found
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return found
+    url_re = re.compile(r"https?://[^\s\"'<>]+", re.I)
+    for raw in url_re.findall(text):
+        link = raw.rstrip("\\").rstrip(").,;]")
+        if not link.startswith("http"):
+            continue
+        if _TOOLKIT_SKIP_HOST_RE.search(link):
+            continue
+        if _ARCHIVE_EXT_RE.search(link):
+            continue
+        try:
+            parsed = urlparse(link)
+        except ValueError:
+            continue
+        host = parsed.netloc.lower()
+        path_text = parsed.path.lower()
+        if host in {"github.com", "www.github.com"} and "/raw/" not in path_text:
+            continue
+        if re.search(
+            r"\.(?:html?|png|jpe?g|gif|svg|webp|js|css|exe|dmg|apk|msi|iso|md)(?:$|[?#])",
+            link,
+            re.I,
+        ):
+            continue
+        if re.search(r"\.(?:yaml|yml|json|txt)(?:$|[?#])", link, re.I):
+            found.append(link)
+            continue
+        if "raw.githubusercontent.com" in host or "/raw/" in path_text:
+            found.append(link)
+    return found
 
+
+def _toolkit_nodes_from_file(path: Path) -> list[dict[str, Any]]:
+    if not _file_looks_text(path):
+        return []
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return []
+    return extract_proxies(text)
+
+
+def _collect_toolkit_sub_urls(root: Path) -> list[str]:
+    files = [path for path in root.rglob("*") if path.is_file()]
     found: list[str] = []
     if files:
-        workers = max(1, min(_FILE_SCAN_WORKERS, len(files)))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            for chunk in pool.map(_from_file, files):
-                found.extend(chunk)
+        workers = _scan_worker_count(len(files))
+        ctx = multiprocessing.get_context("fork")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+            chunk = max(1, len(files) // workers)
+            for piece in pool.map(_toolkit_urls_from_file, files, chunksize=chunk):
+                found.extend(piece)
     return unique_ordered(found)
 
 
 def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
-    found: list[dict[str, Any]] = []
     files = [path for path in root.rglob("*") if path.is_file()]
-
-    def _from_file(path: Path) -> list[dict[str, Any]]:
-        if not _file_looks_text(path):
-            return []
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            return []
-        return extract_proxies(text)
-
+    found: list[dict[str, Any]] = []
     if files:
-        workers = max(1, min(_FILE_SCAN_WORKERS, len(files)))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            for chunk in pool.map(_from_file, files):
-                found.extend(chunk)
+        workers = _scan_worker_count(len(files))
+        ctx = multiprocessing.get_context("fork")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+            chunk = max(1, len(files) // workers)
+            for piece in pool.map(_toolkit_nodes_from_file, files, chunksize=chunk):
+                found.extend(piece)
     return found
 
 
@@ -3263,6 +3303,8 @@ def _parse_1vpn_crx_bundle(root: Path) -> list[dict[str, Any]]:
     files = [path for path in root.rglob("*") if path.is_file()]
 
     def _from_file(path: Path) -> tuple[str, str, list[tuple[str, int]]]:
+        if not _name_matches_exts(path.name, _TOOLKIT_TEXT_EXT):
+            return "", "", []
         if not _file_looks_text(path):
             return "", "", []
         try:
@@ -3577,9 +3619,11 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
     tokens: list[str] = []
     scored: list[tuple[int, bytes]] = []
     if files:
-        workers = max(1, min(_FILE_SCAN_WORKERS, len(files)))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            for pre, nam, sco, tok in pool.map(_apk_scan_one, files):
+        workers = _scan_worker_count(len(files))
+        ctx = multiprocessing.get_context("fork")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+            chunk = max(1, len(files) // workers)
+            for pre, nam, sco, tok in pool.map(_apk_scan_one, files, chunksize=chunk):
                 prefixes.extend(pre)
                 names.extend(nam)
                 scored.extend(sco)
@@ -3814,6 +3858,7 @@ def _discover_toolkit_encrypted_apk(
                     return url, None, str(exc)
 
             workers = max(1, min(CFG_FETCH_WORKERS, len(urls)))
+            plains: list[tuple[str, str, str, str]] = []
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = [pool.submit(_fetch_cfg, url) for url in urls]
                 for future in as_completed(futures):
@@ -3848,15 +3893,17 @@ def _discover_toolkit_encrypted_apk(
                                 continue
                         elif not plain:
                             continue
-                    found = extract_proxies(plain)
-                    if not found:
-                        continue
                     if locked:
                         _APK_VERIFIED_KEYS[kind] = locked[0]
-                    marks, kept = _dedupe_proxies(found, seen)
-                    apk_hits.append((short, marks, len(kept)))
-                    collected.extend(kept)
-                    hit_names.add(fname)
+                    plains.append((url, short, fname, plain))
+            parsed = _extract_proxies_pool([item[3] for item in plains])
+            for (_url, short, fname, _plain), found in zip(plains, parsed):
+                if not found:
+                    continue
+                marks, kept = _dedupe_proxies(found, seen)
+                apk_hits.append((short, marks, len(kept)))
+                collected.extend(kept)
+                hit_names.add(fname)
             if collected:
                 _print_ingest_groups(apk_hits)
                 return collected, archive_url
