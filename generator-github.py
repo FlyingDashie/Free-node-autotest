@@ -181,6 +181,9 @@ SOURCE_GROUPS = [
     {
         "name": "Freesocks",
         "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
+        "also": [
+            "https://freesocks.org/api/v1/sub/4cae35810e6f5c4d92e28e32104e0080",
+        ],
     },
     {
         "name": "NekoWarp",
