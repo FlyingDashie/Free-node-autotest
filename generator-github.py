@@ -116,6 +116,35 @@ _TEST_DONE = 0
 _TEST_LOCK = threading.Lock()
 _BENCH_SLOTS = threading.Semaphore(3)
 _BRANCH_NEXT = 1
+_RUN_STAMPS: list[str] = []
+_SCORED_LINES: list[str] = []
+_STAMP_LOCK = threading.Lock()
+
+
+class _StampStream:
+    def __init__(self, inner: Any) -> None:
+        self.inner = inner
+        self._buf = ""
+
+    def write(self, data: str) -> int:
+        text = str(data or "")
+        written = self.inner.write(text)
+        self._buf += text
+        while "\n" in self._buf:
+            self._buf = self._buf.split("\n", 1)[1]
+            with _STAMP_LOCK:
+                _RUN_STAMPS.append(datetime.now(timezone.utc).isoformat())
+        return written
+
+    def flush(self) -> None:
+        self.inner.flush()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)
+
+
+sys.stdout = _StampStream(sys.stdout)
+sys.stderr = _StampStream(sys.stderr)
 
 
 def _bench_log(msg: str) -> None:
@@ -4667,16 +4696,22 @@ def write_scored_history(
             f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
             f"| {name}"
         )
-        ranked.append((parts["score"], datetime.now(timezone.utc).isoformat(), item["name"]))
+        ranked.append((parts["score"], item["name"]))
     ranked.sort(key=lambda pair: pair[0], reverse=True)
-    stamps = [f"{index}={ts}" for index, (_score, ts, _line) in enumerate(ranked, start=1)]
-    lines = [line for _score, _ts, line in ranked if line]
+    global _SCORED_LINES
+    _SCORED_LINES = [line for _score, line in ranked if line]
+
+
+def write_debug_history() -> None:
     path = history_named("debug", "log")
+    print(f"[INFO] debug history written | path={path} | proxies={len(_SCORED_LINES)}")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    stamps = [f"{index}={ts}" for index, ts in enumerate(_RUN_STAMPS, start=1)]
     chunks = [" ".join(stamps), "============================================================"]
-    if lines:
-        chunks.append("\n".join(lines))
+    if _SCORED_LINES:
+        chunks.append("\n".join(_SCORED_LINES))
     path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
-    print(f"[INFO] debug history written | path={path} | proxies={len(lines)}")
 
 
 def history_file_stamp(name: str) -> str:
@@ -5804,3 +5839,4 @@ if __name__ == "__main__":
     finally:
         _SEP_JUST_PRINTED = False
         print_sep()
+        write_debug_history()
