@@ -5219,15 +5219,21 @@ def health_score_parts(
         code = "GB"
     if code in _GEO_BLOCK:
         weight = 0.0
-        geo_term = _GEO_BLOCK_PENALTY
+        geo_term = 0.0
         dist = 0.0
     else:
         weight = geo_distance_weight(coords)
         geo_term = _GEO_WEIGHT * weight
         dist = _haversine_km(_GEO_ANCHOR, coords) if coords else 0.0
     stab_term = stability * 0.1
+    total = latency_term + geo_term + stab_term
+    if int(latency) <= 0:
+        total -= 100.0
+    if code in _GEO_BLOCK:
+        total -= 5.0
+        geo_term -= 5.0
     return {
-        "score": latency_term + geo_term + stab_term,
+        "score": total,
         "latency": latency_term,
         "geo": geo_term,
         "stab": stab_term,
