@@ -2137,6 +2137,7 @@ _TOOLKIT_TEXT_EXT = {
     ".bat", ".cmd", ".ps1", ".psm1",
     ".sh", ".bash", ".zsh", ".fish", ".command",
     ".txt", ".url", ".md", ".ini", ".conf", ".cfg", ".config",
+    ".js", ".log", ".nfo", ".rst",
     ".yaml", ".yml", ".json", ".toml", ".xml", ".plist",
     ".list", ".sub", ".csv",
 }
@@ -2972,12 +2973,31 @@ def _toolkit_iter_packages(
             shutil.rmtree(root, ignore_errors=True)
 
 
+def _file_looks_text(path: Path) -> bool:
+    try:
+        chunk = path.read_bytes()[:8192]
+    except Exception:
+        return False
+    if not chunk:
+        return True
+    if b"\x00" in chunk:
+        return False
+    sample = chunk.decode("utf-8", errors="replace")
+    bad = sample.count("\ufffd")
+    printable = sum(ch.isprintable() or ch.isspace() for ch in sample)
+    if bad / max(len(sample), 1) > 0.12:
+        return False
+    return printable / max(len(sample), 1) >= 0.85
+
+
 def _collect_toolkit_sub_urls(root: Path) -> list[str]:
     url_re = re.compile(r"https?://[^\s\"'<>]+", re.I)
     files = [path for path in root.rglob("*") if path.is_file()]
 
     def _from_file(path: Path) -> list[str]:
         found: list[str] = []
+        if not _file_looks_text(path):
+            return found
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
@@ -3025,6 +3045,8 @@ def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
     files = [path for path in root.rglob("*") if path.is_file()]
 
     def _from_file(path: Path) -> list[dict[str, Any]]:
+        if not _file_looks_text(path):
+            return []
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
@@ -3241,6 +3263,8 @@ def _parse_1vpn_crx_bundle(root: Path) -> list[dict[str, Any]]:
     files = [path for path in root.rglob("*") if path.is_file()]
 
     def _from_file(path: Path) -> tuple[str, str, list[tuple[str, int]]]:
+        if not _file_looks_text(path):
+            return "", "", []
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
@@ -3529,7 +3553,9 @@ def _apk_scan_one(
 
 
 def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]:
-    files: list[Path] = [path for path in root.rglob("*") if path.is_file()]
+    files: list[Path] = [
+        path for path in root.rglob("*") if path.is_file() and _apk_scan_file(path)
+    ]
 
     def _rank(path: Path) -> tuple[int, int]:
         name = path.name.lower()
