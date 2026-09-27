@@ -5185,47 +5185,9 @@ def build_proxy_metric(proxy: dict[str, Any], latency: int) -> ProxyMetric:
 
 
 def detect_region(name: str) -> str:
-    text = name.lower()
-    patterns = {
-        "HK": (
-            "regex:\\bhk\\b",
-            "hong kong",
-            "\\u9999\\u6e2f",
-            "\U0001f1ed\U0001f1f0",
-        ),
-        "JP": (
-            "regex:\\bjp\\b",
-            "japan",
-            "\\u65e5\\u672c",
-            "\U0001f1ef\U0001f1f5",
-        ),
-        "US": (
-            "regex:\\bus\\b",
-            "regex:\\busa\\b",
-            "united states",
-            "america",
-            "\\u7f8e\\u56fd",
-            "\\u7f8e\\u570b",
-            "\U0001f1fa\U0001f1f8",
-        ),
-        "SG": (
-            "regex:\\bsg\\b",
-            "singapore",
-            "\\u65b0\\u52a0\\u5761",
-            "\U0001f1f8\U0001f1ec",
-        ),
-    }
-    for region, tokens in patterns.items():
-        for token in tokens:
-            if token.startswith("regex:"):
-                if re.search(token.removeprefix("regex:"), text):
-                    return region
-                continue
-            if token.startswith("\\u"):
-                token = token.encode("utf-8").decode("unicode_escape")
-            if token in text:
-                return region
-    return "OTHER"
+    group, _coords, _code = _iso_geo(_name_iso(name))
+    return group
+
 
 
 def health_score_parts(
