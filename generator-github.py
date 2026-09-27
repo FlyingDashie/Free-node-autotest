@@ -4912,6 +4912,16 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         metrics = _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, list(proxies), branch="1"
         )
+        metrics, core_dropped = dedupe_metrics_by_core(metrics)
+        for item in core_dropped:
+            proxy = item.proxy if isinstance(item.proxy, dict) else {}
+            name = str(proxy.get("name") or "")
+            _DROP_NAMES.append(name)
+            print(
+                f"[DROP] name={name} {{core}} "
+                f"| server={proxy.get('server')}:{proxy.get('port')} "
+                f"| reason=duplicate core"
+            )
         if _DROP_NAMES:
             tallies: dict[str, int] = {}
             order: list[str] = []
@@ -5541,27 +5551,21 @@ def print_source_live_stats(
     print_sep()
 
 
-def dedupe_metrics_by_core(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
+def dedupe_metrics_by_core(metrics: list[ProxyMetric]) -> tuple[list[ProxyMetric], list[ProxyMetric]]:
     best: dict[str, ProxyMetric] = {}
     order: list[str] = []
-    dropped_names: list[str] = []
+    dropped_items: list[ProxyMetric] = []
     for item in metrics:
         key = proxy_core_key(item.proxy)
-        name = str(item.proxy.get("name") or "")
         if key not in best:
             best[key] = item
             order.append(key)
         elif item.health_score > best[key].health_score:
-            dropped_names.append(str(best[key].proxy.get("name") or ""))
+            dropped_items.append(best[key])
             best[key] = item
         else:
-            dropped_names.append(name)
-    dropped = len(dropped_names)
-    if dropped:
-        shown = " | ".join(dropped_names[:8])
-        extra = f" | more={dropped-8}" if dropped > 8 else ""
-        print(f"[INFO] core-dedupe | dropped={dropped} | by=health_score | name={shown}{extra}")
-    return [best[key] for key in order]
+            dropped_items.append(item)
+    return [best[key] for key in order], dropped_items
 
 
 def limit_metrics_per_source(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
@@ -5741,7 +5745,6 @@ def main() -> None:
     if raw_nodes:
         write_scored_history(raw_nodes, lat_map)
     raw_live = count_live_by_prefix(metrics)
-    metrics = dedupe_metrics_by_core(metrics)
     metrics = limit_metrics_per_source(metrics)
     metrics = limit_metrics_total(metrics)
     print_live_geo_score_stats(metrics)
