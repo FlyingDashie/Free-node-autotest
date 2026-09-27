@@ -4982,10 +4982,13 @@ def test_single_proxy(controller_url: str, proxy: dict[str, Any]) -> ProxyMetric
 
 _GEO_ANCHOR = (28.99775, 126.90985)  # midpoint of Hong Kong and Tokyo
 _GEOIP_READER = None
-_GEO_DECAY_KM = 2000.0
-_GEO_WEIGHT = 80.0
+_GEO_DECAY_KM = 1500.0
+_GEO_WEIGHT = 160.0
 _GEO_BLOCK = {"CN", "RU", "IR"}
 _GEO_BLOCK_PENALTY = -5.0
+_GEO_ISO_MUL = {"KR": 0.5, "US": 0.2}
+_GEO_ISO_ADD = {"HK": 40.0, "JP": 35.0}
+_SCORE_LAT_NUM = 2500.0
 _GEO_ANYCAST = (
     "cloudflare", "1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4",
     "google.com", "gstatic", "googleapis", "fastly", "akamai",
@@ -5224,7 +5227,7 @@ def health_score_parts(
     if int(latency) <= 0:
         latency_term = 0.0
     else:
-        latency_term = LATENCY_TIMEOUT_MS / int(latency)
+        latency_term = _SCORE_LAT_NUM / int(latency)
     code = str(iso or "").strip().upper()
     if code == "UK":
         code = "GB"
@@ -5235,6 +5238,8 @@ def health_score_parts(
     else:
         weight = geo_distance_weight(coords)
         geo_term = _GEO_WEIGHT * weight
+        geo_term *= float(_GEO_ISO_MUL.get(code, 1.0))
+        geo_term += float(_GEO_ISO_ADD.get(code, 0.0))
         dist = _haversine_km(_GEO_ANCHOR, coords) if coords else 0.0
     stab_term = stability * 0.1
     total = latency_term + geo_term + stab_term
