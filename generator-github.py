@@ -3949,6 +3949,17 @@ def _export_proxy(proxy: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in proxy.items() if not str(key).startswith("_")}
 
 
+
+def _unique_display_name(base: str, seen: set[str]) -> str:
+    name = base.strip() or "node"
+    suffix = 2
+    while name in seen:
+        name = f"{base.strip() or 'node'}-{suffix}"
+        suffix += 1
+    seen.add(name)
+    return name
+
+
 def sanitize_and_deduplicate(proxies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen_fingerprints: set[str] = set()
     seen_names: set[str] = set()
@@ -3965,13 +3976,7 @@ def sanitize_and_deduplicate(proxies: list[dict[str, Any]]) -> list[dict[str, An
         seen_fingerprints.add(fingerprint)
 
         base_name = str(proxy["name"]).strip() or f"node-{index}"
-        name = base_name
-        suffix = 2
-        while name in seen_names:
-            name = f"{base_name}-{suffix}"
-            suffix += 1
-        proxy["name"] = name
-        seen_names.add(name)
+        proxy["name"] = _unique_display_name(base_name, seen_names)
         result.append(proxy)
     return result
 
@@ -4581,12 +4586,15 @@ def write_scored_history(
     latencies: dict[str, int],
 ) -> None:
     ranked: list[tuple[float, dict[str, Any]]] = []
+    seen_names: set[str] = set()
     for proxy in proxies:
         if not isinstance(proxy, dict):
             continue
         item = dict(proxy)
-        name = str(item.get("name") or "")
-        delay = int(latencies.get(name, 0) or 0)
+        base = str(item.get("name") or "").strip() or "node"
+        name = _unique_display_name(base, seen_names)
+        item["name"] = name
+        delay = int(latencies.get(name, 0) or latencies.get(base, 0) or 0)
         _group, coords, code, via = detect_geo(item)
         parts = health_score_parts(name, delay, coords, iso=code)
         item.pop("_geo_name", None)
@@ -5207,8 +5215,10 @@ def health_score_parts(
     latency: int,
     coords: tuple[float, float] | None = None,
     iso: str = "",
+    salt: str = "",
 ) -> dict[str, float]:
-    stability_seed = int(hashlib.sha256(name.encode("utf-8")).hexdigest()[:12], 16)
+    seed_src = f"{name}{salt}"
+    stability_seed = int(hashlib.sha256(seed_src.encode("utf-8")).hexdigest()[:12], 16)
     stability = random.Random(stability_seed).random()
     if int(latency) <= 0:
         latency_term = 0.0
@@ -5242,8 +5252,8 @@ def health_score_parts(
     }
 
 
-def health_score(name: str, latency: int, coords: tuple[float, float] | None = None, iso: str = "") -> float:
-    return health_score_parts(name, latency, coords, iso=iso)["score"]
+def health_score(name: str, latency: int, coords: tuple[float, float] | None = None, iso: str = "", salt: str = "") -> float:
+    return health_score_parts(name, latency, coords, iso=iso, salt=salt)["score"]
 
 
 def low_latency_pool(metrics: list[ProxyMetric]) -> list[str]:
