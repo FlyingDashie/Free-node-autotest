@@ -5225,6 +5225,7 @@ def health_score_parts(
         weight = geo_distance_weight(coords)
         geo_term = _GEO_WEIGHT * weight
         dist = _haversine_km(_GEO_ANCHOR, coords) if coords else 0.0
+    stab_term = stability * 0.1
     return {
         "score": latency_term + geo_term + stab_term,
         "latency": latency_term,
