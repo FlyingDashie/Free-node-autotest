@@ -4588,7 +4588,7 @@ def write_scored_history(
         name = str(item.get("name") or "")
         delay = int(latencies.get(name, 0) or 0)
         _group, coords, code, via = detect_geo(item)
-        parts = health_score_parts(name, delay, coords)
+        parts = health_score_parts(name, delay, coords, iso=code)
         item.pop("_geo_name", None)
         item["name"] = (
             f"{name} | score={parts['score']:.2f} "
@@ -4975,6 +4975,8 @@ _GEO_ANCHOR = (28.99775, 126.90985)  # midpoint of Hong Kong and Tokyo
 _GEOIP_READER = None
 _GEO_DECAY_KM = 2000.0
 _GEO_WEIGHT = 80.0
+_GEO_BLOCK = {"CN", "RU", "IR"}
+_GEO_BLOCK_PENALTY = -5.0
 _GEO_ANYCAST = (
     "cloudflare", "1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4",
     "google.com", "gstatic", "googleapis", "fastly", "akamai",
@@ -5038,7 +5040,7 @@ def _iso_geo(iso: str) -> tuple[str, tuple[float, float] | None, str]:
     code = str(iso or "").strip().upper()
     if code in {"UK"}:
         code = "GB"
-    if code in {"CN", "RU", "IR"}:
+    if code in _GEO_BLOCK:
         return "OTHER", None, code
     coords = _GEO_COORDS.get(code)
     group = code if code in _GEO_GROUP else "OTHER"
@@ -5190,7 +5192,7 @@ def build_proxy_metric(proxy: dict[str, Any], latency: int) -> ProxyMetric:
         latency=latency,
         region=region,
         geo_region=geo_region,
-        health_score=health_score(name, latency, coords),
+        health_score=health_score(name, latency, coords, iso=_geo_code),
     )
 
 
@@ -5204,6 +5206,7 @@ def health_score_parts(
     name: str,
     latency: int,
     coords: tuple[float, float] | None = None,
+    iso: str = "",
 ) -> dict[str, float]:
     stability_seed = int(hashlib.sha256(name.encode("utf-8")).hexdigest()[:12], 16)
     stability = random.Random(stability_seed).random()
@@ -5211,10 +5214,17 @@ def health_score_parts(
         latency_term = 0.0
     else:
         latency_term = LATENCY_TIMEOUT_MS / int(latency)
-    weight = geo_distance_weight(coords)
-    geo_term = _GEO_WEIGHT * weight
-    stab_term = stability * 0.1
-    dist = _haversine_km(_GEO_ANCHOR, coords) if coords else 0.0
+    code = str(iso or "").strip().upper()
+    if code == "UK":
+        code = "GB"
+    if code in _GEO_BLOCK:
+        weight = 0.0
+        geo_term = _GEO_BLOCK_PENALTY
+        dist = 0.0
+    else:
+        weight = geo_distance_weight(coords)
+        geo_term = _GEO_WEIGHT * weight
+        dist = _haversine_km(_GEO_ANCHOR, coords) if coords else 0.0
     return {
         "score": latency_term + geo_term + stab_term,
         "latency": latency_term,
@@ -5225,8 +5235,8 @@ def health_score_parts(
     }
 
 
-def health_score(name: str, latency: int, coords: tuple[float, float] | None = None) -> float:
-    return health_score_parts(name, latency, coords)["score"]
+def health_score(name: str, latency: int, coords: tuple[float, float] | None = None, iso: str = "") -> float:
+    return health_score_parts(name, latency, coords, iso=iso)["score"]
 
 
 def low_latency_pool(metrics: list[ProxyMetric]) -> list[str]:
