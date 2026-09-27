@@ -5544,16 +5544,23 @@ def print_source_live_stats(
 def dedupe_metrics_by_core(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     best: dict[str, ProxyMetric] = {}
     order: list[str] = []
+    dropped_names: list[str] = []
     for item in metrics:
         key = proxy_core_key(item.proxy)
+        name = str(item.proxy.get("name") or "")
         if key not in best:
             best[key] = item
             order.append(key)
         elif item.health_score > best[key].health_score:
+            dropped_names.append(str(best[key].proxy.get("name") or ""))
             best[key] = item
-    dropped = len(metrics) - len(best)
+        else:
+            dropped_names.append(name)
+    dropped = len(dropped_names)
     if dropped:
-        print(f"[INFO] core-dedupe | dropped={dropped} | by=health_score")
+        shown = " | ".join(dropped_names[:8])
+        extra = f" | more={dropped-8}" if dropped > 8 else ""
+        print(f"[INFO] core-dedupe | dropped={dropped} | by=health_score | name={shown}{extra}")
     return [best[key] for key in order]
 
 
@@ -5613,6 +5620,15 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
         f"[INFO] cap live | reserved={len(reserved)} | pool={len(pool)} "
         f"| taken={min(remain, len(pool))}"
     )
+    after: dict[str, int] = {}
+    for item in kept:
+        key = source_prefix_of(str(item.proxy.get("name") or ""))
+        after[key] = after.get(key, 0) + 1
+    for key in order:
+        before_n = len(grouped[key])
+        after_n = after.get(key, 0)
+        if after_n < before_n:
+            print(f"[INFO] cap live | source={key} | from={before_n} | to={after_n}")
     return kept
 
 
@@ -5625,6 +5641,48 @@ def print_sep() -> None:
         return
     print("============================================================")
     _SEP_JUST_PRINTED = True
+
+
+
+def print_live_geo_score_stats(metrics: list[ProxyMetric]) -> None:
+    if not metrics:
+        return
+    tallies: dict[str, int] = {}
+    scores: list[float] = []
+    geos: list[float] = []
+    adjs: list[float] = []
+    for item in metrics:
+        _group, coords, code, _via = detect_geo(item.proxy)
+        code = str(code or "-").upper() or "-"
+        tallies[code] = tallies.get(code, 0) + 1
+        scores.append(float(item.health_score))
+        parts = health_score_parts(str(item.proxy.get("name") or ""), int(item.latency), coords, iso=code)
+        geos.append(float(parts["geo"]))
+        adjs.append(float(parts["adj"]))
+    featured = ["HK", "JP", "KR", "TW", "SG", "US", "GB", "FR", "DE", "NL", "CA"]
+    bits = [f"live={len(metrics)}"]
+    used = 0
+    for code in featured:
+        n = tallies.get(code, 0)
+        if n:
+            bits.append(f"{code}={n}")
+            used += n
+    other = len(metrics) - used
+    if other:
+        bits.append(f"other={other}")
+    print("[INFO] geo tally | " + " | ".join(bits))
+    scores.sort()
+    def _pct(p: float) -> float:
+        if not scores:
+            return 0.0
+        idx = min(len(scores) - 1, max(0, int(round((len(scores) - 1) * p))))
+        return scores[idx]
+    print(
+        f"[INFO] score summary | n={len(scores)} "
+        f"| max={scores[-1]:.4f} | p90={_pct(0.9):.4f} | p50={_pct(0.5):.4f} "
+        f"| avg={sum(scores)/len(scores):.4f} | min={scores[0]:.4f} "
+        f"| geo_avg={sum(geos)/len(geos):.4f} | adj_avg={sum(adjs)/len(adjs):+.4f}"
+    )
 
 
 def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric]) -> None:
@@ -5686,6 +5744,7 @@ def main() -> None:
     metrics = dedupe_metrics_by_core(metrics)
     metrics = limit_metrics_per_source(metrics)
     metrics = limit_metrics_total(metrics)
+    print_live_geo_score_stats(metrics)
     capped_live = count_live_by_prefix(metrics)
     print_source_live_stats(collected_counts, unique_counts, raw_live, capped_live)
     order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
