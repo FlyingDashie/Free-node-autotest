@@ -105,6 +105,8 @@ RAW_PATH = Path("output/raw.yaml")
 HISTORY_DIR = Path("history")
 TEST_URL = "http://www.gstatic.com/generate_204"
 SOURCE_TIMEOUT = 20
+_LAST_CHECKSUM_LINKS: list[str] = []
+_HASH_BY_NAME: dict[str, list] = {}
 CFG_FETCH_TIMEOUT = 12
 CFG_FETCH_WORKERS = 50
 CFG_FETCH_RETRIES = 1
@@ -2421,6 +2423,7 @@ def _expand_github_release_assets(
     seen: set[str] = set()
     checksum_links: list[str] = []
     prefer_on = bool(_prefer_tokens(token))
+    listed_at = time.time()
     for _, tag in tags:
         asset_page = f"https://github.com/{owner}/{repo}/releases/expanded_assets/{tag}"
         try:
@@ -2474,25 +2477,13 @@ def _expand_github_release_assets(
         urls = unique_ordered(source_urls + official_urls)
     else:
         urls = official_urls
-    if not verify_hash:
-        return urls
-    kept: list[str] = []
-    for url in urls:
-        source_hit = _github_tag_source_asset(
-            url,
-            unquote(url.rstrip("/").rsplit("/", 1)[-1]),
-            "",
-        )
-        if source_hit:
-            if url not in kept:
-                kept.append(url)
-            continue
-        if _lookup_hashes(url, checksum_links):
-            kept.append(url)
-        else:
-            name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
-            print(f"[WARN] toolkit skip | reason=no hash | file={name}")
-    return kept
+    global _LAST_CHECKSUM_LINKS
+    _LAST_CHECKSUM_LINKS = list(checksum_links)
+    print(
+        f"[INFO] toolkit release listed | files={len(urls)} "
+        f"| checksums={len(checksum_links)} | time={time.time()-listed_at:.1f}s"
+    )
+    return urls
 
 
 def _toolkit_fetch_package(
@@ -2507,19 +2498,19 @@ def _toolkit_fetch_package(
         verify_hash=verify_hash,
     )
     for url in assets:
-        expected = _lookup_hashes(url) if verify_hash else []
-        if verify_hash and not expected:
-            name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
-            print(f"[WARN] toolkit skip | reason=no hash | file={name}")
-            continue
         archive = _download_archive(
             url,
             dest_dir,
-            expected_hashes=expected,
+            expected_hashes=None,
             save_as=_store_extension_filename(page_url),
         )
-        if archive is not None:
+        if archive is None:
+            continue
+        if not verify_hash:
             return archive
+        if _confirm_downloaded_hash(archive):
+            return archive
+        archive.unlink(missing_ok=True)
     return None
 
 
@@ -2920,18 +2911,16 @@ def _toolkit_iter_packages(
     root = work or Path(tempfile.mkdtemp(prefix="toolkit-"))
     try:
         for index, archive_url in enumerate(archives):
-            expected = _lookup_hashes(archive_url) if verify_hash else []
-            if verify_hash and not expected:
-                name = unquote(archive_url.rstrip("/").rsplit("/", 1)[-1])
-                print(f"[WARN] toolkit skip | reason=no hash | file={name}")
-                continue
             archive = _download_archive(
                 archive_url,
                 root,
-                expected_hashes=expected,
+                expected_hashes=None,
                 save_as=_store_extension_filename(page_url),
             )
             if not archive:
+                continue
+            if verify_hash and not _confirm_downloaded_hash(archive):
+                archive.unlink(missing_ok=True)
                 continue
             unpack = root / f"unpack-{index}"
             os.makedirs(str(unpack), exist_ok=True)
@@ -4277,16 +4266,30 @@ def find_or_install_mihomo() -> Path:
     return binary
 
 
+_CHECKSUM_TEXT: dict[str, str | None] = {}
+
+
 def _fetch_checksum_text(url: str) -> str:
-    response = requests.get(
-        url,
-        headers={"User-Agent": resolve_ua("ClashMeta")},
-        timeout=SOURCE_TIMEOUT,
-        verify=False,
-        proxies=PROXIES,
-    )
-    response.raise_for_status()
-    return response.text
+    if url in _CHECKSUM_TEXT:
+        cached = _CHECKSUM_TEXT[url]
+        if cached is None:
+            raise RuntimeError("checksum missing")
+        return cached
+    try:
+        response = requests.get(
+            url,
+            headers={"User-Agent": resolve_ua("ClashMeta")},
+            timeout=min(8, SOURCE_TIMEOUT),
+            verify=False,
+            proxies=PROXIES,
+        )
+        response.raise_for_status()
+        text = response.text
+    except Exception:
+        _CHECKSUM_TEXT[url] = None
+        raise
+    _CHECKSUM_TEXT[url] = text
+    return text
 
 
 _HASH_LEN = {32: "md5", 40: "sha1", 64: "sha256", 96: "sha384", 128: "sha512"}
@@ -4361,6 +4364,9 @@ def _parse_page_hashes(page_html: str) -> dict[str, list[tuple[str, str]]]:
         found.setdefault(key, [])
         if pair not in found[key]:
             found[key].append(pair)
+        _HASH_BY_NAME.setdefault(key, [])
+        if pair not in _HASH_BY_NAME[key]:
+            _HASH_BY_NAME[key].append(pair)
 
     blob = page_html or ""
     for name, digest in re.findall(
@@ -4384,13 +4390,35 @@ def _lookup_hashes(url: str, extra_checksum_urls: list[str] | None = None) -> li
     name = unquote(url.rstrip("/").rsplit("/", 1)[-1])
     if not name:
         return _merge_hash_pairs(collected)
+    named = _HASH_BY_NAME.get(name.lower()) or []
+    if named:
+        return _merge_hash_pairs(list(collected) + list(named))
+    if "://" not in url:
+        extras = list(extra_checksum_urls or [])
+        collected_rows = list(collected)
+        seen: set[str] = set()
+        for checksum_url in extras:
+            if checksum_url in seen:
+                continue
+            seen.add(checksum_url)
+            try:
+                rows = _checksums_from_text(_fetch_checksum_text(checksum_url), name)
+            except Exception:
+                rows = []
+            if rows:
+                collected_rows.extend(rows)
+                break
+        merged = _merge_hash_pairs(collected_rows)
+        if merged:
+            _HASH_BY_NAME[name.lower()] = merged
+        return merged
     folder = url.rsplit("/", 1)[0]
-    candidates = [
+    extras = list(extra_checksum_urls or [])
+    siblings = [
         url + suffix
         for suffix in (".md5", ".sha1", ".sha256", ".sha256sum", ".sha512", ".sha512sum")
     ]
-    candidates.extend(extra_checksum_urls or [])
-    candidates.extend(
+    folder_sums = [
         f"{folder}/{item}"
         for item in (
             "checksums.txt",
@@ -4403,7 +4431,9 @@ def _lookup_hashes(url: str, extra_checksum_urls: list[str] | None = None) -> li
             "sha256sums",
             "md5sums.txt",
         )
-    )
+    ]
+    # 发布页已给出的校验文件优先，命中后不再盲探 sidecar
+    candidates = extras + folder_sums + siblings
     seen: set[str] = set()
     for checksum_url in candidates:
         if checksum_url in seen:
@@ -4413,11 +4443,43 @@ def _lookup_hashes(url: str, extra_checksum_urls: list[str] | None = None) -> li
             rows = _checksums_from_text(_fetch_checksum_text(checksum_url), name)
         except Exception:
             rows = []
-        collected.extend(rows)
+        if rows:
+            collected.extend(rows)
+            break
     merged = _merge_hash_pairs(collected)
     if merged:
         _HASH_BY_URL[url] = merged
     return merged
+
+
+
+def _confirm_downloaded_hash(path: Path) -> bool:
+    name = path.name
+    expected = list(_HASH_BY_NAME.get(name.lower()) or [])
+    if not expected:
+        expected = _lookup_hashes(name, _LAST_CHECKSUM_LINKS)
+    expected = _merge_hash_pairs(expected)
+    if not expected:
+        print(f"[WARN] toolkit skip | reason=no hash | file={name}")
+        return False
+    data = path.read_bytes()
+    for htype, want in expected:
+        try:
+            actual = hashlib.new(htype, data).hexdigest().lower()
+        except Exception as exc:
+            print(
+                f"[WARN] toolkit hash mismatch | file={name} | type={htype} "
+                f"| provided={want} | local= | reason={format_reason(exc)}"
+            )
+            continue
+        if actual == want:
+            print(f"[OK] toolkit hash verified | file={name} | {htype}={actual}")
+            return True
+        print(
+            f"[WARN] toolkit hash mismatch | file={name} | type={htype} "
+            f"| provided={want} | local={actual}"
+        )
+    return False
 
 
 def verify_file_hashes(
@@ -4574,9 +4636,10 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
             "MATCH,URL-TEST",
         ],
     }
-    RAW_PATH.write_text(dump_yaml(payload), encoding="utf-8")
+    rendered = dump_yaml(payload)
     raw_hist = history_named("raw")
-    raw_hist.write_text(dump_yaml(payload), encoding="utf-8")
+    RAW_PATH.write_text(rendered, encoding="utf-8")
+    raw_hist.write_text(rendered, encoding="utf-8")
     print(f"[INFO] raw backup written | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}")
 
 
@@ -4609,38 +4672,16 @@ def write_scored_history(
             f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
             f"| {name}"
         )
-        ranked.append((parts["score"], item))
+        ranked.append((parts["score"], datetime.now(timezone.utc).isoformat(), item["name"]))
     ranked.sort(key=lambda pair: pair[0], reverse=True)
-    nodes = [item for _score, item in ranked]
-    names = [str(item.get("name") or "") for item in nodes]
-    payload = {
-        "mixed-port": 7890,
-        "allow-lan": True,
-        "mode": "rule",
-        "log-level": "info",
-        "ipv6": True,
-        "unified-delay": True,
-        "tcp-concurrent": True,
-        "global-client-fingerprint": "chrome",
-        "generated-by": "free-node-autotest-scored",
-        "generated-at": datetime.now(timezone.utc).isoformat(),
-        "proxies": nodes,
-        "proxy-groups": [
-            {
-                "name": "URL-TEST",
-                "type": "url-test",
-                "proxies": names or ["DIRECT"],
-                "url": TEST_URL,
-                "interval": 120,
-            }
-        ],
-        "rules": [
-            "MATCH,URL-TEST",
-        ],
-    }
-    path = history_named("scored")
-    path.write_text(dump_yaml(payload), encoding="utf-8")
-    print(f"[INFO] scored history written | path={path} | proxies={len(nodes)}")
+    stamps = [f"{index}={ts}" for index, (_score, ts, _line) in enumerate(ranked, start=1)]
+    lines = [line for _score, _ts, line in ranked if line]
+    path = history_named("debug", "log")
+    chunks = [" ".join(stamps), "============================================================"]
+    if lines:
+        chunks.append("\n".join(lines))
+    path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
+    print(f"[INFO] debug history written | path={path} | proxies={len(lines)}")
 
 
 def history_file_stamp(name: str) -> str:
