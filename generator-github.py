@@ -4305,6 +4305,22 @@ def _export_proxy(proxy: dict[str, Any]) -> dict[str, Any]:
 
 
 
+def _decode_name_escapes(name: str) -> str:
+    text = str(name or "")
+    if "\\U" not in text and "\\u" not in text:
+        return text
+
+    def _hex_char(match: re.Match[str]) -> str:
+        try:
+            return chr(int(match.group(1), 16))
+        except Exception:
+            return match.group(0)
+
+    text = re.sub(r"\\U([0-9a-fA-F]{8})", _hex_char, text)
+    text = re.sub(r"\\u([0-9a-fA-F]{4})", _hex_char, text)
+    return text
+
+
 def _unique_display_name(base: str, seen: set[str]) -> str:
     name = base.strip() or "node"
     suffix = 2
@@ -4375,6 +4391,7 @@ def normalize_proxy(raw: dict[str, Any], index: int) -> dict[str, Any] | None:
             proxy.pop("obfs-host", None)
 
     name = str(proxy.get("name", "")).strip() or f"node-{index}"
+    name = _decode_name_escapes(name)
     proxy["_geo_name"] = name
     name = name.replace("🇨🇳", "🇹🇼").replace("中国", "")
     server = str(proxy.get("server", "")).strip()
