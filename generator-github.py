@@ -5,6 +5,7 @@ import gzip
 import hashlib
 import html
 import importlib.util
+import inspect
 import json
 import math
 import os
@@ -122,6 +123,21 @@ _SCORED_LINES: list[str] = []
 _STAMP_LOCK = threading.Lock()
 
 
+_PREFETCH_QUIET = threading.local()
+_BODY_CACHE: dict[str, str] = {}
+_BODY_CACHE_LOCK = threading.Lock()
+_FILE_CACHE: dict[str, Path] = {}
+_FILE_CACHE_LOCK = threading.Lock()
+_FETCH_SLOTS = threading.Semaphore(50)
+_GEO_READY_LOG = ""
+_ENGINE_READY_LOG = ""
+_PREFETCH_DIR = Path(tempfile.gettempdir()) / "free-node-autotest-prefetch"
+
+
+def _prefetch_quiet() -> bool:
+    return bool(getattr(_PREFETCH_QUIET, "on", False))
+
+
 class _StampStream:
     def __init__(self, inner: Any) -> None:
         self.inner = inner
@@ -129,6 +145,8 @@ class _StampStream:
 
     def write(self, data: str) -> int:
         text = str(data or "")
+        if _prefetch_quiet():
+            return len(text)
         written = self.inner.write(text)
         self._buf += text
         while "\n" in self._buf:
@@ -535,27 +553,35 @@ def fetch_text(
     if referer:
         headers["Referer"] = referer
     url = _safe_http_url(url)
+    with _BODY_CACHE_LOCK:
+        cached = _BODY_CACHE.get(url)
+    if cached is not None:
+        return cached
     session = requests.Session()
     session.trust_env = False
     session.verify = False
     proxy_tries = [PROXIES, {}] if PROXIES else [{}]
     last_error: Exception | None = None
     wait = SOURCE_TIMEOUT if timeout is None else timeout
-    for proxies in proxy_tries:
-        for attempt in range(1, retries + 1):
-            try:
-                response = session.get(
-                    url,
-                    headers=headers,
-                    timeout=wait,
-                    proxies=proxies,
-                )
-                response.raise_for_status()
-                return response.content.decode("utf-8", errors="replace")
-            except Exception as exc:
-                last_error = exc
-                if attempt < retries:
-                    time.sleep(min(1, attempt))
+    with _FETCH_SLOTS:
+        for proxies in proxy_tries:
+            for attempt in range(1, retries + 1):
+                try:
+                    response = session.get(
+                        url,
+                        headers=headers,
+                        timeout=wait,
+                        proxies=proxies,
+                    )
+                    response.raise_for_status()
+                    text = response.content.decode("utf-8", errors="replace")
+                    with _BODY_CACHE_LOCK:
+                        _BODY_CACHE[url] = text
+                    return text
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < retries:
+                        time.sleep(min(1, attempt))
     raise RuntimeError(f"failed to fetch {url}: {last_error}")
 
 
@@ -1473,6 +1499,74 @@ def _parse_standard_uri(uri: str, scheme: str) -> dict[str, Any] | None:
     return proxy
 
 
+def _run_toolkit_item(
+    source: dict[str, Any],
+    spec: dict[str, Any],
+    source_seen: set[str] | None = None,
+) -> dict[str, Any]:
+    url = str(spec.get("url") or "")
+    toolkit_spec = url[len("discover:toolkit:"):]
+    child, _sep, rest = toolkit_spec.partition(":")
+    child_l = child.lower()
+    prefer = spec.get("prefer") or ""
+    verify_hash = spec.get("verify_hash") or False
+    result: dict[str, Any] = {
+        "kind": child_l,
+        "rest": rest,
+        "direct": [],
+        "used_url": "",
+        "candidates": [],
+        "embedded": [],
+        "archive": "",
+        "merge_all": False,
+        "ok": False,
+    }
+    if not rest:
+        print(f"[WARN] toolkit need kind | reason=ss-apk|sr-apk|crg|1vpn-crx | url={url}")
+        return result
+    seen = source_seen if source_seen is not None else set()
+    prefix = source_tag(source)
+    if child_l == "1vpn-crx":
+        vpn_found, vpn_url = _discover_toolkit_1vpn_crx(rest)
+        if vpn_found:
+            _marks, kept = _dedupe_proxies(vpn_found, seen, prefix=prefix)
+            result["direct"] = kept
+            result["used_url"] = vpn_url or rest
+            result["ok"] = True
+        return result
+    if child_l in {"ss-apk", "sr-apk"}:
+        apk_found, apk_url = _discover_toolkit_encrypted_apk(
+            child_l,
+            source,
+            rest,
+            _APK_FILE_ORDER[child_l],
+            prefer=prefer,
+            verify_hash=verify_hash,
+            user_agent=spec.get("user_agent") or "",
+            referer=spec.get("referer") or "",
+        )
+        if apk_found:
+            _marks, kept = _dedupe_proxies(apk_found, seen, prefix=prefix)
+            result["direct"] = kept
+            result["used_url"] = apk_url or url
+            result["ok"] = True
+        return result
+    if child_l == "crg":
+        candidates, embedded, archive = _discover_toolkit_crg(
+            rest,
+            prefer=prefer,
+            verify_hash=verify_hash,
+        )
+        result["candidates"] = candidates
+        result["embedded"] = embedded
+        result["archive"] = archive
+        result["merge_all"] = not spec.get("first_hit")
+        result["ok"] = True
+        return result
+    print(f"[WARN] toolkit need kind | reason=ss-apk|sr-apk|crg|1vpn-crx | url={url}")
+    return result
+
+
 def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     global _SEP_JUST_PRINTED
     collected: list[dict[str, Any]] = []
@@ -1561,47 +1655,17 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     )
                     candidates = unique_ordered(first_pages + list(candidates))
             elif url.startswith("discover:toolkit:"):
-                toolkit_spec = url[len("discover:toolkit:"):]
-                child, sep, rest = toolkit_spec.partition(":")
-                child_l = child.lower()
-                if child_l not in {"ss-apk", "sr-apk", "crg", "1vpn-crx"} or not rest:
-                    print(f"[WARN] toolkit need kind | reason=ss-apk|sr-apk|crg|1vpn-crx | url={url}")
+                packed = _run_toolkit_item(source, spec, source_seen)
+                if packed["direct"]:
+                    source_found.extend(packed["direct"])
+                    used_url = packed["used_url"] or used_url
                     continue
-                if child_l == "1vpn-crx":
-                    vpn_found, vpn_url = _discover_toolkit_1vpn_crx(rest)
-                    if vpn_found:
-                        prefix = source_tag(source)
-                        _marks, kept = _dedupe_proxies(
-                            vpn_found, source_seen, prefix=prefix
-                        )
-                        source_found.extend(kept)
-                        used_url = vpn_url or rest
+                if not packed["ok"]:
                     continue
-                if child_l in {"ss-apk", "sr-apk"}:
-                    apk_found, apk_url = _discover_toolkit_encrypted_apk(
-                        child_l,
-                        source,
-                        rest,
-                        _APK_FILE_ORDER[child_l],
-                        prefer=prefer,
-                        verify_hash=verify_hash,
-                        user_agent=spec["user_agent"],
-                        referer=spec["referer"],
-                    )
-                    if apk_found:
-                        prefix = source_tag(source)
-                        _marks, kept = _dedupe_proxies(
-                            apk_found, source_seen, prefix=prefix
-                        )
-                        source_found.extend(kept)
-                        used_url = apk_url or url
-                    continue
-                candidates, crg_embedded, crg_archive = _discover_toolkit_crg(
-                    rest,
-                    prefer=prefer,
-                    verify_hash=verify_hash,
-                )
-                merge_all = not first_hit
+                candidates = list(packed["candidates"])
+                crg_embedded = list(packed["embedded"])
+                crg_archive = packed["archive"] or ""
+                merge_all = bool(packed["merge_all"])
             else:
                 if _source_addr_key(url) in tried_addrs:
                     continue
@@ -1760,7 +1824,19 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     prepare_geo_score()
     _SEP_JUST_PRINTED = False
     print_sep()
-    write_raw_backup(collected)
+    snapshot = [dict(item) if isinstance(item, dict) else item for item in collected]
+    _RAW_WRITE_DONE.clear()
+
+    def _write_raw_bg() -> None:
+        try:
+            write_raw_backup(snapshot)
+        except Exception:
+            global _RAW_WRITE_LOG
+            _RAW_WRITE_LOG = ""
+        finally:
+            _RAW_WRITE_DONE.set()
+
+    threading.Thread(target=_write_raw_bg, name="raw-write", daemon=True).start()
     sanitized = sanitize_and_deduplicate(collected)
     if MAX_CANDIDATES > 0 and len(sanitized) > MAX_CANDIDATES:
         print(f"[WARN] limiting candidates | from={len(sanitized)} | to={MAX_CANDIDATES}")
@@ -2619,6 +2695,16 @@ def _download_archive(
     save_as: str = "",
 ) -> Path | None:
     from urllib.parse import urlparse, unquote
+    with _FILE_CACHE_LOCK:
+        cached = _FILE_CACHE.get(url)
+    if cached is not None and cached.is_file():
+        dest_hit = dest_dir / cached.name
+        os.makedirs(str(dest_dir), exist_ok=True)
+        if dest_hit.resolve() != cached.resolve():
+            shutil.copy2(cached, dest_hit)
+        print(f"[INFO] toolkit try download | url={url}")
+        print(f"[OK] toolkit downloaded | file={dest_hit.name} | size={format_size(dest_hit.stat().st_size)}")
+        return dest_hit
     local = _find_local_package(url)
     if local is None and _debug_only:
         name_hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
@@ -2688,6 +2774,15 @@ def _download_archive(
         if not downloaded:
             raise last_error or RuntimeError("download failed")
         print(f"[OK] toolkit downloaded | file={dest.name} | size={format_size(written)}")
+        try:
+            os.makedirs(str(_PREFETCH_DIR), exist_ok=True)
+            stored = _PREFETCH_DIR / dest.name
+            if stored.resolve() != dest.resolve():
+                shutil.copy2(dest, stored)
+            with _FILE_CACHE_LOCK:
+                _FILE_CACHE[url] = stored
+        except Exception:
+            pass
         if expected_hashes:
             try:
                 verify_file_hashes(dest, expected_hashes, label=dest.name)
@@ -4339,8 +4434,10 @@ def _ensure_geo_coords(json_path: Path | None = None) -> None:
 
 
 def prepare_geo_score() -> None:
-    global _GEOIP_READER
+    global _GEOIP_READER, _GEO_READY_LOG
     if _GEOIP_READER is not None and _GEO_COORDS:
+        if _GEO_READY_LOG and not _prefetch_quiet():
+            print(_GEO_READY_LOG)
         return
     if importlib.util.find_spec("maxminddb") is None:
         print("[INFO] geo score skipped | reason=maxminddb missing")
@@ -4375,7 +4472,8 @@ def prepare_geo_score() -> None:
             src = package.name if package is not None else json_path.name
             print(f"[OK] toolkit found | file={json_path.name} | from={src}")
     names = ", ".join(files) if files else "-"
-    print(f"[OK] geo score ready | files={names} | centroids={len(_GEO_COORDS)}")
+    _GEO_READY_LOG = f"[OK] geo score ready | files={names} | centroids={len(_GEO_COORDS)}"
+    print(_GEO_READY_LOG)
 
 
 def find_or_install_mihomo() -> Path:
@@ -4785,6 +4883,9 @@ _LAST_RAW_NODES: list[dict[str, Any]] = []
 _RAW_WARM: dict[str, list[dict[str, Any]]] = {}
 _RAW_WARM_META: tuple[str, str] = ("", "")
 _RAW_WARM_DONE = threading.Event()
+_RAW_WRITE_DONE = threading.Event()
+_RAW_WRITE_DONE.set()
+_RAW_WRITE_LOG = ""
 
 
 def _index_raw_nodes(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -4851,7 +4952,10 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     _LAST_RAW_NODES = [dict(item) for item in nodes]
     _RAW_WARM = {key: [dict(item) for item in group] for key, group in grouped.items()}
     _RAW_WARM_META = (raw_hist.name, history_file_stamp(raw_hist.name))
-    print(f"[INFO] raw backup written | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}")
+    global _RAW_WRITE_LOG
+    _RAW_WRITE_LOG = (
+        f"[INFO] raw backup written | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}"
+    )
 
 
 
@@ -5007,6 +5111,144 @@ def start_raw_warmup() -> None:
     _RAW_WARM_DONE.clear()
     worker = threading.Thread(target=_warmup_raw_index, name="raw-warm", daemon=True)
     worker.start()
+
+
+def _source_is_toolkit(source: dict[str, Any]) -> bool:
+    for item in _source_queue(source):
+        spec = _item_spec(item, source)
+        if str(spec.get("url") or "").startswith("discover:toolkit:"):
+            return True
+    return False
+
+
+def _prefetch_pull(url: str, user_agent: str = "", referer: str = "") -> None:
+    try:
+        fetch_text(url, user_agent=user_agent, referer=referer)
+    except Exception:
+        return
+
+
+def _prefetch_one_source(source: dict[str, Any]) -> None:
+    also_count = len(source.get("also") or [])
+    for item_index, item in enumerate(_source_queue(source)):
+        if item_index > also_count + 8:
+            break
+        spec = _item_spec(item, source)
+        url = spec["url"]
+        if url.startswith("discover:toolkit:"):
+            continue
+        ua = spec.get("user_agent") or ""
+        ref = spec.get("referer") or ""
+        prefer = spec.get("prefer") or ""
+        exclude = spec.get("exclude") or ""
+        bare_link = spec.get("bare_link") or ""
+        try:
+            if url.startswith("discover:article:"):
+                links = discover_article(url[len("discover:article:"):], prefer=prefer, bare_link=bare_link)
+            elif url.startswith("discover:sublink:"):
+                links = discover_sublink(
+                    url[len("discover:sublink:"):],
+                    prefer=prefer,
+                    exclude=exclude,
+                    bare_link=bare_link,
+                )
+            else:
+                links = [url]
+        except Exception:
+            continue
+        for link in unique_ordered(links)[:80]:
+            _prefetch_pull(link, user_agent=ua, referer=ref)
+
+
+def _prefetch_sources() -> None:
+    _PREFETCH_QUIET.on = True
+    try:
+        for source in SOURCE_GROUPS:
+            if _source_is_toolkit(source):
+                continue
+            try:
+                _prefetch_one_source(source)
+            except Exception:
+                continue
+    finally:
+        _PREFETCH_QUIET.on = False
+
+
+def _prefetch_toolkit_assets() -> None:
+    _PREFETCH_QUIET.on = True
+    try:
+        os.makedirs(str(_PREFETCH_DIR), exist_ok=True)
+        for source in SOURCE_GROUPS:
+            if source.get("prefetch") is False:
+                continue
+            if not source.get("prefetch") and not _source_is_toolkit(source):
+                continue
+            try:
+                _prefetch_toolkit_source(source)
+            except Exception:
+                continue
+        for step in _toolkit_followup_steps():
+            try:
+                step()
+            except Exception:
+                continue
+    finally:
+        _PREFETCH_QUIET.on = False
+
+
+def _toolkit_followup_steps() -> list:
+    try:
+        text = Path(__file__).read_text(encoding="utf-8")
+    except Exception:
+        text = ""
+    skip = {
+        "collect_proxies",
+        "benchmark_proxies",
+        "main",
+        "start_prefetch",
+        "_prefetch_toolkit_assets",
+        "_prefetch_toolkit_source",
+        "_run_toolkit_item",
+        "_toolkit_followup_steps",
+        "_toolkit_fetch_package",
+        "_toolkit_iter_packages",
+    }
+    found: list[tuple[int, Any]] = []
+    seen: set[str] = set()
+    for name, obj in list(globals().items()):
+        if name in skip or not callable(obj):
+            continue
+        try:
+            body = inspect.getsource(obj)
+        except Exception:
+            continue
+        if "_toolkit_fetch_package" not in body and "_toolkit_iter_packages" not in body:
+            continue
+        match = re.search(rf"(?<!def )\b{re.escape(name)}\(", text)
+        if not match:
+            continue
+        if name in seen:
+            continue
+        seen.add(name)
+        found.append((match.start(), obj))
+    found.sort(key=lambda item: item[0])
+    return [item[1] for item in found]
+
+
+def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
+    for item in _source_queue(source):
+        spec = _item_spec(item, source)
+        if not str(spec.get("url") or "").startswith("discover:toolkit:"):
+            continue
+        try:
+            _run_toolkit_item(source, spec, set())
+        except Exception:
+            continue
+
+
+def start_prefetch() -> None:
+    threading.Thread(target=_prefetch_toolkit_assets, name="prefetch-toolkit", daemon=True).start()
+    threading.Thread(target=_prefetch_sources, name="prefetch-sources", daemon=True).start()
 
 
 def load_previous_source_proxies(
@@ -6079,6 +6321,7 @@ def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric])
 def main() -> None:
     _bind_dirs()
     start_raw_warmup()
+    start_prefetch()
     total_nodes, candidates, collected_counts = collect_proxies()
     metrics: list[ProxyMetric] = []
     tested_metrics: list[ProxyMetric] = []
@@ -6103,6 +6346,7 @@ def main() -> None:
     for proxy in candidates:
         key = source_prefix_of(str(proxy.get("name") or ""))
         unique_counts[key] = unique_counts.get(key, 0) + 1
+    _RAW_WRITE_DONE.wait(timeout=180)
     raw_nodes: list[dict[str, Any]] = [dict(item) for item in _LAST_RAW_NODES if isinstance(item, dict)]
     if not raw_nodes and RAW_PATH.is_file():
         try:
@@ -6142,4 +6386,7 @@ if __name__ == "__main__":
     finally:
         _SEP_JUST_PRINTED = False
         print_sep()
+        _RAW_WRITE_DONE.wait(timeout=180)
+        if _RAW_WRITE_LOG:
+            print(_RAW_WRITE_LOG)
         write_debug_history()
