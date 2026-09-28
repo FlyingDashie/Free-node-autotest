@@ -120,6 +120,7 @@ _BENCH_LIMIT = 4
 _BENCH_SLOTS = threading.Semaphore(_BENCH_LIMIT)
 _BENCH_INUSE = 0
 _BENCH_INUSE_LOCK = threading.Lock()
+_BENCH_FINISHED: set[int] = set()
 _BRANCH_NEXT = 1
 _RUN_STAMPS: list[str] = []
 _SCORED_LINES: list[str] = []
@@ -5682,6 +5683,32 @@ def _benchmark_batch(
             _TEST_DONE += 1
         return []
 
+    if len(proxies) <= 8:
+        ids = [_alloc_branch() for _ in proxies]
+        bits = " + ".join(f"1 {{{child}}}" for child in ids)
+        _bench_log(
+            f"[WARN] batch start failed | size={len(proxies)} {{{branch}}} | split={bits}"
+        )
+        out: list[list[ProxyMetric]] = [[] for _ in proxies]
+
+        def _run_one(index: int, item: dict[str, Any], child: str) -> None:
+            out[index] = _benchmark_batch(
+                engine, temp_dir, config_path, controller_url, controller_port, [item], branch=child
+            )
+
+        workers = [
+            threading.Thread(target=_run_one, args=(index, item, child))
+            for index, (item, child) in enumerate(zip(proxies, ids))
+        ]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join()
+        merged: list[ProxyMetric] = []
+        for item in out:
+            merged.extend(item)
+        return merged
+
     mid = max(1, len(proxies) // 2)
     left = proxies[:mid]
     right = proxies[mid:]
@@ -5718,6 +5745,10 @@ def _benchmark_reshard(
     proxies: list[dict[str, Any]],
     branch: str,
 ) -> list[ProxyMetric]:
+    if len(proxies) <= 500:
+        return _benchmark_batch(
+            engine, temp_dir, config_path, controller_url, controller_port, proxies, branch=branch
+        )
     parts_n = max(1, min(_BENCH_LIMIT, len(proxies)))
     if parts_n <= 1:
         return _benchmark_batch(
@@ -5838,8 +5869,8 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                 alone = _BENCH_INUSE <= 1
             if (
                 alone
-                and rest >= _BENCH_LIMIT * 8
-                and len(pending) >= _BENCH_LIMIT * 8
+                and rest > 500
+                and len(pending) > 500
                 and completed != len(futures)
             ):
                 leftover = [item for item in proxies if id(item) in pending]
