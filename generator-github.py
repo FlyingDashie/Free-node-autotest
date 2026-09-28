@@ -1663,11 +1663,33 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                             got[url] = text
                     return got
 
-                bodies = _fetch_pool(pending)
-                ready = [url for url in pending if url in bodies]
-                parsed = _extract_proxies_pool([bodies[url] for url in ready])
-                for url, found in zip(ready, parsed):
-                    _ingest(url, bodies[url], found)
+                def _ingest_groups(urls: list[str]) -> None:
+                    groups = _ingest_url_groups(urls)
+                    if not groups:
+                        return
+                    index = {url: gi for gi, group in enumerate(groups) for url in group}
+                    left = [len(group) for group in groups]
+                    bucket: list[dict[str, str]] = [{} for _ in groups]
+                    workers = max(1, min(CFG_FETCH_WORKERS, len(urls)))
+                    with ThreadPoolExecutor(max_workers=workers) as pool:
+                        futs = [pool.submit(_fetch_one, url) for url in urls]
+                        for future in as_completed(futs):
+                            url, text, _err = future.result()
+                            gi = index.get(url)
+                            if gi is None:
+                                continue
+                            if text:
+                                bucket[gi][url] = text
+                            left[gi] -= 1
+                            if left[gi] != 0:
+                                continue
+                            ready = [item for item in groups[gi] if item in bucket[gi]]
+                            parsed = _extract_proxies_pool([bucket[gi][item] for item in ready])
+                            for item, found in zip(ready, parsed):
+                                _ingest(item, bucket[gi][item], found)
+                            _print_hits()
+
+                _ingest_groups(pending)
                 if _SUBLINK_BARE and bare_link != "none" and (
                     (not first_hit and len(source_seen) <= 10)
                     or (first_hit and not source_seen)
@@ -1677,17 +1699,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         if link not in pending and _source_addr_key(link) not in tried_addrs
                     ]
                     if extra:
-                        if ingest_hits:
-                            _print_hits()
                         print(
                             f"[INFO] sublink file_nodes={len(source_seen)} "
                             f"| bare links={len(extra)}"
                         )
-                        extra_bodies = _fetch_pool(extra)
-                        extra_ready = [url for url in extra if url in extra_bodies]
-                        extra_parsed = _extract_proxies_pool([extra_bodies[url] for url in extra_ready])
-                        for url, found in zip(extra_ready, extra_parsed):
-                            _ingest(url, extra_bodies[url], found)
+                        _ingest_groups(extra)
             else:
                 for url in pending:
                     try:
@@ -3235,6 +3251,17 @@ def _print_ingest_groups(hits: list[tuple[str, list[str], int]]) -> None:
         print(f"[OK] proxies={len(set(marks))} | new={new_total} | url={label}")
 
 
+def _ingest_url_groups(urls: list[str]) -> list[list[str]]:
+    buckets: dict[tuple[str, int], list[str]] = {}
+    order: list[tuple[str, int]] = []
+    for url in unique_ordered(urls):
+        key = (_url_group_key(url) or url, len(_url_tokens(url)))
+        if key not in buckets:
+            buckets[key] = []
+            order.append(key)
+        buckets[key].append(url)
+    return [buckets[key] for key in order]
+
 
 def _collect_toolkit_candidates(
     page_url: str,
@@ -3446,7 +3473,7 @@ _APK_KEY_CTX = (b"aes", b"ecfg", b"sare", b"secret", b"cfg")
 _APK_SCAN_NOISE = (
     "audience_network", "facebook", "unityads", "applovin", "admob",
 )
-_APK_NAME_RE = rb"(?:ecfg(?:\d+)?(?:_[a-z]{2})?|sareserver(?:\d+)?(?:_[a-z]{2})?|socks5)"
+_APK_NAME_RE = rb"(?:ecfg(?:\d+)?(?:_[A-Za-z]{2}(?:[-_][A-Za-z]{2,8})?)?|sareserver(?:\d+)?(?:_[A-Za-z]{2}(?:[-_][A-Za-z]{2,8})?)?|socks5)"
 _APK_URL_RE = rb"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+"
 _APK_KEY_SLOT = {
     "sr-apk": "[apk-key-sr] reserve",
@@ -3813,19 +3840,15 @@ def _discover_toolkit_encrypted_apk(
             if not prefixes:
                 continue
             wanted = [item.lower() for item in name_order]
-
-            def _name_rank(item: str) -> tuple[int, int, int]:
-                low = str(item).lower()
-                if low in wanted:
-                    return (0, wanted.index(low), -len(low))
-                return (1, 99, -len(low))
-
-            names = sorted(names, key=_name_rank)
+            names = unique_ordered(names)
+            names = sorted(names, key=lambda item: _apk_name_rank(item, wanted))
             urls = _apk_build_cfg_urls(prefixes, names, tokens)
-            def _file_rank(item: str) -> int:
-                name = item.split("?", 1)[0].rsplit("/", 1)[-1].lower()
-                return wanted.index(name) if name in wanted else 99
-            urls.sort(key=_file_rank)
+            urls.sort(
+                key=lambda item: _apk_name_rank(
+                    item.split("?", 1)[0].rsplit("/", 1)[-1],
+                    wanted,
+                )
+            )
             collected: list[dict[str, Any]] = []
             seen: set[str] = set()
             locked = None
@@ -3852,55 +3875,66 @@ def _discover_toolkit_encrypted_apk(
                 except Exception as exc:
                     return url, None, str(exc)
 
+            groups = _ingest_url_groups(urls)
+            index = {url: gi for gi, group in enumerate(groups) for url in group}
+            left = [len(group) for group in groups]
+            plains_g: list[list[tuple[str, str, str, str]]] = [[] for _ in groups]
             workers = max(1, min(CFG_FETCH_WORKERS, len(urls)))
-            plains: list[tuple[str, str, str, str]] = []
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = [pool.submit(_fetch_cfg, url) for url in urls]
                 for future in as_completed(futures):
                     url, body, err = future.result()
+                    gi = index.get(url)
+                    if gi is None:
+                        continue
                     short = url.split("?", 1)[0]
                     fname = short.rsplit("/", 1)[-1].lower()
                     tried += 1
+                    plain = ""
                     if err or body is None:
                         last_err = err or "empty"
-                        continue
-                    try:
-                        plain, locked = _apk_decrypt_body(body, key_pool, locked)
-                    except Exception as exc:
-                        last_err = str(exc)
-                        if not used_scan and scanned:
-                            used_scan = True
-                            key_pool = _apk_keys_for(source, scanned)
-                            try:
-                                plain, locked = _apk_decrypt_body(body, key_pool, None)
-                            except Exception as exc:
-                                last_err = str(exc)
+                    else:
+                        try:
+                            plain, locked = _apk_decrypt_body(body, key_pool, locked)
+                        except Exception as exc:
+                            last_err = str(exc)
+                            if not used_scan and scanned:
+                                used_scan = True
+                                key_pool = _apk_keys_for(source, scanned)
+                                try:
+                                    plain, locked = _apk_decrypt_body(body, key_pool, None)
+                                except Exception as exc:
+                                    last_err = str(exc)
+                                    plain = ""
+                            else:
                                 plain = ""
-                        else:
-                            plain = ""
-                        if not plain and not used_backup and backup_keys:
-                            used_backup = True
-                            key_pool = list(backup_keys)
-                            try:
-                                plain, locked = _apk_decrypt_body(body, key_pool, None)
-                            except Exception as exc:
-                                last_err = str(exc)
-                                continue
-                        elif not plain:
+                            if not plain and not used_backup and backup_keys:
+                                used_backup = True
+                                key_pool = list(backup_keys)
+                                try:
+                                    plain, locked = _apk_decrypt_body(body, key_pool, None)
+                                except Exception as exc:
+                                    last_err = str(exc)
+                                    plain = ""
+                    if plain:
+                        if locked:
+                            _APK_VERIFIED_KEYS[kind] = locked[0]
+                        plains_g[gi].append((url, short, fname, plain))
+                    left[gi] -= 1
+                    if left[gi] != 0:
+                        continue
+                    parsed = _extract_proxies_pool([item[3] for item in plains_g[gi]])
+                    group_hits: list[tuple[str, list[str], int]] = []
+                    for (_url, short, fname, _plain), found in zip(plains_g[gi], parsed):
+                        if not found:
                             continue
-                    if locked:
-                        _APK_VERIFIED_KEYS[kind] = locked[0]
-                    plains.append((url, short, fname, plain))
-            parsed = _extract_proxies_pool([item[3] for item in plains])
-            for (_url, short, fname, _plain), found in zip(plains, parsed):
-                if not found:
-                    continue
-                marks, kept = _dedupe_proxies(found, seen)
-                apk_hits.append((short, marks, len(kept)))
-                collected.extend(kept)
-                hit_names.add(fname)
+                        marks, kept = _dedupe_proxies(found, seen)
+                        group_hits.append((short, marks, len(kept)))
+                        collected.extend(kept)
+                        hit_names.add(fname)
+                    if group_hits:
+                        _print_ingest_groups(group_hits)
             if collected:
-                _print_ingest_groups(apk_hits)
                 return collected, archive_url
         extra = f" tried={tried}"
         if last_err:
@@ -3918,6 +3952,20 @@ _APK_FILE_ORDER = {
     "sr-apk": ["ecfg6_zh", "ecfg_zh", "ecfg6_en", "ecfg6", "ecfg5", "ecfg"],
     "ss-apk": ["sareserver6_en", "sareserver_en", "sareserver6", "sareserver", "socks5"],
 }
+_APK_ZH_NAME = re.compile(r"(?:^|_)zh(?:[-_a-z0-9]|$)", re.I)
+_APK_EN_NAME = re.compile(r"(?:^|_)en(?:[-_a-z0-9]|$)", re.I)
+_APK_LANG_NAME = re.compile(r"_[a-z]{2}(?:[-_][a-z]{2,8})?$", re.I)
+
+
+def _apk_name_rank(name: str, wanted: list[str]) -> tuple:
+    low = str(name or "").lower()
+    if _APK_LANG_NAME.search(low) and not _APK_ZH_NAME.search(low) and not _APK_EN_NAME.search(low):
+        return (2, low, low)
+    if _APK_ZH_NAME.search(low):
+        return (1, 0, wanted.index(low) if low in wanted else 99, low)
+    if _APK_EN_NAME.search(low):
+        return (1, 1, wanted.index(low) if low in wanted else 99, low)
+    return (0, wanted.index(low) if low in wanted else 99, low)
 
 
 def _article_feed_candidates(home: str) -> list[str]:
