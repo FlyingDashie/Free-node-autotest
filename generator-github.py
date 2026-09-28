@@ -5612,6 +5612,18 @@ def _repair_proxy_from_reason(
     return item, changed
 
 
+def _flatten_metrics(items: Any) -> list[ProxyMetric]:
+    flat: list[ProxyMetric] = []
+    stack = list(items) if isinstance(items, (list, tuple)) else [items]
+    while stack:
+        cur = stack.pop(0)
+        if isinstance(cur, ProxyMetric):
+            flat.append(cur)
+        elif isinstance(cur, (list, tuple)):
+            stack[0:0] = list(cur)
+    return flat
+
+
 def _benchmark_batch(
     engine: Path,
     temp_dir: Path,
@@ -5669,7 +5681,12 @@ def _benchmark_batch(
             )
             if process2 is not None:
                 try:
-                    return run_delay_tests(local_url, [fixed], branch=branch)
+                    repaired, extra = run_delay_tests(local_url, [fixed], branch=branch)
+                    if extra:
+                        return repaired + _benchmark_reshard(
+                            engine, temp_dir, config_path, controller_url, controller_port, extra, branch
+                        )
+                    return repaired
                 finally:
                     _stop_process(process2)
             reason = _mihomo_reason(error2) or reason
@@ -5704,10 +5721,7 @@ def _benchmark_batch(
             worker.start()
         for worker in workers:
             worker.join()
-        merged: list[ProxyMetric] = []
-        for item in out:
-            merged.extend(item)
-        return merged
+        return _flatten_metrics(out)
 
     mid = max(1, len(proxies) // 2)
     left = proxies[:mid]
@@ -5733,7 +5747,7 @@ def _benchmark_batch(
         worker.start()
     for worker in workers:
         worker.join()
-    return parts[0] + parts[1]
+    return _flatten_metrics(parts)
 
 
 def _benchmark_reshard(
@@ -5776,10 +5790,7 @@ def _benchmark_reshard(
         worker.start()
     for worker in workers:
         worker.join()
-    merged: list[ProxyMetric] = []
-    for item in out:
-        merged.extend(item)
-    return merged
+    return _flatten_metrics(out)
 
 
 def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
@@ -5800,8 +5811,10 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         _TEST_TOTAL = len(proxies)
         _TEST_DONE = 0
         _BRANCH_NEXT = 2
-        metrics = _benchmark_batch(
-            engine, temp_dir, config_path, controller_url, controller_port, list(proxies), branch="1"
+        metrics = _flatten_metrics(
+            _benchmark_batch(
+                engine, temp_dir, config_path, controller_url, controller_port, list(proxies), branch="1"
+            )
         )
         metrics, core_dropped = dedupe_metrics_by_core(metrics)
         for item in core_dropped:
