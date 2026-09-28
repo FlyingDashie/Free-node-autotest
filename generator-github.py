@@ -4346,7 +4346,11 @@ def unique_ordered(items: list[str]) -> list[str]:
 
 
 def _export_proxy(proxy: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in proxy.items() if not str(key).startswith("_")}
+    out = {key: value for key, value in proxy.items() if not str(key).startswith("_")}
+    name = out.get("name")
+    if isinstance(name, str):
+        out["name"] = _decode_name_escapes(name)
+    return out
 
 
 
@@ -5001,7 +5005,8 @@ def extract_mihomo_binary(archive: Path, directory: Path) -> Path:
     raise RuntimeError(f"unsupported Mihomo archive: {archive}")
 
 
-_YamlDumper = getattr(yaml, "CSafeDumper", None) or yaml.SafeDumper
+# CSafeDumper 会把 BMP 以外的旗帜写成 \U0001F1E8，成品里看起来像乱码
+_YamlDumper = yaml.SafeDumper
 
 
 class QuotedDumper(_YamlDumper):
