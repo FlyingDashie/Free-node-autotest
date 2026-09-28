@@ -217,7 +217,6 @@ SOURCE_GROUPS = [
         ],
         "referer": "https://end-gfw.com",
         "bare_link": "all",
-        "fence_sub": True,
     },
     {
         "name": "Pawdroid",
@@ -310,14 +309,6 @@ SOURCE_GROUPS = [
     {
         "name": "免费节点11",
         "primary": "discover:sublink:https://github.com/kooker/FreeSubsCheck",
-    },
-    {
-        "name": "免费节点12",
-        "primary": "discover:sublink:https://end-gfw.com",
-        "also": [
-            "discover:sublink:https://github.com/hello-world-1989/cn-news",
-        ],
-        "bare_link": "all",
     },
     {
         "name": "ChromeGO-Toolkit",
@@ -1631,12 +1622,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             verify_hash = spec["verify_hash"]
             first_hit = spec["first_hit"]
             bare_link = spec["bare_link"]
-            fence_sub = spec["fence_sub"]
             merge_all = False
             first_pages = []
             crg_embedded = []
             crg_archive = ""
-            _SUBLINK_BARE.clear()
+            _bare_stash(clear=True)
             if url.startswith("discover:article:"):
                 candidates = discover_article(
                     url[len("discover:article:"):],
@@ -1664,7 +1654,6 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                         prefer=prefer,
                         exclude=exclude,
                         bare_link=bare_link,
-                        fence_sub=fence_sub,
                     )
                     discovered_pages.add(_source_addr_key(page))
                     discovered_pages.add(_source_addr_key(resolved))
@@ -1722,9 +1711,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             def _ingest(url: str, text: str, found: list[dict[str, Any]] | None = None) -> bool:
                 nonlocal used_url
                 tried_addrs.add(_source_addr_key(url))
-                if fence_sub and _body_looks_html(text):
-                    found = []
-                elif found is None:
+                if found is None:
                     found = extract_proxies(text)
                 if not found:
                     if not merge_all:
@@ -1795,13 +1782,17 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                             _print_hits()
 
                 _ingest_groups(pending)
-                if _SUBLINK_BARE and bare_link != "none" and (
+                if (
+                    str(bare_link or "").strip().lower() not in {"all", "none"}
+                    and _bare_stash()
+                    and (
                     (not first_hit and len(source_seen) <= 10)
                     or (first_hit and not source_seen)
+                    )
                 ):
                     extra = [
                         link
-                        for link in unique_ordered(_SUBLINK_BARE)
+                        for link in unique_ordered(_bare_stash())
                         if link not in pending
                         and _source_addr_key(link) not in tried_addrs
                         and _source_addr_key(link) not in reserved_addrs
@@ -1910,7 +1901,6 @@ def _queue_addr_keys(item: Any, source: dict[str, Any]) -> set[str]:
 # Reserved source flag: first_hit=True → stop after the first URL that yields nodes.
 # Not set on existing sources.
 # bare_link: "all" scan every bare URL; "none" never scan bare links.
-# fence_sub: True → only take URLs in code fences / standalone URL lines / <pre><code>.
 
 
 def _pick_field(item: Any, source: dict[str, Any], key: str, default: Any = "") -> Any:
@@ -1935,7 +1925,6 @@ def _item_spec(item: Any, source: dict[str, Any]) -> dict[str, Any]:
         "exclude": str(_pick_field(item, source, "exclude", "") or ""),
         "verify_hash": _flag(_pick_field(item, source, "verify_hash", None)),
         "bare_link": str(_pick_field(item, source, "bare_link", "") or "").strip().lower(),
-        "fence_sub": _flag(_pick_field(item, source, "fence_sub", None)),
         "first_hit": _flag(_pick_field(item, source, "first_hit", None)),
         "user_agent": str(_pick_field(item, source, "user_agent", "") or ""),
         "referer": str(_pick_field(item, source, "referer", "") or ""),
@@ -2129,33 +2118,13 @@ def _score_sub_link(url: str, context: str = "", prefer: Any = "", distance: int
     return score
 
 
-def _fence_sub_text(text: str) -> str:
-    blob = str(text or "")
-    chunks: list[str] = []
-    for match in re.finditer(r"```[^\n]*\n(.*?)```", blob, re.S):
-        chunks.append(match.group(1))
-    for match in re.finditer(r"<(?:pre|code)[^>]*>(.*?)</(?:pre|code)>", blob, re.I | re.S):
-        chunks.append(re.sub(r"<[^>]+>", " ", match.group(1)))
-    for match in re.finditer(r"(?m)^[ \t]*(https?://[^\s]+)[ \t]*$", blob):
-        chunks.append(match.group(1))
-    return "\n".join(chunks)
-
-
-def _body_looks_html(text: str) -> bool:
-    head = str(text or "").lstrip()[:800].lower()
-    return head.startswith("<!doctype") or head.startswith("<html") or "<head" in head[:400]
-
-
 def _collect_sub_links(
     text: str,
     page_url: str = "",
     prefer: str = "",
     exclude: str = "",
-    fence_sub: bool = False,
 ) -> list[str]:
     text = html.unescape(text or "")
-    if fence_sub:
-        text = _fence_sub_text(text)
     files: list[tuple[int, str]] = []
     bare: list[tuple[int, str]] = []
     file_re = re.compile(r"\.(?:yaml|yml|txt|json)(?:$|[?#])", re.I)
@@ -2219,9 +2188,8 @@ def discover_sublink(
     prefer: str = "",
     exclude: str = "",
     bare_link: str = "",
-    fence_sub: bool = False,
 ) -> list[str]:
-    global _DISCOVER_PAGES, _SUBLINK_BARE
+    global _DISCOVER_PAGES
     given = _blob_to_raw(page_url.strip())
     page_url = _resolve_github_readme(given)
     if _github_repo_home(given):
@@ -2234,7 +2202,7 @@ def discover_sublink(
         print(f"[WARN] sublink discovery failed | reason={format_reason(exc)} | url={page_url}")
         return []
     file_links, bare_links, ranked = _collect_sub_links(
-        body, page_url, prefer=prefer, exclude=exclude, fence_sub=fence_sub
+        body, page_url, prefer=prefer, exclude=exclude
     )
     mode = str(bare_link or "").strip().lower()
     if mode == "all":
@@ -2255,7 +2223,7 @@ def discover_sublink(
         print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
         return []
     if file_links:
-        _SUBLINK_BARE.extend(bare_links)
+        _bare_stash(extend=bare_links)
         return file_links
     if bare_links:
         return bare_links
@@ -2333,8 +2301,18 @@ _TOOLKIT_CONFIG_EXT = {
     ".sh", ".bash", ".zsh", ".fish", ".command", ".vbs",
 }
 _DISCOVER_PAGES: list[str] = []
-_SUBLINK_BARE: list[str] = []
+_SUBLINK_BARE_STATE = threading.local()
 _HASH_BY_URL: dict[str, list[tuple[str, str]]] = {}
+
+
+def _bare_stash(clear: bool = False, extend: list[str] | None = None) -> list[str]:
+    items = getattr(_SUBLINK_BARE_STATE, "bare", None)
+    if items is None or clear:
+        items = []
+        _SUBLINK_BARE_STATE.bare = items
+    if extend:
+        items.extend(extend)
+    return items
 
 
 def _clean_found_url(link: str, page_url: str) -> str:
@@ -5274,7 +5252,6 @@ def _prefetch_one_source(source: dict[str, Any]) -> None:
             prefer = spec.get("prefer") or ""
             exclude = spec.get("exclude") or ""
             bare_link = spec.get("bare_link") or ""
-            fence_sub = spec.get("fence_sub") or False
             try:
                 if url.startswith("discover:article:"):
                     links = discover_article(url[len("discover:article:"):], prefer=prefer, bare_link=bare_link)
@@ -5284,7 +5261,6 @@ def _prefetch_one_source(source: dict[str, Any]) -> None:
                         prefer=prefer,
                         exclude=exclude,
                         bare_link=bare_link,
-                        fence_sub=fence_sub,
                     )
                 else:
                     links = [url]
