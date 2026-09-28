@@ -116,7 +116,7 @@ _DROP_NAMES: list[str] = []
 _TEST_TOTAL = 0
 _TEST_DONE = 0
 _TEST_LOCK = threading.Lock()
-_BENCH_SLOTS = threading.Semaphore(3)
+_BENCH_SLOTS = threading.Semaphore(4)
 _BRANCH_NEXT = 1
 _RUN_STAMPS: list[str] = []
 _SCORED_LINES: list[str] = []
@@ -135,6 +135,8 @@ _FILE_CACHE_LOCK = threading.Lock()
 _FETCH_SLOTS = threading.Semaphore(50)
 _GEO_READY_LOG = ""
 _ENGINE_READY_LOG = ""
+_FOLLOWUP_LOGS: dict[str, list[str]] = {}
+_FOLLOWUP_RESULT: dict[str, Any] = {}
 _PREFETCH_DIR = Path(tempfile.gettempdir()) / "free-node-autotest-prefetch"
 
 
@@ -223,23 +225,6 @@ SOURCE_GROUPS = [
         "user_agent": "Chrome",
     },
     {
-        "name": "ChromeGO-Toolkit",
-        "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang",
-        "prefer": "ChromeGo",
-    },
-    {
-        "name": "ChromeGO-ShiteThings",
-        "primary": "discover:sublink:https://github.com/ShiteThings/extractNodes",
-    },
-    {
-        "name": "ChromeGO-Merge",
-        "primary": "discover:sublink:https://github.com/shangui999/chromego_merge",
-        "also": [
-            "discover:sublink:https://github.com/yaney01/chromego",
-            "discover:sublink:https://github.com/Misaka-blog/chromego_merge",
-        ],
-    },
-    {
         "name": "Freesocks",
         "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
         "also": [
@@ -249,10 +234,6 @@ SOURCE_GROUPS = [
     {
         "name": "NekoWarp",
         "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
-    },
-    {
-        "name": "1VPN-CRX",
-        "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
     },
     {
         "name": "OpenRunner-RSS",
@@ -323,6 +304,23 @@ SOURCE_GROUPS = [
         "primary": "discover:sublink:https://github.com/kooker/FreeSubsCheck",
     },
     {
+        "name": "ChromeGO-Toolkit",
+        "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang",
+        "prefer": "ChromeGo",
+    },
+    {
+        "name": "ChromeGO-ShiteThings",
+        "primary": "discover:sublink:https://github.com/ShiteThings/extractNodes",
+    },
+    {
+        "name": "ChromeGO-Merge",
+        "primary": "discover:sublink:https://github.com/shangui999/chromego_merge",
+        "also": [
+            "discover:sublink:https://github.com/yaney01/chromego",
+            "discover:sublink:https://github.com/Misaka-blog/chromego_merge",
+        ],
+    },
+    {
         "name": "Pawdroid-SR-APK",
         "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android",
         "prefer": "apk",
@@ -331,6 +329,10 @@ SOURCE_GROUPS = [
         "name": "Pawdroid-SS-APK",
         "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com",
         "prefer": "apk",
+    },
+    {
+        "name": "1VPN-CRX",
+        "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
     },
     {
         "name": "Clashfree",
@@ -1737,7 +1739,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     got: dict[str, str] = {}
                     if not urls:
                         return got
-                    workers = max(1, min(CFG_FETCH_WORKERS, len(urls)))
+                    workers = _adapt_workers("io", min(CFG_FETCH_WORKERS, len(urls)))
                     with ThreadPoolExecutor(max_workers=workers) as pool:
                         futs = [pool.submit(_fetch_one, url) for url in urls]
                         for future in as_completed(futs):
@@ -1755,7 +1757,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     left = [len(group) for group in groups]
                     bucket: list[dict[str, str]] = [{} for _ in groups]
                     ordered = [url for group in groups for url in group]
-                    workers = max(1, min(CFG_FETCH_WORKERS, len(ordered)))
+                    workers = _adapt_workers("io", min(CFG_FETCH_WORKERS, len(ordered)))
                     with ThreadPoolExecutor(max_workers=workers) as pool:
                         futs = [pool.submit(_fetch_one, url) for url in ordered]
                         for future in as_completed(futs):
@@ -3129,9 +3131,47 @@ def _name_matches_exts(name: str, allowed: set[str]) -> bool:
     return False
 
 
-def _scan_worker_count(nfiles: int) -> int:
+def _resource_snap() -> tuple[int, float, int]:
     cores = os.cpu_count() or 2
-    return max(1, min(_FILE_SCAN_WORKERS, cores, nfiles))
+    load = 0.0
+    try:
+        load = float(os.getloadavg()[0])
+    except Exception:
+        pass
+    avail_mb = 0
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                avail_mb = int(line.split()[1]) // 1024
+                break
+    except Exception:
+        pass
+    return cores, load, avail_mb
+
+
+def _adapt_workers(kind: str, wanted: int) -> int:
+    cores, load, avail_mb = _resource_snap()
+    want = max(1, int(wanted or 1))
+    idle = max(0.0, cores - load)
+    if kind == "cpu":
+        cap = max(1, int(cores + idle))
+        if load > cores * 0.85:
+            cap = max(1, cores - 1)
+        if avail_mb and avail_mb < 400:
+            cap = 1
+        return max(1, min(want, cap))
+    cap = max(12, int(cores * 12 + idle * 6))
+    if load > cores * 1.05:
+        cap = max(8, cap // 2)
+    if avail_mb and avail_mb < 350:
+        cap = min(cap, 8)
+    elif avail_mb and avail_mb < 800:
+        cap = min(cap, 24)
+    return max(1, min(want, cap, 80))
+
+
+def _scan_worker_count(nfiles: int) -> int:
+    return _adapt_workers("cpu", min(_FILE_SCAN_WORKERS, max(1, nfiles)))
 
 
 def _file_looks_text(path: Path) -> bool:
@@ -4450,8 +4490,14 @@ def _ensure_geo_coords(json_path: Path | None = None) -> None:
 
 def prepare_geo_score() -> None:
     global _GEOIP_READER, _GEO_READY_LOG
+    pending = _FOLLOWUP_LOGS.pop("prepare_geo_score", None) or []
+    if pending and not _prefetch_quiet():
+        for line in pending:
+            print(line)
+        if _GEOIP_READER is not None and _GEO_COORDS:
+            return
     if _GEOIP_READER is not None and _GEO_COORDS:
-        if _GEO_READY_LOG and not _prefetch_quiet():
+        if not pending and _GEO_READY_LOG and not _prefetch_quiet():
             print(_GEO_READY_LOG)
         return
     if importlib.util.find_spec("maxminddb") is None:
@@ -4492,6 +4538,17 @@ def prepare_geo_score() -> None:
 
 
 def find_or_install_mihomo() -> Path:
+    pending = _FOLLOWUP_LOGS.pop("find_or_install_mihomo", None) or []
+    if pending and not _prefetch_quiet():
+        for line in pending:
+            print(line)
+        cached = _FOLLOWUP_RESULT.get("find_or_install_mihomo")
+        if isinstance(cached, Path) and cached.exists():
+            return cached
+        install_dir = Path(tempfile.gettempdir()) / "free-node-autotest-mihomo"
+        binary = install_dir / ("mihomo.exe" if os.name == "nt" else "mihomo")
+        if binary.exists():
+            return binary
     # 优先使用已有的 Clash Verge 内核
     existing = Path(r"C:\Program Files\Clash Verge\verge-mihomo-alpha.exe")
     if existing.exists():
@@ -5209,11 +5266,24 @@ def _prefetch_toolkit_assets() -> None:
                         fut.result()
                     except Exception:
                         continue
-        for step in _toolkit_followup_steps():
+        ordered = _toolkit_followup_steps()
+        have = {getattr(step, "__name__", "") for step in ordered}
+        for extra in (prepare_geo_score, find_or_install_mihomo):
+            if extra.__name__ not in have:
+                ordered.append(extra)
+        for step in ordered:
+            chunks: list[str] = []
+            _LOG_CAPTURE.buf = chunks
             try:
-                step()
+                result = step()
+                _FOLLOWUP_RESULT[getattr(step, "__name__", str(step))] = result
             except Exception:
-                continue
+                result = None
+            finally:
+                _LOG_CAPTURE.buf = None
+            lines = _capture_chunks_to_lines(chunks)
+            name = getattr(step, "__name__", str(step))
+            _FOLLOWUP_LOGS[name] = lines
     finally:
         _PREFETCH_QUIET.on = False
 
@@ -5266,29 +5336,56 @@ def _capture_chunks_to_lines(chunks: list[str]) -> list[str]:
     return [line for line in parts if line]
 
 
+def _flush_toolkit_job_logs(job: dict[str, Any], printed: list[int]) -> None:
+    chunks = job.get("chunks")
+    if chunks is not None:
+        lines = _capture_chunks_to_lines(list(chunks))
+    else:
+        lines = list(job.get("logs") or [])
+    if printed[0] < len(lines):
+        for line in lines[printed[0]:]:
+            print(line)
+        printed[0] = len(lines)
+
+
 def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
     key = source_label(source)
-    event = None
-    with _TOOLKIT_JOB_LOCK:
-        job = _TOOLKIT_JOBS.get(key)
-        if job:
-            event = job.get("event")
-    if event is not None:
-        event.wait(timeout=180)
-    with _TOOLKIT_JOB_LOCK:
-        job = _TOOLKIT_JOBS.get(key)
-        if not job or not job.get("done"):
+    printed = [0]
+    deadline = time.time() + 180
+    while time.time() < deadline:
+        with _TOOLKIT_JOB_LOCK:
+            job = _TOOLKIT_JOBS.get(key)
+        if not job:
             return None
-        return job
+        _flush_toolkit_job_logs(job, printed)
+        if job.get("done"):
+            with _TOOLKIT_JOB_LOCK:
+                job = _TOOLKIT_JOBS.get(key) or job
+            _flush_toolkit_job_logs(job, printed)
+            return job
+        time.sleep(0.15)
+    with _TOOLKIT_JOB_LOCK:
+        job = _TOOLKIT_JOBS.get(key)
+    if job:
+        _flush_toolkit_job_logs(job, printed)
+        if job.get("done"):
+            return job
+    return None
 
 
 def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
     key = source_label(source)
     event = threading.Event()
-    with _TOOLKIT_JOB_LOCK:
-        _TOOLKIT_JOBS[key] = {"event": event, "done": False, "logs": [], "packed": {}}
     chunks: list[str] = []
     packed: dict[str, Any] = {}
+    with _TOOLKIT_JOB_LOCK:
+        _TOOLKIT_JOBS[key] = {
+            "event": event,
+            "done": False,
+            "chunks": chunks,
+            "logs": [],
+            "packed": {},
+        }
     _LOG_CAPTURE.buf = chunks
     _PREFETCH_QUIET.on = True
     try:
