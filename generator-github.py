@@ -108,7 +108,7 @@ TEST_URL = "http://www.gstatic.com/generate_204"
 SOURCE_TIMEOUT = 20
 _LAST_CHECKSUM_LINKS: list[str] = []
 _HASH_BY_NAME: dict[str, list] = {}
-CFG_FETCH_TIMEOUT = 12
+CFG_FETCH_TIMEOUT = 6
 CFG_FETCH_WORKERS = 50
 CFG_FETCH_RETRIES = 1
 _DROP_NAMES: list[str] = []
@@ -162,6 +162,8 @@ def _alloc_branch() -> str:
         _BRANCH_NEXT += 1
         return str(n)
 LATENCY_TIMEOUT_MS = 5000
+CONTROLLER_READY_SEC = 2.5
+CONTROLLER_READY_STEP = 0.08
 MAX_RETRIES = 2
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
@@ -435,6 +437,9 @@ class ProxyMetric:
     region: str
     geo_region: str
     health_score: float
+    score_parts: dict[str, float] | None = None
+    geo_iso: str = ""
+    geo_via: str = ""
 
 
 UA_PRESETS = {
@@ -3036,16 +3041,8 @@ def _file_looks_text(path: Path) -> bool:
     return printable / max(len(sample), 1) >= 0.85
 
 
-def _toolkit_urls_from_file(path: Path) -> list[str]:
+def _toolkit_urls_from_text(text: str) -> list[str]:
     found: list[str] = []
-    if not _name_matches_exts(path.name, _TOOLKIT_TEXT_EXT):
-        return found
-    if not _file_looks_text(path):
-        return found
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
-    except Exception:
-        return found
     url_re = re.compile(r"https?://[^\s\"'<>]+", re.I)
     for raw in url_re.findall(text):
         link = raw.rstrip("\\").rstrip(").,;]")
@@ -3077,45 +3074,54 @@ def _toolkit_urls_from_file(path: Path) -> list[str]:
     return found
 
 
+def _toolkit_urls_from_file(path: Path) -> list[str]:
+    urls, _nodes = _toolkit_scan_file(path)
+    return urls
+
+
 def _toolkit_nodes_from_file(path: Path) -> list[dict[str, Any]]:
+    _urls, nodes = _toolkit_scan_file(path)
+    return nodes
+
+
+def _toolkit_scan_file(path: Path) -> tuple[list[str], list[dict[str, Any]]]:
     if not _file_looks_text(path):
-        return []
+        return [], []
     try:
         text = path.read_text(encoding="utf-8", errors="ignore")
     except Exception:
-        return []
-    return extract_proxies(text)
+        return [], []
+    urls = _toolkit_urls_from_text(text) if _name_matches_exts(path.name, _TOOLKIT_TEXT_EXT) else []
+    return urls, extract_proxies(text)
+
+
+def _collect_toolkit_tree(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
+    files = [path for path in root.rglob("*") if path.is_file()]
+    urls: list[str] = []
+    embedded: list[dict[str, Any]] = []
+    if files:
+        workers = _scan_worker_count(len(files))
+        ctx = multiprocessing.get_context("fork")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+            chunk = max(1, len(files) // workers)
+            for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files, chunksize=chunk):
+                urls.extend(piece_urls)
+                embedded.extend(piece_nodes)
+    return unique_ordered(urls), embedded
 
 
 def _collect_toolkit_sub_urls(root: Path) -> list[str]:
-    files = [path for path in root.rglob("*") if path.is_file()]
-    found: list[str] = []
-    if files:
-        workers = _scan_worker_count(len(files))
-        ctx = multiprocessing.get_context("fork")
-        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-            chunk = max(1, len(files) // workers)
-            for piece in pool.map(_toolkit_urls_from_file, files, chunksize=chunk):
-                found.extend(piece)
-    return unique_ordered(found)
+    urls, _embedded = _collect_toolkit_tree(root)
+    return urls
 
 
 def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
-    files = [path for path in root.rglob("*") if path.is_file()]
-    found: list[dict[str, Any]] = []
-    if files:
-        workers = _scan_worker_count(len(files))
-        ctx = multiprocessing.get_context("fork")
-        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-            chunk = max(1, len(files) // workers)
-            for piece in pool.map(_toolkit_nodes_from_file, files, chunksize=chunk):
-                found.extend(piece)
-    return found
+    _urls, embedded = _collect_toolkit_tree(root)
+    return embedded
 
 
 def _toolkit_collect_payload(root: Path, archive_name: str = "") -> tuple[list[str], list[dict[str, Any]]]:
-    urls = _collect_toolkit_sub_urls(root)
-    embedded = _collect_toolkit_embedded_proxies(root)
+    urls, embedded = _collect_toolkit_tree(root)
     tag = f" archive={archive_name}" if archive_name else ""
     if urls or embedded:
         print(
@@ -3715,6 +3721,8 @@ def _apk_keys_from_raw_files() -> dict[str, bytes]:
     if HISTORY_DIR.is_dir():
         ranked: list[tuple[str, Path]] = []
         for path in HISTORY_DIR.glob("*raw*.yaml"):
+            if "rawsrc" in path.name:
+                continue
             stamp = history_file_stamp(path.name)
             if stamp:
                 ranked.append((stamp, path))
@@ -4717,7 +4725,10 @@ def extract_mihomo_binary(archive: Path, directory: Path) -> Path:
     raise RuntimeError(f"unsupported Mihomo archive: {archive}")
 
 
-class QuotedDumper(yaml.SafeDumper):
+_YamlDumper = getattr(yaml, "CSafeDumper", None) or yaml.SafeDumper
+
+
+class QuotedDumper(_YamlDumper):
     pass
 
 
@@ -4769,6 +4780,27 @@ def dump_yaml(data: Any) -> str:
     )
 
 
+_RAW_FILE_INDEX: dict[str, dict[str, list[dict[str, Any]]]] = {}
+_LAST_RAW_NODES: list[dict[str, Any]] = []
+_RAW_WARM: dict[str, list[dict[str, Any]]] = {}
+_RAW_WARM_META: tuple[str, str] = ("", "")
+_RAW_WARM_DONE = threading.Event()
+
+
+def _index_raw_nodes(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "")
+        if name.startswith("[") and "]" in name:
+            key = name.split("]", 1)[0] + "] "
+        else:
+            continue
+        buckets.setdefault(key, []).append(dict(item))
+    return buckets
+
+
 def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     os.makedirs(str(RAW_PATH.parent), exist_ok=True)
     reserved = set(_APK_KEY_SLOT.values())
@@ -4812,15 +4844,49 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     raw_hist = history_named("raw")
     RAW_PATH.write_text(rendered, encoding="utf-8")
     raw_hist.write_text(rendered, encoding="utf-8")
+    grouped = _index_raw_nodes(nodes)
+    _RAW_FILE_INDEX[str(RAW_PATH.resolve())] = grouped
+    _RAW_FILE_INDEX[str(raw_hist.resolve())] = grouped
+    global _LAST_RAW_NODES, _RAW_WARM, _RAW_WARM_META
+    _LAST_RAW_NODES = [dict(item) for item in nodes]
+    _RAW_WARM = {key: [dict(item) for item in group] for key, group in grouped.items()}
+    _RAW_WARM_META = (raw_hist.name, history_file_stamp(raw_hist.name))
     print(f"[INFO] raw backup written | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}")
 
+
+
+def _scored_line_from_row(row: tuple[dict[str, Any], str, int]) -> tuple[float, str]:
+    item, name, delay = row
+    _group, coords, code, via = detect_geo(item)
+    parts = health_score_parts(name, delay, coords, iso=code)
+    line = (
+        f"score={parts['score']:.4f} "
+        f"| latency={parts['latency']:.4f} "
+        f"| time={delay}ms "
+        f"| geo={parts['geo']:.4f} "
+        f"| adj={parts['adj']:+.4f} "
+        f"| stab={parts['stab']:.4f} "
+        f"| iso={code} | via={via} "
+        f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
+        f"| {name}"
+    )
+    return float(parts["score"]), line
 
 
 def write_scored_history(
     proxies: list[dict[str, Any]],
     latencies: dict[str, int],
+    metrics: list[ProxyMetric] | None = None,
 ) -> None:
-    ranked: list[tuple[float, dict[str, Any]]] = []
+    known: dict[str, ProxyMetric] = {}
+    for item in metrics or []:
+        if not isinstance(item.proxy, dict):
+            continue
+        key = str(item.proxy.get("name") or "")
+        if key:
+            known[key] = item
+    ranked: list[tuple[float, str]] = []
+    leftover: list[tuple[dict[str, Any], str, int]] = []
     seen_names: set[str] = set()
     for proxy in proxies:
         if not isinstance(proxy, dict):
@@ -4830,21 +4896,34 @@ def write_scored_history(
         name = _unique_display_name(base, seen_names)
         item["name"] = name
         delay = int(latencies.get(name, 0) or latencies.get(base, 0) or 0)
-        _group, coords, code, via = detect_geo(item)
-        parts = health_score_parts(name, delay, coords, iso=code)
-        item.pop("_geo_name", None)
-        item["name"] = (
-            f"score={parts['score']:.4f} "
-            f"| latency={parts['latency']:.4f} "
-            f"| time={delay}ms "
-            f"| geo={parts['geo']:.4f} "
-            f"| adj={parts['adj']:+.4f} "
-            f"| stab={parts['stab']:.4f} "
-            f"| iso={code} | via={via} "
-            f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
-            f"| {name}"
-        )
-        ranked.append((parts["score"], item["name"]))
+        cached = known.get(name) or known.get(base)
+        if cached is not None and cached.score_parts:
+            parts = cached.score_parts
+            code = cached.geo_iso
+            via = cached.geo_via
+            ranked.append((
+                float(parts["score"]),
+                f"score={parts['score']:.4f} "
+                f"| latency={parts['latency']:.4f} "
+                f"| time={delay}ms "
+                f"| geo={parts['geo']:.4f} "
+                f"| adj={parts['adj']:+.4f} "
+                f"| stab={parts['stab']:.4f} "
+                f"| iso={code} | via={via} "
+                f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
+                f"| {name}",
+            ))
+            continue
+        leftover.append((item, name, delay))
+    if leftover:
+        workers = _scan_worker_count(len(leftover))
+        if workers <= 1 or len(leftover) < 80:
+            ranked.extend(_scored_line_from_row(row) for row in leftover)
+        else:
+            ctx = multiprocessing.get_context("fork")
+            chunk = max(1, len(leftover) // workers)
+            with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+                ranked.extend(pool.map(_scored_line_from_row, leftover, chunksize=chunk))
     ranked.sort(key=lambda pair: pair[0], reverse=True)
     global _SCORED_LINES
     _SCORED_LINES = [line for _score, line in ranked if line]
@@ -4872,37 +4951,83 @@ def history_file_stamp(name: str) -> str:
     return ""
 
 
+def _load_raw_index(path: Path) -> dict[str, list[dict[str, Any]]]:
+    key = str(path.resolve())
+    cached = _RAW_FILE_INDEX.get(key)
+    if cached is not None:
+        return cached
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception:
+        _RAW_FILE_INDEX[key] = {}
+        return {}
+    items = data.get("proxies") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        _RAW_FILE_INDEX[key] = {}
+        return {}
+    index = _index_raw_nodes([item for item in items if isinstance(item, dict)])
+    _RAW_FILE_INDEX[key] = index
+    return index
+
+
+def _latest_raw_path() -> tuple[str, Path] | None:
+    ranked: list[tuple[str, Path]] = []
+    if RAW_PATH.is_file():
+        ranked.append((history_file_stamp(RAW_PATH.name) or "0", RAW_PATH))
+    if HISTORY_DIR.is_dir():
+        for path in HISTORY_DIR.glob("*raw*.yaml"):
+            if "rawsrc" in path.name:
+                continue
+            stamp = history_file_stamp(path.name)
+            if stamp:
+                ranked.append((stamp, path))
+    if not ranked:
+        return None
+    ranked.sort(reverse=True)
+    return ranked[0]
+
+
+def _warmup_raw_index() -> None:
+    global _RAW_WARM, _RAW_WARM_META
+    try:
+        latest = _latest_raw_path()
+        if latest:
+            stamp, path = latest
+            index = _load_raw_index(path)
+            _RAW_WARM = {key: [dict(item) for item in group] for key, group in index.items()}
+            _RAW_WARM_META = (path.name, stamp)
+    except Exception:
+        _RAW_WARM = {}
+        _RAW_WARM_META = ("", "")
+    finally:
+        _RAW_WARM_DONE.set()
+
+
+def start_raw_warmup() -> None:
+    _RAW_WARM_DONE.clear()
+    worker = threading.Thread(target=_warmup_raw_index, name="raw-warm", daemon=True)
+    worker.start()
+
+
 def load_previous_source_proxies(
     source: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], str, str]:
     prefix = source_tag(source)
-    if not HISTORY_DIR.is_dir() or not prefix:
+    if not prefix:
         return [], "", ""
-    ranked: list[tuple[str, Path]] = []
-    for path in HISTORY_DIR.glob("*raw*.yaml"):
-        stamp = history_file_stamp(path.name)
-        if stamp:
-            ranked.append((stamp, path))
-    ranked.sort(reverse=True)
-    if not ranked:
+    _RAW_WARM_DONE.wait(timeout=90)
+    found = _RAW_WARM.get(prefix) or []
+    if found:
+        name, stamp = _RAW_WARM_META
+        return [dict(item) for item in found], name, stamp
+    latest = _latest_raw_path()
+    if not latest:
         return [], "", ""
-    for stamp, path in ranked:
-        try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        items = data.get("proxies") if isinstance(data, dict) else None
-        if not isinstance(items, list):
-            continue
-        found = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            node_name = str(item.get("name") or "")
-            if node_name.startswith(prefix):
-                found.append(dict(item))
-        if found:
-            return found, path.name, stamp
+    stamp, path = latest
+    index = _load_raw_index(path)
+    found = [dict(item) for item in index.get(prefix, [])]
+    if found:
+        return found, path.name, stamp
     return [], "", ""
 
 
@@ -4927,17 +5052,29 @@ def write_benchmark_config(path: Path, proxies: list[dict[str, Any]], controller
     path.write_text(dump_yaml(config), encoding="utf-8")
 
 
-def wait_for_controller(controller_url: str, process: subprocess.Popen[str]) -> None:
-    for _ in range(60):
+def wait_for_controller(
+    controller_url: str,
+    process: subprocess.Popen[str],
+    logs: list[str] | None = None,
+) -> None:
+    deadline = time.time() + CONTROLLER_READY_SEC
+    while time.time() < deadline:
+        blob = "".join(logs or [])
+        if "Parse config error" in blob or "level=fatal" in blob:
+            raise RuntimeError("Mihomo exited before controller became ready")
         if process.poll() is not None:
             raise RuntimeError("Mihomo exited before controller became ready")
         try:
-            response = requests.get(f"{controller_url}/version", timeout=1, verify=False)
+            response = requests.get(
+                f"{controller_url}/version",
+                timeout=CONTROLLER_READY_STEP,
+                verify=False,
+            )
             if response.status_code == 200:
                 return
         except Exception:
             pass
-        time.sleep(0.5)
+        time.sleep(CONTROLLER_READY_STEP)
     raise RuntimeError("Mihomo controller did not become ready")
 
 
@@ -4965,19 +5102,32 @@ def _start_mihomo_for_batch(
     process = subprocess.Popen(
         [str(engine), "-d", str(temp_dir), "-f", str(config_path)],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
     )
+    logs: list[str] = []
+
+    def _pump() -> None:
+        handle = process.stdout
+        if handle is None:
+            return
+        try:
+            for line in handle:
+                logs.append(line)
+                if "Parse config error" in line or "level=fatal" in line:
+                    break
+        except Exception:
+            return
+
+    reader = threading.Thread(target=_pump, daemon=True)
+    reader.start()
     try:
-        wait_for_controller(controller_url, process)
+        wait_for_controller(controller_url, process, logs)
         return process, ""
     except Exception as exc:
-        try:
-            stdout, stderr = process.communicate(timeout=2)
-        except Exception:
-            stdout, stderr = "", ""
         _stop_process(process)
-        message = f"{exc}\n{stderr}\n{stdout}"
+        reader.join(timeout=1)
+        message = f"{exc}\n{''.join(logs)}"
         return None, message
 
 
@@ -5428,13 +5578,17 @@ def geo_distance_weight(coords: tuple[float, float] | None) -> float:
 def build_proxy_metric(proxy: dict[str, Any], latency: int) -> ProxyMetric:
     name = str(proxy.get("name") or "")
     region = detect_region(str(proxy.get("_geo_name") or name))
-    geo_region, coords, _geo_code, _via = detect_geo(proxy)
+    geo_region, coords, geo_code, via = detect_geo(proxy)
+    parts = health_score_parts(name, latency, coords, iso=geo_code)
     return ProxyMetric(
         proxy=proxy,
         latency=latency,
         region=region,
         geo_region=geo_region,
-        health_score=health_score(name, latency, coords, iso=_geo_code),
+        health_score=float(parts["score"]),
+        score_parts=parts,
+        geo_iso=geo_code,
+        geo_via=via,
     )
 
 
@@ -5924,6 +6078,7 @@ def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric])
 
 def main() -> None:
     _bind_dirs()
+    start_raw_warmup()
     total_nodes, candidates, collected_counts = collect_proxies()
     metrics: list[ProxyMetric] = []
     tested_metrics: list[ProxyMetric] = []
@@ -5948,8 +6103,8 @@ def main() -> None:
     for proxy in candidates:
         key = source_prefix_of(str(proxy.get("name") or ""))
         unique_counts[key] = unique_counts.get(key, 0) + 1
-    raw_nodes: list[dict[str, Any]] = []
-    if RAW_PATH.is_file():
+    raw_nodes: list[dict[str, Any]] = [dict(item) for item in _LAST_RAW_NODES if isinstance(item, dict)]
+    if not raw_nodes and RAW_PATH.is_file():
         try:
             raw_doc = yaml.safe_load(RAW_PATH.read_text(encoding="utf-8"))
             if isinstance(raw_doc, dict) and isinstance(raw_doc.get("proxies"), list):
@@ -5962,7 +6117,7 @@ def main() -> None:
         if isinstance(item.proxy, dict)
     }
     if raw_nodes:
-        write_scored_history(raw_nodes, lat_map)
+        write_scored_history(raw_nodes, lat_map, tested_metrics)
     raw_live = count_live_by_prefix(metrics)
     metrics = limit_metrics_per_source(metrics)
     metrics = limit_metrics_total(metrics)
