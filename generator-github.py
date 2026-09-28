@@ -5516,6 +5516,23 @@ def wait_for_controller(
     raise RuntimeError("Mihomo controller did not become ready")
 
 
+def _debug_mihomo(tag: str, branch: str, proxies: list[dict[str, Any]], error: str = "", process: subprocess.Popen[str] | None = None) -> None:
+    blob = re.sub(r"\s+", " ", str(error or "")).strip()
+    if len(blob) > 240:
+        blob = blob[:237] + "..."
+    code = ""
+    if process is not None:
+        code = f" | rc={process.poll()}"
+    names = ",".join(str(item.get("name") or "")[:40] for item in proxies[:3])
+    if len(proxies) > 3:
+        names += f"...+{len(proxies) - 3}"
+    parse_hit = "Parse config error" in (error or "") or "level=fatal" in (error or "")
+    _bench_log(
+        f"[DEBUG] mihomo {tag} | branch={{{branch}}} | size={len(proxies)} "
+        f"| parse={int(parse_hit)}{code} | names={names} | err={blob or '-'}"
+    )
+
+
 def _stop_process(process: subprocess.Popen[str] | None) -> None:
     if process is None:
         return
@@ -5563,9 +5580,11 @@ def _start_mihomo_for_batch(
         wait_for_controller(controller_url, process, logs)
         return process, ""
     except Exception as exc:
+        rc = process.poll()
         _stop_process(process)
         reader.join(timeout=1)
         message = f"{exc}\n{''.join(logs)}"
+        _debug_mihomo("start-fail", branch, proxies, error=f"rc={rc} {message}", process=process)
         return None, message
 
 
@@ -5674,6 +5693,7 @@ def _benchmark_batch(
         bad = proxies[0]
         reason = _mihomo_reason(error)
         parse_hit = "Parse config error" in (error or "") or "level=fatal" in (error or "")
+        _debug_mihomo("isolate", branch, proxies, error=error or reason)
         if not parse_hit and process is None:
             process3, error3 = _start_mihomo_for_batch(
                 engine, work, local_config, local_url, local_port, proxies, branch=branch
@@ -5706,6 +5726,7 @@ def _benchmark_batch(
                 finally:
                     _stop_process(process2)
             reason = _mihomo_reason(error2) or reason
+        _debug_mihomo("drop", branch, [bad], error=error or reason)
         _bench_log(
             f"[DROP] name={bad.get('name')} {{{branch}}} "
             f"| server={bad.get('server')}:{bad.get('port')} | reason={reason or 'mihomo start failed'}"
@@ -5717,6 +5738,7 @@ def _benchmark_batch(
         return []
 
     if len(proxies) <= 8:
+        _debug_mihomo("split-small", branch, proxies, error=error)
         ids = [_alloc_branch() for _ in proxies]
         bits = " + ".join(f"1 {{{child}}}" for child in ids)
         _bench_log(
