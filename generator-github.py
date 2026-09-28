@@ -1133,9 +1133,12 @@ def extract_client_json_proxies(text: str) -> list[dict[str, Any]]:
 def _extract_proxies_pool(texts: list[str]) -> list[list[dict[str, Any]]]:
     if not texts:
         return []
-    if len(texts) < 4:
+    huge = any(len(item or "") >= 400_000 for item in texts)
+    if len(texts) == 1 and not huge:
+        return [extract_proxies(texts[0])]
+    if len(texts) < 4 and not huge:
         return [extract_proxies(item) for item in texts]
-    workers = _scan_worker_count(len(texts))
+    workers = _scan_worker_count(len(texts) if not huge else max(len(texts), 2))
     ctx = multiprocessing.get_context("fork")
     chunk = max(1, len(texts) // workers)
     with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
@@ -1574,279 +1577,310 @@ def _run_toolkit_item(
     return result
 
 
+def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
+    source_found: list[dict[str, Any]] = []
+    source_seen: set[str] = set()
+    used_url = ""
+    crg_archive = ""
+    crg_embedded: list[dict[str, Any]] = []
+    discover_pages: list[str] = []
+    first_pages: list[str] = []
+    ingest_hits: list[tuple[str, list[str], int]] = []
+    tried_addrs: set[str] = set()
+    discovered_pages: set[str] = set()
+    reserved_addrs: set[str] = set()
+    for later in _source_queue(source)[1:]:
+        reserved_addrs.update(_queue_addr_keys(later, source))
+
+    def _print_hits() -> None:
+        nonlocal ingest_hits
+        if not ingest_hits:
+            return
+        head = set(first_pages)
+        ordered = [row for row in ingest_hits if row[0] in head] + [
+            row for row in ingest_hits if row[0] not in head
+        ]
+        _print_ingest_groups(ordered)
+        ingest_hits = []
+
+    also_count = len(source.get("also") or [])
+    for item_index, item in enumerate(_source_queue(source)):
+        if source_found and item_index > also_count:
+            break
+        spec = _item_spec(item, source)
+        url = spec["url"]
+        prefer = spec["prefer"]
+        exclude = spec["exclude"]
+        verify_hash = spec["verify_hash"]
+        first_hit = spec["first_hit"]
+        bare_link = spec["bare_link"]
+        merge_all = False
+        first_pages = []
+        crg_embedded = []
+        crg_archive = ""
+        _bare_stash(clear=True)
+        if url.startswith("discover:article:"):
+            candidates = discover_article(
+                url[len("discover:article:"):],
+                prefer=prefer,
+                bare_link=bare_link,
+            )
+            merge_all = not first_hit
+            discover_pages = _discover_pages_get()
+            if merge_all:
+                first_pages = unique_ordered(
+                    [_blob_to_raw(p) for p in discover_pages if p]
+                )
+                candidates = unique_ordered(first_pages + list(candidates))
+        elif url.startswith("discover:sublink:"):
+            page = url[len("discover:sublink:"):]
+            resolved = _resolve_github_readme(_blob_to_raw(page.strip()))
+            page_keys = {_source_addr_key(page), _source_addr_key(resolved)}
+            reserved_hit = bool(page_keys & reserved_addrs) and item_index > 0
+            already = bool(page_keys & discovered_pages) and not reserved_hit
+            if already:
+                candidates = []
+            else:
+                candidates = discover_sublink(
+                    page,
+                    prefer=prefer,
+                    exclude=exclude,
+                    bare_link=bare_link,
+                )
+                discovered_pages.add(_source_addr_key(page))
+                discovered_pages.add(_source_addr_key(resolved))
+            merge_all = not first_hit
+            discover_pages = _discover_pages_get() or [_blob_to_raw(page)]
+            if merge_all:
+                first_pages = unique_ordered(
+                    [_blob_to_raw(p) for p in discover_pages if p]
+                )
+                candidates = unique_ordered(first_pages + list(candidates))
+        elif url.startswith("discover:toolkit:"):
+            job = _take_toolkit_job(source)
+            if job:
+                for line in job.get("logs") or []:
+                    if line:
+                        print(line)
+                packed = job.get("packed") or {}
+            else:
+                packed = _run_toolkit_item(source, spec, source_seen)
+            if packed.get("direct"):
+                source_found.extend(packed["direct"])
+                used_url = packed.get("used_url") or used_url
+                continue
+            if not packed.get("ok"):
+                continue
+            candidates = list(packed.get("candidates") or [])
+            crg_embedded = list(packed.get("embedded") or [])
+            crg_archive = packed.get("archive") or ""
+            merge_all = bool(packed.get("merge_all"))
+        else:
+            addr = _source_addr_key(url)
+            if addr in tried_addrs and item_index == 0:
+                continue
+            if addr in tried_addrs and item_index > 0:
+                tried_addrs.discard(addr)
+            candidates = [url]
+            print(f"[INFO] source try link | url={url}")
+        if crg_embedded:
+            prefix = source_tag(source)
+            marks, kept_embed = _dedupe_proxies(
+                crg_embedded, source_seen, prefix=prefix
+            )
+            if marks:
+                ingest_hits.append(("embedded://archive-config", marks, len(kept_embed)))
+            source_found.extend(kept_embed)
+        pending = []
+        for item in unique_ordered(candidates):
+            key = _source_addr_key(item)
+            if key in tried_addrs and not (item_index > 0 and key in reserved_addrs):
+                continue
+            pending.append(item)
+        ua = spec["user_agent"]
+        ref = spec["referer"]
+
+        def _ingest(url: str, text: str, found: list[dict[str, Any]] | None = None) -> bool:
+            nonlocal used_url
+            tried_addrs.add(_source_addr_key(url))
+            if found is None:
+                if len(text) >= 400_000:
+                    found = (_extract_proxies_pool([text]) or [[]])[0]
+                else:
+                    found = extract_proxies(text)
+            if not found:
+                if not merge_all:
+                    print(f"[WARN] source try failed | reason=empty | url={url}")
+                return False
+            prefix = source_tag(source)
+            marks, kept = _dedupe_proxies(found, source_seen, prefix=prefix)
+            ingest_hits.append((url, marks, len(kept)))
+            if not kept:
+                return bool(found)
+            source_found.extend(kept)
+            used_url = url
+            return True
+
+        if merge_all and pending:
+            def _fetch_one(url: str) -> tuple[str, str | None, str]:
+                try:
+                    body = fetch_text(
+                        url,
+                        retries=CFG_FETCH_RETRIES,
+                        user_agent=ua,
+                        referer=ref,
+                        timeout=SOURCE_TIMEOUT,
+                    )
+                    return url, body, ""
+                except Exception as exc:
+                    return url, None, str(exc)
+
+            def _fetch_pool(urls: list[str]) -> dict[str, str]:
+                got: dict[str, str] = {}
+                if not urls:
+                    return got
+                workers = _adapt_workers("io", min(CFG_FETCH_WORKERS, len(urls)))
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    futs = [pool.submit(_fetch_one, url) for url in urls]
+                    for future in as_completed(futs):
+                        url, text, err = future.result()
+                        if err or text is None:
+                            continue
+                        got[url] = text
+                return got
+
+            def _ingest_groups(urls: list[str]) -> None:
+                groups = _ingest_url_groups(urls)
+                if not groups:
+                    return
+                index = {url: gi for gi, group in enumerate(groups) for url in group}
+                left = [len(group) for group in groups]
+                bucket: list[dict[str, str]] = [{} for _ in groups]
+                ordered = [url for group in groups for url in group]
+                workers = _adapt_workers("io", min(CFG_FETCH_WORKERS, len(ordered)))
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    futs = [pool.submit(_fetch_one, url) for url in ordered]
+                    for future in as_completed(futs):
+                        url, text, _err = future.result()
+                        gi = index.get(url)
+                        if gi is None:
+                            continue
+                        if text:
+                            bucket[gi][url] = text
+                        left[gi] -= 1
+                        if left[gi] != 0:
+                            continue
+                        ready = [item for item in groups[gi] if item in bucket[gi]]
+                        parsed = _extract_proxies_pool([bucket[gi][item] for item in ready])
+                        for item, found in zip(ready, parsed):
+                            _ingest(item, bucket[gi][item], found)
+                        _print_hits()
+
+            _ingest_groups(pending)
+            if (
+                str(bare_link or "").strip().lower() not in {"all", "none"}
+                and _bare_stash()
+                and (
+                (not first_hit and len(source_seen) <= 10)
+                or (first_hit and not source_seen)
+                )
+            ):
+                extra = [
+                    link
+                    for link in unique_ordered(_bare_stash())
+                    if link not in pending
+                    and _source_addr_key(link) not in tried_addrs
+                    and _source_addr_key(link) not in reserved_addrs
+                ]
+                if extra:
+                    print(
+                        f"[INFO] sublink file_nodes={len(source_seen)} "
+                        f"| bare links={len(extra)}"
+                    )
+                    _ingest_groups(extra)
+        else:
+            for url in pending:
+                try:
+                    text = fetch_text(url, user_agent=ua, referer=ref)
+                except Exception as exc:
+                    print(f"[WARN] source try failed | reason={format_reason(exc)} | url={url}")
+                    continue
+                if _ingest(url, text):
+                    break
+                if source_found:
+                    break
+        _print_hits()
+    if ingest_hits:
+        _print_hits()
+    live_n = len(source_found)
+    if live_n < 10:
+        previous, raw_name, raw_stamp = load_previous_source_proxies(source)
+        raw_n = len(previous)
+        reuse = live_n == 0 or raw_n >= 10
+        if reuse and raw_n:
+            kind = "no proxies" if live_n == 0 else "few proxies"
+            print(
+                f"[WARN] {kind} | found={live_n} | raw={raw_n}"
+            )
+            _marks, kept = _dedupe_proxies(previous, source_seen)
+            source_found.extend(kept)
+            print(
+                f"[INFO] reused previous raw | file={raw_name} | stamp={raw_stamp}"
+            )
+    if not source_found:
+        print(
+            f"[WARN] no proxies | found=0 | raw=0"
+        )
+    if source_found:
+        if crg_archive:
+            extra = f" | url={crg_archive}"
+        elif discover_pages:
+            extra = f" | url={_aggregate_urls(discover_pages)}"
+        elif used_url:
+            extra = f" | url={used_url}"
+        else:
+            extra = ""
+        print(f"[OK] proxies={len(source_found)} | source={source_bracket(source)}{extra}")
+    return source_found
+
+
 def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     global _SEP_JUST_PRINTED
     collected: list[dict[str, Any]] = []
+    jobs = [source for source in SOURCE_GROUPS if source_label(source)]
+    skipped = len(SOURCE_GROUPS) - len(jobs)
+    for _ in range(skipped):
+        print("[WARN] skip source without name")
+    captured: dict[int, tuple[list[str], list[dict[str, Any]]]] = {}
+    next_i = 0
     first = True
-    for source in SOURCE_GROUPS:
-        if not source_label(source):
-            print("[WARN] skip source without name")
-            continue
-        if not first:
-            _SEP_JUST_PRINTED = False
-            print_sep()
-        first = False
-        source_found: list[dict[str, Any]] = []
-        source_seen: set[str] = set()
-        used_url = ""
-        crg_archive = ""
-        crg_embedded: list[dict[str, Any]] = []
-        discover_pages: list[str] = []
-        first_pages: list[str] = []
-        ingest_hits: list[tuple[str, list[str], int]] = []
-        tried_addrs: set[str] = set()
-        discovered_pages: set[str] = set()
-        reserved_addrs: set[str] = set()
-        for later in _source_queue(source)[1:]:
-            reserved_addrs.update(_queue_addr_keys(later, source))
 
-        def _print_hits() -> None:
-            nonlocal ingest_hits
-            if not ingest_hits:
-                return
-            head = set(first_pages)
-            ordered = [row for row in ingest_hits if row[0] in head] + [
-                row for row in ingest_hits if row[0] not in head
-            ]
-            _print_ingest_groups(ordered)
-            ingest_hits = []
+    def _run(index: int, source: dict[str, Any]) -> tuple[int, list[str], list[dict[str, Any]]]:
+        chunks: list[str] = []
+        _LOG_CAPTURE.buf = chunks
+        try:
+            found = _collect_single_source(source)
+        finally:
+            _LOG_CAPTURE.buf = None
+        return index, chunks, found
 
-        also_count = len(source.get("also") or [])
-        for item_index, item in enumerate(_source_queue(source)):
-            if source_found and item_index > also_count:
-                break
-            spec = _item_spec(item, source)
-            url = spec["url"]
-            prefer = spec["prefer"]
-            exclude = spec["exclude"]
-            verify_hash = spec["verify_hash"]
-            first_hit = spec["first_hit"]
-            bare_link = spec["bare_link"]
-            merge_all = False
-            first_pages = []
-            crg_embedded = []
-            crg_archive = ""
-            _bare_stash(clear=True)
-            if url.startswith("discover:article:"):
-                candidates = discover_article(
-                    url[len("discover:article:"):],
-                    prefer=prefer,
-                    bare_link=bare_link,
-                )
-                merge_all = not first_hit
-                discover_pages = list(_DISCOVER_PAGES)
-                if merge_all:
-                    first_pages = unique_ordered(
-                        [_blob_to_raw(p) for p in discover_pages if p]
-                    )
-                    candidates = unique_ordered(first_pages + list(candidates))
-            elif url.startswith("discover:sublink:"):
-                page = url[len("discover:sublink:"):]
-                resolved = _resolve_github_readme(_blob_to_raw(page.strip()))
-                page_keys = {_source_addr_key(page), _source_addr_key(resolved)}
-                reserved_hit = bool(page_keys & reserved_addrs) and item_index > 0
-                already = bool(page_keys & discovered_pages) and not reserved_hit
-                if already:
-                    candidates = []
-                else:
-                    candidates = discover_sublink(
-                        page,
-                        prefer=prefer,
-                        exclude=exclude,
-                        bare_link=bare_link,
-                    )
-                    discovered_pages.add(_source_addr_key(page))
-                    discovered_pages.add(_source_addr_key(resolved))
-                merge_all = not first_hit
-                discover_pages = list(_DISCOVER_PAGES) or [_blob_to_raw(page)]
-                if merge_all:
-                    first_pages = unique_ordered(
-                        [_blob_to_raw(p) for p in discover_pages if p]
-                    )
-                    candidates = unique_ordered(first_pages + list(candidates))
-            elif url.startswith("discover:toolkit:"):
-                job = _take_toolkit_job(source)
-                if job:
-                    for line in job.get("logs") or []:
-                        if line:
-                            print(line)
-                    packed = job.get("packed") or {}
-                else:
-                    packed = _run_toolkit_item(source, spec, source_seen)
-                if packed.get("direct"):
-                    source_found.extend(packed["direct"])
-                    used_url = packed.get("used_url") or used_url
-                    continue
-                if not packed.get("ok"):
-                    continue
-                candidates = list(packed.get("candidates") or [])
-                crg_embedded = list(packed.get("embedded") or [])
-                crg_archive = packed.get("archive") or ""
-                merge_all = bool(packed.get("merge_all"))
-            else:
-                addr = _source_addr_key(url)
-                if addr in tried_addrs and item_index == 0:
-                    continue
-                if addr in tried_addrs and item_index > 0:
-                    tried_addrs.discard(addr)
-                candidates = [url]
-                print(f"[INFO] source try link | url={url}")
-            if crg_embedded:
-                prefix = source_tag(source)
-                marks, kept_embed = _dedupe_proxies(
-                    crg_embedded, source_seen, prefix=prefix
-                )
-                if marks:
-                    ingest_hits.append(("embedded://archive-config", marks, len(kept_embed)))
-                source_found.extend(kept_embed)
-            pending = []
-            for item in unique_ordered(candidates):
-                key = _source_addr_key(item)
-                if key in tried_addrs and not (item_index > 0 and key in reserved_addrs):
-                    continue
-                pending.append(item)
-            ua = spec["user_agent"]
-            ref = spec["referer"]
-
-            def _ingest(url: str, text: str, found: list[dict[str, Any]] | None = None) -> bool:
-                nonlocal used_url
-                tried_addrs.add(_source_addr_key(url))
-                if found is None:
-                    found = extract_proxies(text)
-                if not found:
-                    if not merge_all:
-                        print(f"[WARN] source try failed | reason=empty | url={url}")
-                    return False
-                prefix = source_tag(source)
-                marks, kept = _dedupe_proxies(found, source_seen, prefix=prefix)
-                ingest_hits.append((url, marks, len(kept)))
-                if not kept:
-                    return bool(found)
-                source_found.extend(kept)
-                used_url = url
-                return True
-
-            if merge_all and pending:
-                def _fetch_one(url: str) -> tuple[str, str | None, str]:
-                    try:
-                        body = fetch_text(
-                            url,
-                            retries=CFG_FETCH_RETRIES,
-                            user_agent=ua,
-                            referer=ref,
-                            timeout=SOURCE_TIMEOUT,
-                        )
-                        return url, body, ""
-                    except Exception as exc:
-                        return url, None, str(exc)
-
-                def _fetch_pool(urls: list[str]) -> dict[str, str]:
-                    got: dict[str, str] = {}
-                    if not urls:
-                        return got
-                    workers = _adapt_workers("io", min(CFG_FETCH_WORKERS, len(urls)))
-                    with ThreadPoolExecutor(max_workers=workers) as pool:
-                        futs = [pool.submit(_fetch_one, url) for url in urls]
-                        for future in as_completed(futs):
-                            url, text, err = future.result()
-                            if err or text is None:
-                                continue
-                            got[url] = text
-                    return got
-
-                def _ingest_groups(urls: list[str]) -> None:
-                    groups = _ingest_url_groups(urls)
-                    if not groups:
-                        return
-                    index = {url: gi for gi, group in enumerate(groups) for url in group}
-                    left = [len(group) for group in groups]
-                    bucket: list[dict[str, str]] = [{} for _ in groups]
-                    ordered = [url for group in groups for url in group]
-                    workers = _adapt_workers("io", min(CFG_FETCH_WORKERS, len(ordered)))
-                    with ThreadPoolExecutor(max_workers=workers) as pool:
-                        futs = [pool.submit(_fetch_one, url) for url in ordered]
-                        for future in as_completed(futs):
-                            url, text, _err = future.result()
-                            gi = index.get(url)
-                            if gi is None:
-                                continue
-                            if text:
-                                bucket[gi][url] = text
-                            left[gi] -= 1
-                            if left[gi] != 0:
-                                continue
-                            ready = [item for item in groups[gi] if item in bucket[gi]]
-                            parsed = _extract_proxies_pool([bucket[gi][item] for item in ready])
-                            for item, found in zip(ready, parsed):
-                                _ingest(item, bucket[gi][item], found)
-                            _print_hits()
-
-                _ingest_groups(pending)
-                if (
-                    str(bare_link or "").strip().lower() not in {"all", "none"}
-                    and _bare_stash()
-                    and (
-                    (not first_hit and len(source_seen) <= 10)
-                    or (first_hit and not source_seen)
-                    )
-                ):
-                    extra = [
-                        link
-                        for link in unique_ordered(_bare_stash())
-                        if link not in pending
-                        and _source_addr_key(link) not in tried_addrs
-                        and _source_addr_key(link) not in reserved_addrs
-                    ]
-                    if extra:
-                        print(
-                            f"[INFO] sublink file_nodes={len(source_seen)} "
-                            f"| bare links={len(extra)}"
-                        )
-                        _ingest_groups(extra)
-            else:
-                for url in pending:
-                    try:
-                        text = fetch_text(url, user_agent=ua, referer=ref)
-                    except Exception as exc:
-                        print(f"[WARN] source try failed | reason={format_reason(exc)} | url={url}")
-                        continue
-                    if _ingest(url, text):
-                        break
-                    if source_found:
-                        break
-            _print_hits()
-        if ingest_hits:
-            _print_hits()
-        live_n = len(source_found)
-        if live_n < 10:
-            previous, raw_name, raw_stamp = load_previous_source_proxies(source)
-            raw_n = len(previous)
-            reuse = live_n == 0 or raw_n >= 10
-            if reuse and raw_n:
-                kind = "no proxies" if live_n == 0 else "few proxies"
-                print(
-                    f"[WARN] {kind} | found={live_n} | raw={raw_n}"
-                )
-                _marks, kept = _dedupe_proxies(previous, source_seen)
-                source_found.extend(kept)
-                print(
-                    f"[INFO] reused previous raw | file={raw_name} | stamp={raw_stamp}"
-                )
-        if not source_found:
-            print(
-                f"[WARN] no proxies | found=0 | raw=0"
-            )
-        if source_found:
-            if crg_archive:
-                extra = f" | url={crg_archive}"
-            elif discover_pages:
-                extra = f" | url={_aggregate_urls(discover_pages)}"
-            elif used_url:
-                extra = f" | url={used_url}"
-            else:
-                extra = ""
-            print(f"[OK] proxies={len(source_found)} | source={source_bracket(source)}{extra}")
-        collected.extend(source_found)
+    workers = min(3, max(1, len(jobs)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = [pool.submit(_run, index, source) for index, source in enumerate(jobs)]
+        for fut in as_completed(futs):
+            index, chunks, found = fut.result()
+            captured[index] = (chunks, found)
+            while next_i in captured:
+                chunks, found = captured.pop(next_i)
+                if not first:
+                    _SEP_JUST_PRINTED = False
+                    print_sep()
+                first = False
+                text = "".join(chunks)
+                if text:
+                    print(text, end="" if text.endswith("\n") else "\n")
+                collected.extend(found)
+                next_i += 1
 
     _SEP_JUST_PRINTED = False
     print_sep()
@@ -2189,12 +2223,11 @@ def discover_sublink(
     exclude: str = "",
     bare_link: str = "",
 ) -> list[str]:
-    global _DISCOVER_PAGES
     given = _blob_to_raw(page_url.strip())
     page_url = _resolve_github_readme(given)
     if _github_repo_home(given):
         print(f"[INFO] sublink try repo | url={given}")
-    _DISCOVER_PAGES = [page_url]
+    _discover_pages_set([page_url])
     print(f"[INFO] sublink try page | url={page_url}")
     try:
         body = fetch_text(page_url)
@@ -2300,7 +2333,15 @@ _TOOLKIT_CONFIG_EXT = {
     ".bat", ".cmd", ".ps1", ".ps2", ".psm1",
     ".sh", ".bash", ".zsh", ".fish", ".command", ".vbs",
 }
-_DISCOVER_PAGES: list[str] = []
+_DISCOVER_PAGES_STATE = threading.local()
+
+
+def _discover_pages_get() -> list[str]:
+    return list(getattr(_DISCOVER_PAGES_STATE, "pages", []) or [])
+
+
+def _discover_pages_set(pages: list[str]) -> None:
+    _DISCOVER_PAGES_STATE.pages = list(pages)
 _SUBLINK_BARE_STATE = threading.local()
 _HASH_BY_URL: dict[str, list[tuple[str, str]]] = {}
 
@@ -2755,6 +2796,12 @@ def _download_archive(
     from urllib.parse import urlparse, unquote
     with _FILE_CACHE_LOCK:
         cached = _FILE_CACHE.get(url)
+        if cached is None and save_as:
+            cached = _FILE_CACHE.get(Path(str(save_as).strip()).name)
+        if cached is None:
+            hint_name = _toolkit_download_name(url)
+            if hint_name:
+                cached = _FILE_CACHE.get(hint_name)
     if cached is not None and cached.is_file():
         dest_hit = dest_dir / cached.name
         os.makedirs(str(dest_dir), exist_ok=True)
@@ -2834,6 +2881,7 @@ def _download_archive(
                 shutil.copy2(dest, stored)
             with _FILE_CACHE_LOCK:
                 _FILE_CACHE[url] = stored
+                _FILE_CACHE[stored.name] = stored
         except Exception:
             pass
         if expected_hashes:
@@ -4187,8 +4235,7 @@ def _article_feed_candidates(home: str) -> list[str]:
 
 
 def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> list[str]:
-    global _DISCOVER_PAGES
-    _DISCOVER_PAGES = []
+    _discover_pages_set([])
     body = ""
     used_feed = ""
     groups: dict[str, list[str]] = {}
@@ -4284,7 +4331,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
             if not ok and str(bare_link or "").strip().lower() != "none":
                 ok = bool(found)
             if ok:
-                _DISCOVER_PAGES = [page]
+                _discover_pages_set([page])
                 return found
     print(f"[WARN] article discovery failed | reason=no article links | url={feed_url}")
     return []
@@ -5425,7 +5472,8 @@ def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
         with _TOOLKIT_JOB_LOCK:
             job = _TOOLKIT_JOBS.get(key)
         if not job:
-            return None
+            time.sleep(0.15)
+            continue
         _flush_toolkit_job_logs(job, printed)
         if job.get("done"):
             with _TOOLKIT_JOB_LOCK:
@@ -5752,39 +5800,15 @@ def _benchmark_batch(
             _TEST_DONE += 1
         return []
 
-    if len(proxies) <= 8:
-        ids = [_alloc_branch() for _ in proxies]
-        bits = " + ".join(f"1 {{{child}}}" for child in ids)
-        _bench_log(
-            f"[WARN] batch start failed | size={len(proxies)} {{{branch}}} | split={bits}"
-        )
-        out: list[list[ProxyMetric]] = [[] for _ in proxies]
-
-        def _run_one(index: int, item: dict[str, Any], child: str) -> None:
-            out[index] = _benchmark_batch(
-                engine, temp_dir, config_path, controller_url, controller_port, [item], branch=child
-            )
-
-        workers = [
-            threading.Thread(target=_run_one, args=(index, item, child))
-            for index, (item, child) in enumerate(zip(proxies, ids))
-        ]
-        for worker in workers:
-            worker.start()
-        for worker in workers:
-            worker.join()
-        return _flatten_metrics(out)
-
-    mid = max(1, len(proxies) // 2)
-    left = proxies[:mid]
-    right = proxies[mid:]
-    left_id = _alloc_branch()
-    right_id = _alloc_branch()
+    parts_n = max(2, min(_BENCH_LIMIT, len(proxies)))
+    size = (len(proxies) + parts_n - 1) // parts_n
+    chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
+    ids = [_alloc_branch() for _ in chunks]
+    bits = " + ".join(f"{len(chunk)} {{{child}}}" for chunk, child in zip(chunks, ids))
     _bench_log(
-        f"[WARN] batch start failed | size={len(proxies)} {{{branch}}} "
-        f"| split={len(left)} {{{left_id}}} + {len(right)} {{{right_id}}}"
+        f"[WARN] batch start failed | size={len(proxies)} {{{branch}}} | split={bits}"
     )
-    parts: list[list[ProxyMetric]] = [[], []]
+    parts: list[list[ProxyMetric]] = [[] for _ in chunks]
 
     def _run(index: int, chunk: list[dict[str, Any]], child: str) -> None:
         parts[index] = _benchmark_batch(
@@ -5792,8 +5816,8 @@ def _benchmark_batch(
         )
 
     workers = [
-        threading.Thread(target=_run, args=(0, left, left_id)),
-        threading.Thread(target=_run, args=(1, right, right_id)),
+        threading.Thread(target=_run, args=(index, chunk, child))
+        for index, (chunk, child) in enumerate(zip(chunks, ids))
     ]
     for worker in workers:
         worker.start()
