@@ -197,8 +197,8 @@ def _alloc_branch() -> str:
         _BRANCH_NEXT += 1
         return str(n)
 LATENCY_TIMEOUT_MS = 5000
-CONTROLLER_READY_SEC = 12.0
-CONTROLLER_READY_STEP = 0.12
+CONTROLLER_READY_SEC = 8.0
+CONTROLLER_READY_STEP = 0.15
 MAX_RETRIES = 2
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
@@ -5666,6 +5666,7 @@ def _benchmark_batch(
     error = ""
     leftover: list[dict[str, Any]] = []
     kept: list[ProxyMetric] = []
+    started = False
     global _BENCH_INUSE
     with _BENCH_SLOTS:
         with _BENCH_INUSE_LOCK:
@@ -5675,6 +5676,7 @@ def _benchmark_batch(
                 engine, work, local_config, local_url, local_port, proxies, branch=branch
             )
             if process is not None:
+                started = True
                 try:
                     kept, leftover = run_delay_tests(local_url, proxies, branch=branch)
                 finally:
@@ -5682,7 +5684,14 @@ def _benchmark_batch(
         finally:
             with _BENCH_INUSE_LOCK:
                 _BENCH_INUSE = max(0, _BENCH_INUSE - 1)
-    if kept or leftover:
+    if started:
+        if not kept and not leftover:
+            _debug_mihomo(
+                "tested-empty",
+                branch,
+                proxies,
+                error="controller ready, delay kept=0",
+            )
         if leftover:
             return kept + _benchmark_reshard(
                 engine, temp_dir, config_path, controller_url, controller_port, leftover, branch
@@ -5692,20 +5701,7 @@ def _benchmark_batch(
     if len(proxies) == 1:
         bad = proxies[0]
         reason = _mihomo_reason(error)
-        parse_hit = "Parse config error" in (error or "") or "level=fatal" in (error or "")
         _debug_mihomo("isolate", branch, proxies, error=error or reason)
-        if not parse_hit and process is None:
-            process3, error3 = _start_mihomo_for_batch(
-                engine, work, local_config, local_url, local_port, proxies, branch=branch
-            )
-            if process3 is not None:
-                try:
-                    kept3, extra3 = run_delay_tests(local_url, proxies, branch=branch)
-                    return kept3 if not extra3 else kept3
-                finally:
-                    _stop_process(process3)
-            error = error3 or error
-            reason = _mihomo_reason(error)
         fixed, fields = _repair_proxy_from_reason(bad, reason)
         if fixed:
             _bench_log(
