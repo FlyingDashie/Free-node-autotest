@@ -2802,14 +2802,10 @@ def _download_archive(
             hint_name = _toolkit_download_name(url)
             if hint_name:
                 cached = _FILE_CACHE.get(hint_name)
-    if cached is not None and cached.is_file():
-        dest_hit = dest_dir / cached.name
-        os.makedirs(str(dest_dir), exist_ok=True)
-        if dest_hit.resolve() != cached.resolve():
-            shutil.copy2(cached, dest_hit)
+    if cached is not None and cached.is_file() and cached.stat().st_size > 0:
         print(f"[INFO] toolkit try download | url={url}")
-        print(f"[OK] toolkit downloaded | file={dest_hit.name} | size={format_size(dest_hit.stat().st_size)}")
-        return dest_hit
+        print(f"[OK] toolkit downloaded | file={cached.name} | size={format_size(cached.stat().st_size)}")
+        return cached
     local = _find_local_package(url)
     if local is None and _debug_only:
         name_hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
@@ -2843,7 +2839,9 @@ def _download_archive(
             total = int(response.headers.get("Content-Length") or 0)
             started = time.time()
             progress_printed = False
-            with dest.open("wb") as handle:
+            os.makedirs(str(dest_dir), exist_ok=True)
+            part = dest.with_name(dest.name + ".part")
+            with part.open("wb") as handle:
                 for chunk in response.iter_content(chunk_size=1024 * 256):
                     if not chunk:
                         continue
@@ -2866,13 +2864,13 @@ def _download_archive(
         hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(
             final_url,
             headers=resp_headers,
-            head=dest.read_bytes()[:8] if dest.exists() else b"",
+            head=part.read_bytes()[:8] if part.exists() else b"",
         )
         if hint and hint != dest.name:
-            renamed = dest.with_name(hint)
-            if renamed.exists() and renamed != dest:
-                renamed.unlink()
-            dest = dest.replace(renamed)
+            dest = dest.with_name(hint)
+        if dest.exists():
+            dest.unlink()
+        part.replace(dest)
         print(f"[OK] toolkit downloaded | file={dest.name} | size={format_size(written)}")
         try:
             os.makedirs(str(_PREFETCH_DIR), exist_ok=True)
@@ -4981,8 +4979,16 @@ def download_file(url: str, directory: Path) -> Path:
 def extract_mihomo_binary(archive: Path, directory: Path) -> Path:
     if archive.suffix == ".gz" and not archive.name.endswith(".tar.gz"):
         target = directory / archive.name[:-3]
-        with gzip.open(archive, "rb") as source, target.open("wb") as dest:
-            shutil.copyfileobj(source, dest)
+        data = archive.read_bytes()
+        if len(data) < 32:
+            raise RuntimeError("Compressed file ended before the end-of-stream marker was reached")
+        raw = gzip.decompress(data)
+        os.makedirs(str(directory), exist_ok=True)
+        tmp = target.with_name(target.name + ".part")
+        tmp.write_bytes(raw)
+        if target.exists():
+            target.unlink()
+        tmp.replace(target)
         return target
 
     if archive.suffix == ".zip":
@@ -5373,6 +5379,28 @@ def _prefetch_toolkit_assets() -> None:
             if not source.get("prefetch") and not _source_is_toolkit(source):
                 continue
             jobs.append(source)
+        def _run_followups() -> None:
+            ordered = _toolkit_followup_steps()
+            have = {getattr(step, "__name__", "") for step in ordered}
+            for extra in (prepare_geo_score, find_or_install_mihomo):
+                if extra.__name__ not in have:
+                    ordered.append(extra)
+            for step in ordered:
+                chunks: list[str] = []
+                _LOG_CAPTURE.buf = chunks
+                try:
+                    result = step()
+                    _FOLLOWUP_RESULT[getattr(step, "__name__", str(step))] = result
+                except Exception:
+                    result = None
+                finally:
+                    _LOG_CAPTURE.buf = None
+                lines = _capture_chunks_to_lines(chunks)
+                name = getattr(step, "__name__", str(step))
+                _FOLLOWUP_LOGS[name] = lines
+
+        follow = threading.Thread(target=_run_followups, name="prefetch-followup", daemon=True)
+        follow.start()
         workers = max(1, min(4, len(jobs)))
         if jobs:
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -5382,24 +5410,7 @@ def _prefetch_toolkit_assets() -> None:
                         fut.result()
                     except Exception:
                         continue
-        ordered = _toolkit_followup_steps()
-        have = {getattr(step, "__name__", "") for step in ordered}
-        for extra in (prepare_geo_score, find_or_install_mihomo):
-            if extra.__name__ not in have:
-                ordered.append(extra)
-        for step in ordered:
-            chunks: list[str] = []
-            _LOG_CAPTURE.buf = chunks
-            try:
-                result = step()
-                _FOLLOWUP_RESULT[getattr(step, "__name__", str(step))] = result
-            except Exception:
-                result = None
-            finally:
-                _LOG_CAPTURE.buf = None
-            lines = _capture_chunks_to_lines(chunks)
-            name = getattr(step, "__name__", str(step))
-            _FOLLOWUP_LOGS[name] = lines
+        follow.join(timeout=180)
     finally:
         _PREFETCH_QUIET.on = False
 
