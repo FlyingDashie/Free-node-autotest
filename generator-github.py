@@ -124,6 +124,10 @@ _STAMP_LOCK = threading.Lock()
 
 
 _PREFETCH_QUIET = threading.local()
+_LOG_CAPTURE = threading.local()
+_MAIN_TID = threading.get_ident()
+_TOOLKIT_JOBS: dict[str, dict[str, Any]] = {}
+_TOOLKIT_JOB_LOCK = threading.Lock()
 _BODY_CACHE: dict[str, str] = {}
 _BODY_CACHE_LOCK = threading.Lock()
 _FILE_CACHE: dict[str, Path] = {}
@@ -145,7 +149,11 @@ class _StampStream:
 
     def write(self, data: str) -> int:
         text = str(data or "")
-        if _prefetch_quiet():
+        cap = getattr(_LOG_CAPTURE, "buf", None)
+        if cap is not None:
+            cap.append(text)
+            return len(text)
+        if _prefetch_quiet() and threading.get_ident() != _MAIN_TID:
             return len(text)
         written = self.inner.write(text)
         self._buf += text
@@ -1655,17 +1663,24 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     )
                     candidates = unique_ordered(first_pages + list(candidates))
             elif url.startswith("discover:toolkit:"):
-                packed = _run_toolkit_item(source, spec, source_seen)
-                if packed["direct"]:
+                job = _take_toolkit_job(source)
+                if job:
+                    for line in job.get("logs") or []:
+                        if line:
+                            print(line)
+                    packed = job.get("packed") or {}
+                else:
+                    packed = _run_toolkit_item(source, spec, source_seen)
+                if packed.get("direct"):
                     source_found.extend(packed["direct"])
-                    used_url = packed["used_url"] or used_url
+                    used_url = packed.get("used_url") or used_url
                     continue
-                if not packed["ok"]:
+                if not packed.get("ok"):
                     continue
-                candidates = list(packed["candidates"])
-                crg_embedded = list(packed["embedded"])
-                crg_archive = packed["archive"] or ""
-                merge_all = bool(packed["merge_all"])
+                candidates = list(packed.get("candidates") or [])
+                crg_embedded = list(packed.get("embedded") or [])
+                crg_archive = packed.get("archive") or ""
+                merge_all = bool(packed.get("merge_all"))
             else:
                 if _source_addr_key(url) in tried_addrs:
                     continue
@@ -5178,15 +5193,22 @@ def _prefetch_toolkit_assets() -> None:
     _PREFETCH_QUIET.on = True
     try:
         os.makedirs(str(_PREFETCH_DIR), exist_ok=True)
+        jobs = []
         for source in SOURCE_GROUPS:
             if source.get("prefetch") is False:
                 continue
             if not source.get("prefetch") and not _source_is_toolkit(source):
                 continue
-            try:
-                _prefetch_toolkit_source(source)
-            except Exception:
-                continue
+            jobs.append(source)
+        workers = max(1, min(4, len(jobs)))
+        if jobs:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futs = [pool.submit(_prefetch_toolkit_source, source) for source in jobs]
+                for fut in futs:
+                    try:
+                        fut.result()
+                    except Exception:
+                        continue
         for step in _toolkit_followup_steps():
             try:
                 step()
@@ -5235,15 +5257,60 @@ def _toolkit_followup_steps() -> list:
     return [item[1] for item in found]
 
 
+def _capture_chunks_to_lines(chunks: list[str]) -> list[str]:
+    text = "".join(chunks)
+    if text.endswith("\n"):
+        parts = text.split("\n")[:-1]
+    else:
+        parts = text.split("\n")
+    return [line for line in parts if line]
+
+
+def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
+    key = source_label(source)
+    event = None
+    with _TOOLKIT_JOB_LOCK:
+        job = _TOOLKIT_JOBS.get(key)
+        if job:
+            event = job.get("event")
+    if event is not None:
+        event.wait(timeout=180)
+    with _TOOLKIT_JOB_LOCK:
+        job = _TOOLKIT_JOBS.get(key)
+        if not job or not job.get("done"):
+            return None
+        return job
+
+
 def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
-    for item in _source_queue(source):
-        spec = _item_spec(item, source)
-        if not str(spec.get("url") or "").startswith("discover:toolkit:"):
-            continue
-        try:
-            _run_toolkit_item(source, spec, set())
-        except Exception:
-            continue
+    key = source_label(source)
+    event = threading.Event()
+    with _TOOLKIT_JOB_LOCK:
+        _TOOLKIT_JOBS[key] = {"event": event, "done": False, "logs": [], "packed": {}}
+    chunks: list[str] = []
+    packed: dict[str, Any] = {}
+    _LOG_CAPTURE.buf = chunks
+    _PREFETCH_QUIET.on = True
+    try:
+        for item in _source_queue(source):
+            spec = _item_spec(item, source)
+            if not str(spec.get("url") or "").startswith("discover:toolkit:"):
+                continue
+            packed = _run_toolkit_item(source, spec, set())
+            break
+    except Exception:
+        packed = packed or {}
+    finally:
+        _LOG_CAPTURE.buf = None
+        _PREFETCH_QUIET.on = False
+        with _TOOLKIT_JOB_LOCK:
+            _TOOLKIT_JOBS[key] = {
+                "event": event,
+                "done": True,
+                "logs": _capture_chunks_to_lines(chunks),
+                "packed": packed,
+            }
+        event.set()
 
 
 def start_prefetch() -> None:
