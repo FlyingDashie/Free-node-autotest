@@ -3963,13 +3963,10 @@ _APK_LANG_NAME = re.compile(r"_[a-z]{2}(?:[-_][a-z]{2,8})?$", re.I)
 
 def _apk_name_rank(name: str, wanted: list[str]) -> tuple:
     low = str(name or "").lower()
-    if _APK_ZH_NAME.search(low):
-        return (0, 0, wanted.index(low) if low in wanted else 99, low)
-    if _APK_EN_NAME.search(low):
-        return (0, 1, wanted.index(low) if low in wanted else 99, low)
-    if _APK_LANG_NAME.search(low):
-        return (2, low, low)
-    return (1, wanted.index(low) if low in wanted else 99, low)
+    other_lang = bool(_APK_LANG_NAME.search(low)) and not _APK_ZH_NAME.search(low) and not _APK_EN_NAME.search(low)
+    if other_lang:
+        return (1, low)
+    return (0, wanted.index(low) if low in wanted else 99, low)
 
 
 def _article_feed_candidates(home: str) -> list[str]:
