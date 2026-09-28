@@ -210,10 +210,9 @@ _FILE_SCAN_WORKERS = 50
 SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
-        "primary": "discover:sublink:https://end-gfw.com",
+        "primary": "discover:sublink:https://github.com/hello-world-1989/cn-news",
         "also": [
             "https://end-gfw.com/ss-key",
-            "discover:sublink:https://github.com/hello-world-1989/cn-news",
         ],
         "referer": "https://end-gfw.com",
         "bare_link": "all",
@@ -309,6 +308,11 @@ SOURCE_GROUPS = [
     {
         "name": "免费节点11",
         "primary": "discover:sublink:https://github.com/kooker/FreeSubsCheck",
+    },
+    {
+        "name": "免费节点12",
+        "primary": "discover:sublink:https://end-gfw.com",
+        "bare_link": "all",
     },
     {
         "name": "ChromeGO-Toolkit",
