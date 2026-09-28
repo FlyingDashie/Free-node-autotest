@@ -116,7 +116,10 @@ _DROP_NAMES: list[str] = []
 _TEST_TOTAL = 0
 _TEST_DONE = 0
 _TEST_LOCK = threading.Lock()
-_BENCH_SLOTS = threading.Semaphore(4)
+_BENCH_LIMIT = 4
+_BENCH_SLOTS = threading.Semaphore(_BENCH_LIMIT)
+_BENCH_INUSE = 0
+_BENCH_INUSE_LOCK = threading.Lock()
 _BRANCH_NEXT = 1
 _RUN_STAMPS: list[str] = []
 _SCORED_LINES: list[str] = []
@@ -128,11 +131,14 @@ _LOG_CAPTURE = threading.local()
 _MAIN_TID = threading.get_ident()
 _TOOLKIT_JOBS: dict[str, dict[str, Any]] = {}
 _TOOLKIT_JOB_LOCK = threading.Lock()
+_SOURCE_JOBS: dict[str, dict[str, Any]] = {}
+_SOURCE_JOB_LOCK = threading.Lock()
 _BODY_CACHE: dict[str, str] = {}
 _BODY_CACHE_LOCK = threading.Lock()
 _FILE_CACHE: dict[str, Path] = {}
 _FILE_CACHE_LOCK = threading.Lock()
 _FETCH_SLOTS = threading.Semaphore(50)
+_PREFETCH_PULL_POOL: ThreadPoolExecutor | None = None
 _GEO_READY_LOG = ""
 _ENGINE_READY_LOG = ""
 _FOLLOWUP_LOGS: dict[str, list[str]] = {}
@@ -5201,49 +5207,65 @@ def _prefetch_pull(url: str, user_agent: str = "", referer: str = "") -> None:
 
 
 def _prefetch_one_source(source: dict[str, Any]) -> None:
-    also_count = len(source.get("also") or [])
-    for item_index, item in enumerate(_source_queue(source)):
-        if item_index > also_count + 8:
-            break
-        spec = _item_spec(item, source)
-        url = spec["url"]
-        if url.startswith("discover:toolkit:"):
-            continue
-        ua = spec.get("user_agent") or ""
-        ref = spec.get("referer") or ""
-        prefer = spec.get("prefer") or ""
-        exclude = spec.get("exclude") or ""
-        bare_link = spec.get("bare_link") or ""
-        try:
-            if url.startswith("discover:article:"):
-                links = discover_article(url[len("discover:article:"):], prefer=prefer, bare_link=bare_link)
-            elif url.startswith("discover:sublink:"):
-                links = discover_sublink(
-                    url[len("discover:sublink:"):],
-                    prefer=prefer,
-                    exclude=exclude,
-                    bare_link=bare_link,
-                )
-            else:
-                links = [url]
-        except Exception:
-            continue
-        for link in unique_ordered(links)[:80]:
-            _prefetch_pull(link, user_agent=ua, referer=ref)
+    _PREFETCH_QUIET.on = True
+    try:
+        also_count = len(source.get("also") or [])
+        for item_index, item in enumerate(_source_queue(source)):
+            if item_index > also_count + 8:
+                break
+            spec = _item_spec(item, source)
+            url = spec["url"]
+            if url.startswith("discover:toolkit:"):
+                continue
+            ua = spec.get("user_agent") or ""
+            ref = spec.get("referer") or ""
+            prefer = spec.get("prefer") or ""
+            exclude = spec.get("exclude") or ""
+            bare_link = spec.get("bare_link") or ""
+            try:
+                if url.startswith("discover:article:"):
+                    links = discover_article(url[len("discover:article:"):], prefer=prefer, bare_link=bare_link)
+                elif url.startswith("discover:sublink:"):
+                    links = discover_sublink(
+                        url[len("discover:sublink:"):],
+                        prefer=prefer,
+                        exclude=exclude,
+                        bare_link=bare_link,
+                    )
+                else:
+                    links = [url]
+            except Exception:
+                continue
+            pending = unique_ordered(links)
+            if not pending:
+                continue
+            pool = _PREFETCH_PULL_POOL
+            if pool is None:
+                for link in pending:
+                    _prefetch_pull(link, ua, ref)
+                continue
+            futs = [pool.submit(_prefetch_pull, link, ua, ref) for link in pending]
+            for fut in futs:
+                try:
+                    fut.result()
+                except Exception:
+                    continue
+    finally:
+        _PREFETCH_QUIET.on = False
 
 
 def _prefetch_sources() -> None:
-    _PREFETCH_QUIET.on = True
-    try:
-        for source in SOURCE_GROUPS:
-            if _source_is_toolkit(source):
-                continue
+    jobs = [source for source in SOURCE_GROUPS if not _source_is_toolkit(source)]
+    if not jobs:
+        return
+    workers = _adapt_workers("io", min(max(8, len(jobs)), CFG_FETCH_WORKERS))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = [pool.submit(_prefetch_one_source, source) for source in jobs]
+        for fut in futs:
             try:
-                _prefetch_one_source(source)
+                fut.result()
             except Exception:
                 continue
-    finally:
-        _PREFETCH_QUIET.on = False
 
 
 def _prefetch_toolkit_assets() -> None:
@@ -5411,6 +5433,12 @@ def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
 
 
 def start_prefetch() -> None:
+    global _PREFETCH_PULL_POOL
+    if _PREFETCH_PULL_POOL is None:
+        _PREFETCH_PULL_POOL = ThreadPoolExecutor(
+            max_workers=CFG_FETCH_WORKERS,
+            thread_name_prefix="pref-pull",
+        )
     threading.Thread(target=_prefetch_toolkit_assets, name="prefetch-toolkit", daemon=True).start()
     threading.Thread(target=_prefetch_sources, name="prefetch-sources", daemon=True).start()
 
@@ -5601,15 +5629,30 @@ def _benchmark_batch(
     local_url = f"http://127.0.0.1:{local_port}"
     process = None
     error = ""
+    leftover: list[dict[str, Any]] = []
+    kept: list[ProxyMetric] = []
+    global _BENCH_INUSE
     with _BENCH_SLOTS:
-        process, error = _start_mihomo_for_batch(
-            engine, work, local_config, local_url, local_port, proxies, branch=branch
-        )
-        if process is not None:
-            try:
-                return run_delay_tests(local_url, proxies, branch=branch)
-            finally:
-                _stop_process(process)
+        with _BENCH_INUSE_LOCK:
+            _BENCH_INUSE += 1
+        try:
+            process, error = _start_mihomo_for_batch(
+                engine, work, local_config, local_url, local_port, proxies, branch=branch
+            )
+            if process is not None:
+                try:
+                    kept, leftover = run_delay_tests(local_url, proxies, branch=branch)
+                finally:
+                    _stop_process(process)
+        finally:
+            with _BENCH_INUSE_LOCK:
+                _BENCH_INUSE = max(0, _BENCH_INUSE - 1)
+    if kept or leftover:
+        if leftover:
+            return kept + _benchmark_reshard(
+                engine, temp_dir, config_path, controller_url, controller_port, leftover, branch
+            )
+        return kept
 
     if len(proxies) == 1:
         bad = proxies[0]
@@ -5666,6 +5709,48 @@ def _benchmark_batch(
     return parts[0] + parts[1]
 
 
+def _benchmark_reshard(
+    engine: Path,
+    temp_dir: Path,
+    config_path: Path,
+    controller_url: str,
+    controller_port: int,
+    proxies: list[dict[str, Any]],
+    branch: str,
+) -> list[ProxyMetric]:
+    parts_n = max(1, min(_BENCH_LIMIT, len(proxies)))
+    if parts_n <= 1:
+        return _benchmark_batch(
+            engine, temp_dir, config_path, controller_url, controller_port, proxies, branch=branch
+        )
+    size = (len(proxies) + parts_n - 1) // parts_n
+    chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
+    ids = [_alloc_branch() for _ in chunks]
+    bits = " + ".join(f"{len(chunk)} {{{child}}}" for chunk, child in zip(chunks, ids))
+    _bench_log(
+        f"[WARN] batch reshard | size={len(proxies)} {{{branch}}} | split={bits}"
+    )
+    out: list[list[ProxyMetric]] = [[] for _ in chunks]
+
+    def _run(index: int, chunk: list[dict[str, Any]], child: str) -> None:
+        out[index] = _benchmark_batch(
+            engine, temp_dir, config_path, controller_url, controller_port, chunk, branch=child
+        )
+
+    workers = [
+        threading.Thread(target=_run, args=(index, chunk, child))
+        for index, (chunk, child) in enumerate(zip(chunks, ids))
+    ]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    merged: list[ProxyMetric] = []
+    for item in out:
+        merged.extend(item)
+    return merged
+
+
 def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
     global _SEP_JUST_PRINTED
     if not proxies:
@@ -5719,9 +5804,11 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         return metrics
 
 
-def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: str = "1") -> list[ProxyMetric]:
+def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: str = "1") -> tuple[list[ProxyMetric], list[dict[str, Any]]]:
     workers = max(1, min(MAX_WORKERS, len(proxies)))
     metrics: list[ProxyMetric] = []
+    leftover: list[dict[str, Any]] = []
+    pending = dict.fromkeys(id(proxy) for proxy in proxies)
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {
             executor.submit(test_single_proxy, controller_url, proxy): proxy
@@ -5730,6 +5817,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
         global _TEST_DONE
         for completed, future in enumerate(as_completed(futures), start=1):
             proxy = futures[future]
+            pending.pop(id(proxy), None)
             metric = None
             try:
                 metric = future.result()
@@ -5746,7 +5834,22 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                     f"[TEST] {{{branch}}} tested={completed}/{len(futures)} "
                     f"| kept={len(metrics)} | rest={rest}"
                 )
-    return metrics
+            with _BENCH_INUSE_LOCK:
+                alone = _BENCH_INUSE <= 1
+            if (
+                alone
+                and rest >= _BENCH_LIMIT * 8
+                and len(pending) >= _BENCH_LIMIT * 8
+                and completed != len(futures)
+            ):
+                leftover = [item for item in proxies if id(item) in pending]
+                for item in leftover:
+                    pending.pop(id(item), None)
+                with _TEST_LOCK:
+                    _TEST_DONE = max(0, _TEST_DONE - len(leftover))
+                executor.shutdown(wait=False, cancel_futures=True)
+                break
+    return metrics, leftover
 
 
 def test_single_proxy(controller_url: str, proxy: dict[str, Any]) -> ProxyMetric | None:
