@@ -1670,9 +1670,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     index = {url: gi for gi, group in enumerate(groups) for url in group}
                     left = [len(group) for group in groups]
                     bucket: list[dict[str, str]] = [{} for _ in groups]
-                    workers = max(1, min(CFG_FETCH_WORKERS, len(urls)))
+                    ordered = [url for group in groups for url in group]
+                    workers = max(1, min(CFG_FETCH_WORKERS, len(ordered)))
                     with ThreadPoolExecutor(max_workers=workers) as pool:
-                        futs = [pool.submit(_fetch_one, url) for url in urls]
+                        futs = [pool.submit(_fetch_one, url) for url in ordered]
                         for future in as_completed(futs):
                             url, text, _err = future.result()
                             gi = index.get(url)
@@ -3260,7 +3261,9 @@ def _ingest_url_groups(urls: list[str]) -> list[list[str]]:
             buckets[key] = []
             order.append(key)
         buckets[key].append(url)
-    return [buckets[key] for key in order]
+    groups = [buckets[key] for key in order]
+    groups.sort(key=len)
+    return groups
 
 
 def _collect_toolkit_candidates(
@@ -3879,9 +3882,10 @@ def _discover_toolkit_encrypted_apk(
             index = {url: gi for gi, group in enumerate(groups) for url in group}
             left = [len(group) for group in groups]
             plains_g: list[list[tuple[str, str, str, str]]] = [[] for _ in groups]
-            workers = max(1, min(CFG_FETCH_WORKERS, len(urls)))
+            ordered = [url for group in groups for url in group]
+            workers = max(1, min(CFG_FETCH_WORKERS, len(ordered)))
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = [pool.submit(_fetch_cfg, url) for url in urls]
+                futures = [pool.submit(_fetch_cfg, url) for url in ordered]
                 for future in as_completed(futures):
                     url, body, err = future.result()
                     gi = index.get(url)
@@ -3959,13 +3963,13 @@ _APK_LANG_NAME = re.compile(r"_[a-z]{2}(?:[-_][a-z]{2,8})?$", re.I)
 
 def _apk_name_rank(name: str, wanted: list[str]) -> tuple:
     low = str(name or "").lower()
-    if _APK_LANG_NAME.search(low) and not _APK_ZH_NAME.search(low) and not _APK_EN_NAME.search(low):
-        return (2, low, low)
     if _APK_ZH_NAME.search(low):
-        return (1, 0, wanted.index(low) if low in wanted else 99, low)
+        return (0, 0, wanted.index(low) if low in wanted else 99, low)
     if _APK_EN_NAME.search(low):
-        return (1, 1, wanted.index(low) if low in wanted else 99, low)
-    return (0, wanted.index(low) if low in wanted else 99, low)
+        return (0, 1, wanted.index(low) if low in wanted else 99, low)
+    if _APK_LANG_NAME.search(low):
+        return (2, low, low)
+    return (1, wanted.index(low) if low in wanted else 99, low)
 
 
 def _article_feed_candidates(home: str) -> list[str]:
