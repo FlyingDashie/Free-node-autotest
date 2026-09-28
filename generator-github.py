@@ -199,7 +199,7 @@ def _alloc_branch() -> str:
 LATENCY_TIMEOUT_MS = 5000
 CONTROLLER_READY_SEC = 8.0
 CONTROLLER_READY_STEP = 0.15
-MAX_RETRIES = 2
+MAX_RETRIES = 1
 MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
@@ -577,29 +577,19 @@ def fetch_text(
     session = requests.Session()
     session.trust_env = False
     session.verify = False
-    proxy_tries = [PROXIES, {}] if PROXIES else [{}]
-    last_error: Exception | None = None
     wait = SOURCE_TIMEOUT if timeout is None else timeout
     with _FETCH_SLOTS:
-        for proxies in proxy_tries:
-            for attempt in range(1, retries + 1):
-                try:
-                    response = session.get(
-                        url,
-                        headers=headers,
-                        timeout=wait,
-                        proxies=proxies,
-                    )
-                    response.raise_for_status()
-                    text = response.content.decode("utf-8", errors="replace")
-                    with _BODY_CACHE_LOCK:
-                        _BODY_CACHE[url] = text
-                    return text
-                except Exception as exc:
-                    last_error = exc
-                    if attempt < retries:
-                        time.sleep(min(1, attempt))
-    raise RuntimeError(f"failed to fetch {url}: {last_error}")
+        response = session.get(
+            url,
+            headers=headers,
+            timeout=wait,
+            proxies=PROXIES,
+        )
+        response.raise_for_status()
+        text = response.content.decode("utf-8", errors="replace")
+        with _BODY_CACHE_LOCK:
+            _BODY_CACHE[url] = text
+        return text
 
 
 def format_reason(exc: object | None = None, fallback: str = "") -> str:
@@ -1606,6 +1596,9 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
         ingest_hits: list[tuple[str, list[str], int]] = []
         tried_addrs: set[str] = set()
         discovered_pages: set[str] = set()
+        reserved_addrs: set[str] = set()
+        for later in _source_queue(source)[1:]:
+            reserved_addrs.update(_queue_addr_keys(later, source))
 
         def _print_hits() -> None:
             nonlocal ingest_hits
@@ -1650,10 +1643,10 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             elif url.startswith("discover:sublink:"):
                 page = url[len("discover:sublink:"):]
                 resolved = _resolve_github_readme(_blob_to_raw(page.strip()))
-                if (
-                    _source_addr_key(page) in discovered_pages
-                    or _source_addr_key(resolved) in discovered_pages
-                ):
+                page_keys = {_source_addr_key(page), _source_addr_key(resolved)}
+                reserved_hit = bool(page_keys & reserved_addrs) and item_index > 0
+                already = bool(page_keys & discovered_pages) and not reserved_hit
+                if already:
                     candidates = []
                 else:
                     candidates = discover_sublink(
@@ -1691,8 +1684,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 crg_archive = packed.get("archive") or ""
                 merge_all = bool(packed.get("merge_all"))
             else:
-                if _source_addr_key(url) in tried_addrs:
+                addr = _source_addr_key(url)
+                if addr in tried_addrs and item_index == 0:
                     continue
+                if addr in tried_addrs and item_index > 0:
+                    tried_addrs.discard(addr)
                 candidates = [url]
                 print(f"[INFO] source try link | url={url}")
             if crg_embedded:
@@ -1703,10 +1699,12 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                 if marks:
                     ingest_hits.append(("embedded://archive-config", marks, len(kept_embed)))
                 source_found.extend(kept_embed)
-            pending = [
-                item for item in unique_ordered(candidates)
-                if _source_addr_key(item) not in tried_addrs
-            ]
+            pending = []
+            for item in unique_ordered(candidates):
+                key = _source_addr_key(item)
+                if key in tried_addrs and not (item_index > 0 and key in reserved_addrs):
+                    continue
+                pending.append(item)
             ua = spec["user_agent"]
             ref = spec["referer"]
 
@@ -1789,8 +1787,11 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     or (first_hit and not source_seen)
                 ):
                     extra = [
-                        link for link in unique_ordered(_SUBLINK_BARE)
-                        if link not in pending and _source_addr_key(link) not in tried_addrs
+                        link
+                        for link in unique_ordered(_SUBLINK_BARE)
+                        if link not in pending
+                        and _source_addr_key(link) not in tried_addrs
+                        and _source_addr_key(link) not in reserved_addrs
                     ]
                     if extra:
                         print(
@@ -1879,6 +1880,18 @@ def _source_queue(source: dict[str, Any]) -> list[Any]:
     items.extend(source.get("also") or [])
     items.extend(source.get("fallbacks") or [])
     return items
+
+
+def _queue_addr_keys(item: Any, source: dict[str, Any]) -> set[str]:
+    spec = _item_spec(item, source)
+    raw = str(spec.get("url") or "")
+    if raw.startswith("discover:"):
+        raw = raw.split(":", 2)[-1]
+    keys = {_source_addr_key(raw), _source_addr_key(_blob_to_raw(raw))}
+    resolved = _resolve_github_readme(_blob_to_raw(raw.strip()))
+    if resolved:
+        keys.add(_source_addr_key(resolved))
+    return {key for key in keys if key}
 
 
 # Reserved source flag: first_hit=True → stop after the first URL that yields nodes.
@@ -2748,55 +2761,50 @@ def _download_archive(
         session = requests.Session()
         session.trust_env = False
         session.verify = False
-        proxy_tries = [PROXIES, {}] if PROXIES else [{}]
-        last_error: Exception | None = None
         written = 0
-        downloaded = False
-        for proxies in proxy_tries:
-            for attempt in range(1, 4):
-                try:
-                    with session.get(
-                        url,
-                        headers={"User-Agent": resolve_ua("Chrome")},
-                        timeout=180,
-                        stream=True,
-                        verify=False,
-                        proxies=proxies,
-                    ) as response:
-                        response.raise_for_status()
-                        written = 0
-                        total = int(response.headers.get("Content-Length") or 0)
-                        with dest.open("wb") as handle:
-                            for chunk in response.iter_content(chunk_size=1024 * 256):
-                                if not chunk:
-                                    continue
-                                handle.write(chunk)
-                                written += len(chunk)
-                        final_url = str(response.url or url)
-                        resp_headers = dict(response.headers)
-                    if total and written < total:
-                        raise RuntimeError(f"incomplete download {written}/{total}")
-                    hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(
-                        final_url,
-                        headers=resp_headers,
-                        head=dest.read_bytes()[:8] if dest.exists() else b"",
-                    )
-                    if hint and hint != dest.name:
-                        renamed = dest.with_name(hint)
-                        if renamed.exists() and renamed != dest:
-                            renamed.unlink()
-                        dest = dest.replace(renamed)
-                    downloaded = True
-                    break
-                except Exception as exc:
-                    last_error = exc
-                    dest.unlink(missing_ok=True)
-                    print(f"[WARN] toolkit download retry | reason={format_reason(exc)} | attempt={attempt}/3")
-                    time.sleep(attempt)
-            if downloaded:
-                break
-        if not downloaded:
-            raise last_error or RuntimeError("download failed")
+        with session.get(
+            url,
+            headers={"User-Agent": resolve_ua("Chrome")},
+            timeout=(8, 120),
+            stream=True,
+            verify=False,
+            proxies=PROXIES,
+        ) as response:
+            response.raise_for_status()
+            written = 0
+            total = int(response.headers.get("Content-Length") or 0)
+            started = time.time()
+            progress_printed = False
+            with dest.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=1024 * 256):
+                    if not chunk:
+                        continue
+                    handle.write(chunk)
+                    written += len(chunk)
+                    elapsed = time.time() - started
+                    if not progress_printed and elapsed >= 30:
+                        extra = f"/{format_size(total)}" if total else ""
+                        print(
+                            f"[INFO] toolkit download | file={dest.name} "
+                            f"| size={format_size(written)}{extra} | time={elapsed:.0f}s"
+                        )
+                        progress_printed = True
+                    if elapsed >= 120:
+                        raise RuntimeError("download exceeded 120s")
+            final_url = str(response.url or url)
+            resp_headers = dict(response.headers)
+        if total and written < total:
+            raise RuntimeError(f"incomplete download {written}/{total}")
+        hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(
+            final_url,
+            headers=resp_headers,
+            head=dest.read_bytes()[:8] if dest.exists() else b"",
+        )
+        if hint and hint != dest.name:
+            renamed = dest.with_name(hint)
+            if renamed.exists() and renamed != dest:
+                renamed.unlink()
+            dest = dest.replace(renamed)
         print(f"[OK] toolkit downloaded | file={dest.name} | size={format_size(written)}")
         try:
             os.makedirs(str(_PREFETCH_DIR), exist_ok=True)
@@ -5516,24 +5524,7 @@ def wait_for_controller(
     raise RuntimeError("Mihomo controller did not become ready")
 
 
-def _debug_mihomo(tag: str, branch: str, proxies: list[dict[str, Any]], error: str = "", process: subprocess.Popen[str] | None = None) -> None:
-    blob = re.sub(r"\s+", " ", str(error or "")).strip()
-    if len(blob) > 240:
-        blob = blob[:237] + "..."
-    code = ""
-    if process is not None:
-        code = f" | rc={process.poll()}"
-    names = ",".join(str(item.get("name") or "")[:40] for item in proxies[:3])
-    if len(proxies) > 3:
-        names += f"...+{len(proxies) - 3}"
-    parse_hit = "Parse config error" in (error or "") or "level=fatal" in (error or "")
-    _bench_log(
-        f"[DEBUG] mihomo {tag} | branch={{{branch}}} | size={len(proxies)} "
-        f"| parse={int(parse_hit)}{code} | names={names} | err={blob or '-'}"
-    )
-
-
-def _stop_process(process: subprocess.Popen[str] | None) -> None:
+def _stop_process(process: subprocess.Popen[str] | None = None) -> None:
     if process is None:
         return
     if process.poll() is None:
@@ -5584,7 +5575,6 @@ def _start_mihomo_for_batch(
         _stop_process(process)
         reader.join(timeout=1)
         message = f"{exc}\n{''.join(logs)}"
-        _debug_mihomo("start-fail", branch, proxies, error=f"rc={rc} {message}", process=process)
         return None, message
 
 
@@ -5685,13 +5675,6 @@ def _benchmark_batch(
             with _BENCH_INUSE_LOCK:
                 _BENCH_INUSE = max(0, _BENCH_INUSE - 1)
     if started:
-        if not kept and not leftover:
-            _debug_mihomo(
-                "tested-empty",
-                branch,
-                proxies,
-                error="controller ready, delay kept=0",
-            )
         if leftover:
             return kept + _benchmark_reshard(
                 engine, temp_dir, config_path, controller_url, controller_port, leftover, branch
@@ -5701,7 +5684,6 @@ def _benchmark_batch(
     if len(proxies) == 1:
         bad = proxies[0]
         reason = _mihomo_reason(error)
-        _debug_mihomo("isolate", branch, proxies, error=error or reason)
         fixed, fields = _repair_proxy_from_reason(bad, reason)
         if fixed:
             _bench_log(
@@ -5722,7 +5704,6 @@ def _benchmark_batch(
                 finally:
                     _stop_process(process2)
             reason = _mihomo_reason(error2) or reason
-        _debug_mihomo("drop", branch, [bad], error=error or reason)
         _bench_log(
             f"[DROP] name={bad.get('name')} {{{branch}}} "
             f"| server={bad.get('server')}:{bad.get('port')} | reason={reason or 'mihomo start failed'}"
@@ -5734,7 +5715,6 @@ def _benchmark_batch(
         return []
 
     if len(proxies) <= 8:
-        _debug_mihomo("split-small", branch, proxies, error=error)
         ids = [_alloc_branch() for _ in proxies]
         bits = " + ".join(f"1 {{{child}}}" for child in ids)
         _bench_log(
