@@ -5969,16 +5969,6 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
                 engine, temp_dir, config_path, controller_url, controller_port, list(proxies), branch="1"
             )
         )
-        metrics, core_dropped = dedupe_metrics_by_core(metrics)
-        for item in core_dropped:
-            proxy = item.proxy if isinstance(item.proxy, dict) else {}
-            name = str(proxy.get("name") or "")
-            _DROP_NAMES.append(name)
-            print(
-                f"[DROP] name={name} {{core}} "
-                f"| server={proxy.get('server')}:{proxy.get('port')} "
-                f"| reason=duplicate core"
-            )
         if _DROP_NAMES:
             tallies: dict[str, int] = {}
             order: list[str] = []
@@ -6628,23 +6618,6 @@ def print_source_live_stats(
         print(rule)
     _SEP_JUST_PRINTED = False
     print_sep()
-
-
-def dedupe_metrics_by_core(metrics: list[ProxyMetric]) -> tuple[list[ProxyMetric], list[ProxyMetric]]:
-    best: dict[str, ProxyMetric] = {}
-    order: list[str] = []
-    dropped_items: list[ProxyMetric] = []
-    for item in metrics:
-        key = proxy_core_key(item.proxy)
-        if key not in best:
-            best[key] = item
-            order.append(key)
-        elif item.health_score > best[key].health_score:
-            dropped_items.append(best[key])
-            best[key] = item
-        else:
-            dropped_items.append(item)
-    return [best[key] for key in order], dropped_items
 
 
 def limit_metrics_per_source(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
