@@ -2901,7 +2901,7 @@ def _download_archive(
             written = 0
             total = int(response.headers.get("Content-Length") or 0)
             started = time.time()
-            progress_printed = False
+            last_progress = 0.0
             os.makedirs(str(dest_dir), exist_ok=True)
             part = dest.with_name(dest.name + ".part")
             with part.open("wb") as handle:
@@ -2911,13 +2911,13 @@ def _download_archive(
                     handle.write(chunk)
                     written += len(chunk)
                     elapsed = time.time() - started
-                    if not progress_printed and elapsed >= 30:
+                    if elapsed >= last_progress + 60:
                         extra = f"/{format_size(total)}" if total else ""
                         print(
                             f"[INFO] toolkit download | file={dest.name} "
                             f"| size={format_size(written)}{extra} | time={elapsed:.0f}s"
                         )
-                        progress_printed = True
+                        last_progress = elapsed
                     if not quiet and elapsed >= 120:
                         raise RuntimeError("download exceeded 120s")
             final_url = str(response.url or url)
