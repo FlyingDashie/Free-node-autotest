@@ -1138,11 +1138,10 @@ def _extract_proxies_pool(texts: list[str]) -> list[list[dict[str, Any]]]:
         return [extract_proxies(texts[0])]
     if len(texts) < 4 and not huge:
         return [extract_proxies(item) for item in texts]
-    workers = _scan_worker_count(len(texts) if not huge else max(len(texts), 2))
-    ctx = multiprocessing.get_context("fork")
-    chunk = max(1, len(texts) // workers)
-    with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-        return list(pool.map(extract_proxies, texts, chunksize=chunk))
+    # 采集线程里 fork 会和别的线程锁死，大 YAML 改线程池解析
+    workers = min(8, max(2, len(texts)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(extract_proxies, texts))
 
 
 def extract_proxies(text: str) -> list[dict[str, Any]]:
@@ -3332,11 +3331,9 @@ def _collect_toolkit_tree(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
     urls: list[str] = []
     embedded: list[dict[str, Any]] = []
     if files:
-        workers = _scan_worker_count(len(files))
-        ctx = multiprocessing.get_context("fork")
-        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-            chunk = max(1, len(files) // workers)
-            for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files, chunksize=chunk):
+        workers = min(32, max(1, _scan_worker_count(len(files))))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
                 urls.extend(piece_urls)
                 embedded.extend(piece_nodes)
     return unique_ordered(urls), embedded
@@ -3882,11 +3879,9 @@ def _apk_scan(root: Path) -> tuple[list[str], list[str], list[bytes], list[str]]
     tokens: list[str] = []
     scored: list[tuple[int, bytes]] = []
     if files:
-        workers = _scan_worker_count(len(files))
-        ctx = multiprocessing.get_context("fork")
-        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-            chunk = max(1, len(files) // workers)
-            for pre, nam, sco, tok in pool.map(_apk_scan_one, files, chunksize=chunk):
+        workers = min(32, max(1, _scan_worker_count(len(files))))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for pre, nam, sco, tok in pool.map(_apk_scan_one, files):
                 prefixes.extend(pre)
                 names.extend(nam)
                 scored.extend(sco)
@@ -5005,11 +5000,11 @@ def extract_mihomo_binary(archive: Path, directory: Path) -> Path:
     raise RuntimeError(f"unsupported Mihomo archive: {archive}")
 
 
-# CSafeDumper 会把 BMP 以外的旗帜写成 \U0001F1E8，成品里看起来像乱码
-_YamlDumper = yaml.SafeDumper
+# clash 用纯 Python，避免国旗被写成 \U0001F1E8；raw 用 C 实现，避免 2 万节点写出卡死
+_FastDumper = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
 
 
-class QuotedDumper(_YamlDumper):
+class QuotedDumper(yaml.SafeDumper):
     pass
 
 
@@ -5045,6 +5040,13 @@ def _represent_str(dumper: yaml.Dumper, data: str):
 
 
 QuotedDumper.add_representer(str, _represent_str)
+if _FastDumper is not yaml.SafeDumper:
+    class FastQuotedDumper(_FastDumper):
+        pass
+
+    FastQuotedDumper.add_representer(str, _represent_str)
+else:
+    FastQuotedDumper = QuotedDumper
 
 
 _SEP_JUST_PRINTED = False
@@ -5054,6 +5056,17 @@ def dump_yaml(data: Any) -> str:
     return yaml.dump(
         data,
         Dumper=QuotedDumper,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+        width=10**9,
+    )
+
+
+def dump_yaml_fast(data: Any) -> str:
+    return yaml.dump(
+        data,
+        Dumper=FastQuotedDumper,
         allow_unicode=True,
         sort_keys=False,
         default_flow_style=False,
@@ -5124,7 +5137,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
             "MATCH,URL-TEST",
         ],
     }
-    rendered = dump_yaml(payload)
+    rendered = dump_yaml_fast(payload)
     raw_hist = history_named("raw")
     RAW_PATH.write_text(rendered, encoding="utf-8")
     raw_hist.write_text(rendered, encoding="utf-8")
@@ -5207,10 +5220,8 @@ def write_scored_history(
         if workers <= 1 or len(leftover) < 80:
             ranked.extend(_scored_line_from_row(row) for row in leftover)
         else:
-            ctx = multiprocessing.get_context("fork")
-            chunk = max(1, len(leftover) // workers)
-            with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-                ranked.extend(pool.map(_scored_line_from_row, leftover, chunksize=chunk))
+            with ThreadPoolExecutor(max_workers=min(8, workers)) as pool:
+                ranked.extend(pool.map(_scored_line_from_row, leftover))
     ranked.sort(key=lambda pair: pair[0], reverse=True)
     global _SCORED_LINES
     _SCORED_LINES = [line for _score, line in ranked if line]
