@@ -1130,18 +1130,65 @@ def extract_client_json_proxies(text: str) -> list[dict[str, Any]]:
     return found
 
 
+_PARSE_POOL: ProcessPoolExecutor | None = None
+_PARSE_POOL_LOCK = threading.Lock()
+_PARSE_HUGE = 400_000
+
+
+def start_parse_pool() -> ProcessPoolExecutor | None:
+    global _PARSE_POOL
+    if _PARSE_POOL is not None:
+        return _PARSE_POOL
+    with _PARSE_POOL_LOCK:
+        if _PARSE_POOL is not None:
+            return _PARSE_POOL
+        workers = max(2, min(4, os.cpu_count() or 2))
+        try:
+            ctx = multiprocessing.get_context("forkserver")
+        except ValueError:
+            ctx = multiprocessing.get_context("spawn")
+        _PARSE_POOL = ProcessPoolExecutor(max_workers=workers, mp_context=ctx)
+        return _PARSE_POOL
+
+
+def shutdown_parse_pool() -> None:
+    global _PARSE_POOL
+    pool = _PARSE_POOL
+    _PARSE_POOL = None
+    if pool is None:
+        return
+    pool.shutdown(wait=False, cancel_futures=True)
+
+
 def _extract_proxies_pool(texts: list[str]) -> list[list[dict[str, Any]]]:
     if not texts:
         return []
-    huge = any(len(item or "") >= 400_000 for item in texts)
-    if len(texts) == 1 and not huge:
-        return [extract_proxies(texts[0])]
-    if len(texts) < 4 and not huge:
-        return [extract_proxies(item) for item in texts]
-    # 采集线程里 fork 会和别的线程锁死，大 YAML 改线程池解析
-    workers = min(8, max(2, len(texts)))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        return list(pool.map(extract_proxies, texts))
+    huge_items = [(index, item) for index, item in enumerate(texts) if len(item or "") >= _PARSE_HUGE]
+    small_items = [(index, item) for index, item in enumerate(texts) if len(item or "") < _PARSE_HUGE]
+    out: list[list[dict[str, Any]] | None] = [None] * len(texts)
+    if small_items:
+        if len(small_items) == 1:
+            index, item = small_items[0]
+            out[index] = extract_proxies(item)
+        else:
+            workers = min(8, max(1, len(small_items)))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                results = list(pool.map(extract_proxies, [item for _index, item in small_items]))
+            for (index, _item), parsed in zip(small_items, results):
+                out[index] = parsed
+    if huge_items:
+        pool = start_parse_pool()
+        if pool is None:
+            for index, item in huge_items:
+                out[index] = extract_proxies(item)
+        else:
+            futs = [(index, pool.submit(extract_proxies, item)) for index, item in huge_items]
+            for index, fut in futs:
+                try:
+                    out[index] = fut.result(timeout=180)
+                except Exception:
+                    out[index] = extract_proxies(texts[index])
+    return [item or [] for item in out]
 
 
 def extract_proxies(text: str) -> list[dict[str, Any]]:
@@ -6734,6 +6781,7 @@ def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric])
 
 def main() -> None:
     _bind_dirs()
+    start_parse_pool()
     start_raw_warmup()
     start_prefetch()
     total_nodes, candidates, collected_counts = collect_proxies()
@@ -6804,3 +6852,4 @@ if __name__ == "__main__":
         if _RAW_WRITE_LOG:
             print(_RAW_WRITE_LOG)
         write_debug_history()
+        shutdown_parse_pool()
