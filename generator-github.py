@@ -2873,7 +2873,6 @@ def _download_archive(
     name = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
     dest = dest_dir / name
     print(f"[INFO] toolkit try download | url={url}")
-    started = time.time()
     try:
         session = requests.Session()
         session.trust_env = False
