@@ -149,6 +149,30 @@ _BODY_CACHE_LOCK = threading.Lock()
 _FILE_CACHE: dict[str, Path] = {}
 _FILE_CACHE_TIME: dict[str, float] = {}
 _FILE_CACHE_LOCK = threading.Lock()
+_DL_INFLIGHT: dict[str, threading.Event] = {}
+_DL_FRONT_DEADLINE: dict[str, float] = {}
+_DL_INFLIGHT_LOCK = threading.Lock()
+
+
+def _arm_download_front(url: str = "") -> float:
+    now = time.time()
+    with _DL_INFLIGHT_LOCK:
+        urls = [url] if url else list(_DL_INFLIGHT.keys())
+        last = now + 120
+        for item in urls:
+            if not item:
+                continue
+            prev = _DL_FRONT_DEADLINE.get(item)
+            if prev is None:
+                _DL_FRONT_DEADLINE[item] = now + 120
+            last = _DL_FRONT_DEADLINE.get(item, now + 120)
+        return last
+
+
+def _download_front_hit(url: str) -> bool:
+    with _DL_INFLIGHT_LOCK:
+        limit = _DL_FRONT_DEADLINE.get(url)
+    return limit is not None and time.time() >= limit
 _FETCH_SLOTS = threading.Semaphore(50)
 _PREFETCH_PULL_POOL: ThreadPoolExecutor | None = None
 _GEO_READY_LOG = ""
@@ -2882,13 +2906,41 @@ def _download_archive(
         return local
     name = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
     dest = dest_dir / name
+    quiet = _prefetch_quiet()
+    owner = False
+    inflight: threading.Event | None = None
+    with _DL_INFLIGHT_LOCK:
+        inflight = _DL_INFLIGHT.get(url)
+        if inflight is None:
+            inflight = threading.Event()
+            _DL_INFLIGHT[url] = inflight
+            owner = True
+    if not owner:
+        print(f"[INFO] toolkit try download | url={url}")
+        limit = None if quiet else _arm_download_front(url)
+        wait_s = None if limit is None else max(0.1, limit - time.time())
+        if not inflight.wait(timeout=wait_s):
+            print(f"[WARN] toolkit try failed | reason=download exceeded 120s | url={url}")
+            return None
+        with _FILE_CACHE_LOCK:
+            cached = _FILE_CACHE.get(url) or _FILE_CACHE.get(Path(str(save_as).strip()).name if save_as else "")
+        if cached is not None and cached.is_file() and cached.stat().st_size > 0:
+            with _FILE_CACHE_LOCK:
+                elapsed = _FILE_CACHE_TIME.get(url)
+                if elapsed is None:
+                    elapsed = _FILE_CACHE_TIME.get(cached.name)
+            extra = f" | time={elapsed:.1f}s" if elapsed is not None else ""
+            print(f"[OK] toolkit downloaded | file={cached.name} | size={format_size(cached.stat().st_size)}{extra}")
+            return cached
+        return None
     print(f"[INFO] toolkit try download | url={url}")
+    if not quiet:
+        _arm_download_front(url)
     try:
         session = requests.Session()
         session.trust_env = False
         session.verify = False
         written = 0
-        quiet = _prefetch_quiet()
         with session.get(
             url,
             headers={"User-Agent": resolve_ua("Chrome")},
@@ -2918,7 +2970,7 @@ def _download_archive(
                             f"| size={format_size(written)}{extra} | time={elapsed:.0f}s"
                         )
                         last_progress = elapsed
-                    if not quiet and elapsed >= 120:
+                    if _download_front_hit(url):
                         raise RuntimeError("download exceeded 120s")
             final_url = str(response.url or url)
             resp_headers = dict(response.headers)
@@ -2960,6 +3012,12 @@ def _download_archive(
         print(f"[WARN] toolkit try failed | reason={format_reason(exc)} | url={url}")
         dest.unlink(missing_ok=True)
         return None
+    finally:
+        if owner and inflight is not None:
+            inflight.set()
+            with _DL_INFLIGHT_LOCK:
+                _DL_INFLIGHT.pop(url, None)
+                _DL_FRONT_DEADLINE.pop(url, None)
 
 
 def _unwrap_crx(archive: Path) -> Path:
@@ -5557,6 +5615,8 @@ def _flush_toolkit_job_logs(job: dict[str, Any], printed: list[int]) -> None:
         for line in lines[printed[0]:]:
             print(line)
         printed[0] = len(lines)
+        if not job.get("done"):
+            _arm_download_front()
 
 
 def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
@@ -5570,6 +5630,8 @@ def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
             time.sleep(0.15)
             continue
         _flush_toolkit_job_logs(job, printed)
+        if not job.get("done"):
+            _arm_download_front()
         if job.get("done"):
             with _TOOLKIT_JOB_LOCK:
                 job = _TOOLKIT_JOBS.get(key) or job
