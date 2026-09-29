@@ -5874,7 +5874,10 @@ def _benchmark_batch(
             _TEST_DONE += 1
         return []
 
-    parts_n = max(2, min(_BENCH_LIMIT, len(proxies)))
+    if len(proxies) <= 8:
+        parts_n = len(proxies)
+    else:
+        parts_n = max(2, min(_BENCH_LIMIT, len(proxies)))
     size = (len(proxies) + parts_n - 1) // parts_n
     chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
     ids = [_alloc_branch() for _ in chunks]
