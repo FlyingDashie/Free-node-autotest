@@ -151,6 +151,8 @@ _FILE_CACHE_TIME: dict[str, float] = {}
 _FILE_CACHE_LOCK = threading.Lock()
 _DL_INFLIGHT: dict[str, threading.Event] = {}
 _DL_FRONT_DEADLINE: dict[str, float] = {}
+_DL_RETRY_COUNT: dict[str, int] = {}
+_DL_FRONT_RETRY0: dict[str, int] = {}
 _DL_INFLIGHT_LOCK = threading.Lock()
 
 
@@ -165,6 +167,7 @@ def _arm_download_front(url: str = "") -> float:
             prev = _DL_FRONT_DEADLINE.get(item)
             if prev is None:
                 _DL_FRONT_DEADLINE[item] = now + 120
+                _DL_FRONT_RETRY0.setdefault(item, _DL_RETRY_COUNT.get(item, 0))
             last = _DL_FRONT_DEADLINE.get(item, now + 120)
         return last
 
@@ -2937,81 +2940,95 @@ def _download_archive(
     if not quiet:
         _arm_download_front(url)
     try:
-        session = requests.Session()
-        session.trust_env = False
-        session.verify = False
-        written = 0
-        with session.get(
-            url,
-            headers={"User-Agent": resolve_ua("Chrome")},
-            timeout=(8, None if quiet else 120),
-            stream=True,
-            verify=False,
-            proxies=PROXIES,
-        ) as response:
-            response.raise_for_status()
+        while True:
+          try:
+            session = requests.Session()
+            session.trust_env = False
+            session.verify = False
             written = 0
-            total = int(response.headers.get("Content-Length") or 0)
-            started = time.time()
-            last_progress = 0.0
-            os.makedirs(str(dest_dir), exist_ok=True)
-            part = dest.with_name(dest.name + ".part")
-            with part.open("wb") as handle:
-                for chunk in response.iter_content(chunk_size=1024 * 256):
-                    if not chunk:
-                        continue
-                    handle.write(chunk)
-                    written += len(chunk)
-                    elapsed = time.time() - started
-                    if elapsed >= last_progress + 60:
-                        extra = f"/{format_size(total)}" if total else ""
-                        print(
-                            f"[INFO] toolkit download | file={dest.name} "
-                            f"| size={format_size(written)}{extra} | time={elapsed:.0f}s"
-                        )
-                        last_progress = elapsed
-                    if _download_front_hit(url):
-                        raise RuntimeError("download exceeded 120s")
-            final_url = str(response.url or url)
-            resp_headers = dict(response.headers)
-        if total and written < total:
-            raise RuntimeError(f"incomplete download {written}/{total}")
-        hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(
-            final_url,
-            headers=resp_headers,
-            head=part.read_bytes()[:8] if part.exists() else b"",
-        )
-        if hint and hint != dest.name:
-            dest = dest.with_name(hint)
-        if dest.exists():
-            dest.unlink()
-        part.replace(dest)
-        elapsed = time.time() - started
-        print(f"[OK] toolkit downloaded | file={dest.name} | size={format_size(written)} | time={elapsed:.1f}s")
-        try:
-            os.makedirs(str(_PREFETCH_DIR), exist_ok=True)
-            stored = _PREFETCH_DIR / dest.name
-            if stored.resolve() != dest.resolve():
-                shutil.copy2(dest, stored)
-            with _FILE_CACHE_LOCK:
-                _FILE_CACHE[url] = stored
-                _FILE_CACHE[stored.name] = stored
-                _FILE_CACHE_TIME[url] = elapsed
-                _FILE_CACHE_TIME[stored.name] = elapsed
-                _FILE_CACHE_TIME[dest.name] = elapsed
-        except Exception:
-            pass
-        if expected_hashes:
+            with session.get(
+                url,
+                headers={"User-Agent": resolve_ua("Chrome")},
+                timeout=(8, None if quiet else 120),
+                stream=True,
+                verify=False,
+                proxies=PROXIES,
+            ) as response:
+                response.raise_for_status()
+                written = 0
+                total = int(response.headers.get("Content-Length") or 0)
+                started = time.time()
+                last_progress = 0.0
+                os.makedirs(str(dest_dir), exist_ok=True)
+                part = dest.with_name(dest.name + ".part")
+                with part.open("wb") as handle:
+                    for chunk in response.iter_content(chunk_size=1024 * 256):
+                        if not chunk:
+                            continue
+                        handle.write(chunk)
+                        written += len(chunk)
+                        elapsed = time.time() - started
+                        if elapsed >= last_progress + 60:
+                            extra = f"/{format_size(total)}" if total else ""
+                            print(
+                                f"[INFO] toolkit download | file={dest.name} "
+                                f"| size={format_size(written)}{extra} | time={elapsed:.0f}s"
+                            )
+                            last_progress = elapsed
+                        if _download_front_hit(url):
+                            raise RuntimeError("download exceeded 120s")
+                final_url = str(response.url or url)
+                resp_headers = dict(response.headers)
+            if total and written < total:
+                raise RuntimeError(f"incomplete download {written}/{total}")
+            hint = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(
+                final_url,
+                headers=resp_headers,
+                head=part.read_bytes()[:8] if part.exists() else b"",
+            )
+            if hint and hint != dest.name:
+                dest = dest.with_name(hint)
+            if dest.exists():
+                dest.unlink()
+            part.replace(dest)
+            elapsed = time.time() - started
+            print(f"[OK] toolkit downloaded | file={dest.name} | size={format_size(written)} | time={elapsed:.1f}s")
             try:
-                verify_file_hashes(dest, expected_hashes, label=dest.name)
+                os.makedirs(str(_PREFETCH_DIR), exist_ok=True)
+                stored = _PREFETCH_DIR / dest.name
+                if stored.resolve() != dest.resolve():
+                    shutil.copy2(dest, stored)
+                with _FILE_CACHE_LOCK:
+                    _FILE_CACHE[url] = stored
+                    _FILE_CACHE[stored.name] = stored
+                    _FILE_CACHE_TIME[url] = elapsed
+                    _FILE_CACHE_TIME[stored.name] = elapsed
+                    _FILE_CACHE_TIME[dest.name] = elapsed
             except Exception:
-                dest.unlink(missing_ok=True)
+                pass
+            if expected_hashes:
+                try:
+                    verify_file_hashes(dest, expected_hashes, label=dest.name)
+                except Exception:
+                    dest.unlink(missing_ok=True)
+                    return None
+            return dest
+          except Exception as exc:
+            reason = format_reason(exc)
+            dest.unlink(missing_ok=True)
+            with _DL_INFLIGHT_LOCK:
+                retry_n = _DL_RETRY_COUNT.get(url, 0) + 1
+                _DL_RETRY_COUNT[url] = retry_n
+                snap = _DL_FRONT_RETRY0.get(url)
+                front = url in _DL_FRONT_DEADLINE
+            after = 0 if snap is None else retry_n - snap
+            if front and after > 2:
+                print(f"[WARN] toolkit try failed | reason={reason} | url={url}")
                 return None
-        return dest
-    except Exception as exc:
-        print(f"[WARN] toolkit try failed | reason={format_reason(exc)} | url={url}")
-        dest.unlink(missing_ok=True)
-        return None
+            print(f"[WARN] toolkit retry | count={retry_n} | reason={reason} | url={url}")
+            if front and after >= 2:
+                return None
+            time.sleep(2)
     finally:
         if owner and inflight is not None:
             inflight.set()
