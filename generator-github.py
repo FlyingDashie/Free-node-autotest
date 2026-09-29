@@ -2941,6 +2941,10 @@ def _download_archive(
         _arm_download_front(url)
     try:
         while True:
+          if _download_front_hit(url):
+            print(f"[WARN] toolkit try failed | reason=download exceeded 120s | url={url}")
+            dest.unlink(missing_ok=True)
+            return None
           try:
             session = requests.Session()
             session.trust_env = False
@@ -3028,7 +3032,16 @@ def _download_archive(
             print(f"[WARN] toolkit retry | count={retry_n} | reason={reason} | url={url}")
             if front and after >= 2:
                 return None
-            time.sleep(2)
+            if _download_front_hit(url):
+                return None
+            wait_s = 2.0
+            with _DL_INFLIGHT_LOCK:
+                limit = _DL_FRONT_DEADLINE.get(url)
+            if limit is not None:
+                wait_s = min(2.0, max(0.0, limit - time.time()))
+                if wait_s <= 0:
+                    return None
+            time.sleep(wait_s)
     finally:
         if owner and inflight is not None:
             inflight.set()
