@@ -493,12 +493,12 @@ UA_PRESETS = {
 def format_size(num: int | float) -> str:
     n = float(num)
     if n < 1024:
-        return f"{int(n)}B"
+        return f"{int(n)}b"
     if n < 1024 * 1024:
         val = n / 1024
-        return f"{val:.1f}KB".replace(".0KB", "KB")
+        return f"{val:.1f}kb".replace(".0kb", "kb")
     val = n / (1024 * 1024)
-    return f"{val:.1f}MB".replace(".0MB", "MB")
+    return f"{val:.1f}mb".replace(".0mb", "mb")
 
 
 def resolve_ua(name: str = "") -> str:
