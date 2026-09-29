@@ -29,6 +29,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse, urlunparse
 
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+except Exception:
+    pass
+_orig_print = print
+def print(*args, **kwargs):
+    kwargs.setdefault("flush", True)
+    return _orig_print(*args, **kwargs)
+
 _REQUIRED_PACKAGES = {
     "requests": "requests",
     "urllib3": "urllib3",
@@ -2878,10 +2888,11 @@ def _download_archive(
         session.trust_env = False
         session.verify = False
         written = 0
+        quiet = _prefetch_quiet()
         with session.get(
             url,
             headers={"User-Agent": resolve_ua("Chrome")},
-            timeout=(8, 120),
+            timeout=(8, None if quiet else 120),
             stream=True,
             verify=False,
             proxies=PROXIES,
@@ -2907,7 +2918,7 @@ def _download_archive(
                             f"| size={format_size(written)}{extra} | time={elapsed:.0f}s"
                         )
                         progress_printed = True
-                    if elapsed >= 120:
+                    if not quiet and elapsed >= 120:
                         raise RuntimeError("download exceeded 120s")
             final_url = str(response.url or url)
             resp_headers = dict(response.headers)
