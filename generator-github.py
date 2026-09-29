@@ -137,6 +137,7 @@ _SOURCE_JOB_LOCK = threading.Lock()
 _BODY_CACHE: dict[str, str] = {}
 _BODY_CACHE_LOCK = threading.Lock()
 _FILE_CACHE: dict[str, Path] = {}
+_FILE_CACHE_TIME: dict[str, float] = {}
 _FILE_CACHE_LOCK = threading.Lock()
 _FETCH_SLOTS = threading.Semaphore(50)
 _PREFETCH_PULL_POOL: ThreadPoolExecutor | None = None
@@ -2850,7 +2851,12 @@ def _download_archive(
                 cached = _FILE_CACHE.get(hint_name)
     if cached is not None and cached.is_file() and cached.stat().st_size > 0:
         print(f"[INFO] toolkit try download | url={url}")
-        print(f"[OK] toolkit downloaded | file={cached.name} | size={format_size(cached.stat().st_size)}")
+        with _FILE_CACHE_LOCK:
+            elapsed = _FILE_CACHE_TIME.get(url)
+            if elapsed is None:
+                elapsed = _FILE_CACHE_TIME.get(cached.name)
+        extra = f" | time={elapsed:.1f}s" if elapsed is not None else ""
+        print(f"[OK] toolkit downloaded | file={cached.name} | size={format_size(cached.stat().st_size)}{extra}")
         return cached
     local = _find_local_package(url)
     if local is None and _debug_only:
@@ -2867,6 +2873,7 @@ def _download_archive(
     name = Path(str(save_as).strip()).name if str(save_as or "").strip() else _toolkit_download_name(url)
     dest = dest_dir / name
     print(f"[INFO] toolkit try download | url={url}")
+    started = time.time()
     try:
         session = requests.Session()
         session.trust_env = False
@@ -2917,7 +2924,8 @@ def _download_archive(
         if dest.exists():
             dest.unlink()
         part.replace(dest)
-        print(f"[OK] toolkit downloaded | file={dest.name} | size={format_size(written)}")
+        elapsed = time.time() - started
+        print(f"[OK] toolkit downloaded | file={dest.name} | size={format_size(written)} | time={elapsed:.1f}s")
         try:
             os.makedirs(str(_PREFETCH_DIR), exist_ok=True)
             stored = _PREFETCH_DIR / dest.name
@@ -2926,6 +2934,9 @@ def _download_archive(
             with _FILE_CACHE_LOCK:
                 _FILE_CACHE[url] = stored
                 _FILE_CACHE[stored.name] = stored
+                _FILE_CACHE_TIME[url] = elapsed
+                _FILE_CACHE_TIME[stored.name] = elapsed
+                _FILE_CACHE_TIME[dest.name] = elapsed
         except Exception:
             pass
         if expected_hashes:
