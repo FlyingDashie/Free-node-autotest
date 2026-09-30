@@ -5156,10 +5156,7 @@ def extract_mihomo_binary(archive: Path, directory: Path) -> Path:
     raise RuntimeError(f"unsupported Mihomo archive: {archive}")
 
 
-_FastDumper = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
-
-
-class QuotedDumper(yaml.SafeDumper):
+class QuotedDumper(getattr(yaml, "CSafeDumper", yaml.SafeDumper)):
     pass
 
 
@@ -5168,9 +5165,9 @@ _QUOTE_BOOLS = {
 }
 _RISKY_SCALAR = re.compile(
     r"^(?:"
-    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)"  # 科学计数 953e8078
-    r"|[-+]?\d+:\d+(?::\d+(?:\.\d*)?)?"              # YAML 1.1 六十进制
-    r"|[-+]?0[0-9]+"                                 # 前导 0
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)"
+    r"|[-+]?\d+:\d+(?::\d+(?:\.\d*)?)?"
+    r"|[-+]?0[0-9]+"
     r")$"
 )
 
@@ -5195,13 +5192,6 @@ def _represent_str(dumper: yaml.Dumper, data: str):
 
 
 QuotedDumper.add_representer(str, _represent_str)
-if _FastDumper is not yaml.SafeDumper:
-    class FastQuotedDumper(_FastDumper):
-        pass
-
-    FastQuotedDumper.add_representer(str, _represent_str)
-else:
-    FastQuotedDumper = QuotedDumper
 
 
 _SEP_JUST_PRINTED = False
@@ -5210,7 +5200,7 @@ _SEP_JUST_PRINTED = False
 def dump_yaml(data: Any) -> str:
     text = yaml.dump(
         data,
-        Dumper=FastQuotedDumper,
+        Dumper=QuotedDumper,
         allow_unicode=True,
         sort_keys=False,
         default_flow_style=False,
