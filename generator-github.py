@@ -242,7 +242,7 @@ MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
 MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "400"))
-DEBUG_ONLY_SOURCES = ["免费节点7"]
+DEBUG_ONLY_SOURCES = []
 _FILE_SCAN_WORKERS = 50
 
 SOURCE_GROUPS = [
@@ -5168,9 +5168,9 @@ _QUOTE_BOOLS = {
 }
 _RISKY_SCALAR = re.compile(
     r"^(?:"
-    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)"  # 科学计数 953e8078
-    r"|[-+]?\d+:\d+(?::\d+(?:\.\d*)?)?"              # YAML 1.1 六十进制
-    r"|[-+]?0[0-9]+"                                 # 前导 0
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)"
+    r"|[-+]?\d+:\d+(?::\d+(?:\.\d*)?)?"
+    r"|[-+]?0[0-9]+"
     r")$"
 )
 
