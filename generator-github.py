@@ -242,7 +242,7 @@ MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
 MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "400"))
-DEBUG_ONLY_SOURCES = []
+DEBUG_ONLY_SOURCES = ["免费节点7"]
 _FILE_SCAN_WORKERS = 50
 
 SOURCE_GROUPS = [
@@ -5156,7 +5156,6 @@ def extract_mihomo_binary(archive: Path, directory: Path) -> Path:
     raise RuntimeError(f"unsupported Mihomo archive: {archive}")
 
 
-# clash 用纯 Python，避免国旗被写成 \U0001F1E8；raw 用 C 实现，避免 2 万节点写出卡死
 _FastDumper = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
 
 
@@ -5209,18 +5208,7 @@ _SEP_JUST_PRINTED = False
 
 
 def dump_yaml(data: Any) -> str:
-    return yaml.dump(
-        data,
-        Dumper=QuotedDumper,
-        allow_unicode=True,
-        sort_keys=False,
-        default_flow_style=False,
-        width=10**9,
-    )
-
-
-def dump_yaml_fast(data: Any) -> str:
-    return yaml.dump(
+    text = yaml.dump(
         data,
         Dumper=FastQuotedDumper,
         allow_unicode=True,
@@ -5228,6 +5216,7 @@ def dump_yaml_fast(data: Any) -> str:
         default_flow_style=False,
         width=10**9,
     )
+    return _decode_name_escapes(text)
 
 
 _RAW_FILE_INDEX: dict[str, dict[str, list[dict[str, Any]]]] = {}
@@ -5293,7 +5282,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
             "MATCH,URL-TEST",
         ],
     }
-    rendered = dump_yaml_fast(payload)
+    rendered = dump_yaml(payload)
     raw_hist = history_named("raw")
     RAW_PATH.write_text(rendered, encoding="utf-8")
     raw_hist.write_text(rendered, encoding="utf-8")
