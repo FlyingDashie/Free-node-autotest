@@ -5539,16 +5539,27 @@ def write_scored_history(
         if not line:
             continue
         name = line.rsplit(" | ", 1)[-1] if " | " in line else line
-        key = source_prefix_of(name)
-        if key.startswith("[") and key.endswith("]"):
-            key = key[1:-1]
-        key = key.strip() or "-"
+        match = re.match(r"\[([^\]]+)\]", name.strip())
+        if match:
+            key = match.group(1).strip() or "-"
+        else:
+            key = source_prefix_of(name)
+            if key.startswith("[") and key.endswith("]"):
+                key = key[1:-1]
+            key = key.strip() or "-"
         tagged.append((key, line))
-    width = max((_visual_width(key) for key, _line in tagged), default=0)
+    target = 0
+    for key, _line in tagged:
+        target = max(target, _visual_width(f"[SCORED-{key}]"))
+    target += 1
     rows: list[str] = []
     for key, line in tagged:
-        dash_n = max(1, width - _visual_width(key) + 1)
-        rows.append(f"[SCORED{'-' * dash_n}{key}] {line}")
+        dash_n = 1
+        tag = f"[SCORED{'-' * dash_n}{key}]"
+        while _visual_width(tag) < target:
+            dash_n += 1
+            tag = f"[SCORED{'-' * dash_n}{key}]"
+        rows.append(f"{tag} {line}")
     _SCORED_LINES = rows
 
 
