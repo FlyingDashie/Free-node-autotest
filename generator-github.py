@@ -127,7 +127,7 @@ _TEST_TOTAL = 0
 _TEST_DONE = 0
 _LAT_TABLE: dict[str, int] = {}
 _TEST_LOCK = threading.Lock()
-_BENCH_LIMIT = 4
+_BENCH_LIMIT = 6
 _BENCH_SLOTS = threading.Semaphore(_BENCH_LIMIT)
 _BENCH_INUSE = 0
 _BENCH_INUSE_LOCK = threading.Lock()
@@ -186,6 +186,9 @@ def _download_front_hit(url: str) -> bool:
         limit = _DL_FRONT_DEADLINE.get(url)
     return limit is not None and time.time() >= limit
 _FETCH_SLOTS = threading.Semaphore(50)
+_FETCH_INFLIGHT: dict[str, threading.Event] = {}
+_FETCH_INFLIGHT_LOCK = threading.Lock()
+_FETCH_DONE: dict[str, tuple[str | None, str]] = {}
 _HOST_FETCH_SLOTS: dict[str, threading.Semaphore] = {}
 _HOST_FETCH_LOCK = threading.Lock()
 _HOST_FETCH_LIMIT = 8
@@ -193,6 +196,7 @@ _HOST_FAIL_N: dict[str, int] = {}
 _HOST_SLOW: dict[str, threading.Lock] = {}
 _SCAN_BUSY = 0
 _SCAN_BUSY_LOCK = threading.Lock()
+_SCAN_ELAPSED: list[float] = []
 _SCORED_PATH: Path | None = None
 _PREFETCH_PULL_POOL: ThreadPoolExecutor | None = None
 _GEO_READY_LOG = ""
@@ -799,6 +803,7 @@ def fetch_text(
     referer: str = "",
     accept: str = "",
     timeout: int | None = None,
+    count_fail: bool = True,
 ) -> str:
     headers = {
         "User-Agent": resolve_ua(user_agent),
@@ -811,6 +816,24 @@ def fetch_text(
         cached = _BODY_CACHE.get(url)
     if cached is not None:
         return cached
+    with _FETCH_INFLIGHT_LOCK:
+        inflight = _FETCH_INFLIGHT.get(url)
+        owner = inflight is None
+        if owner:
+            inflight = threading.Event()
+            _FETCH_INFLIGHT[url] = inflight
+    if not owner:
+        inflight.wait(timeout=SOURCE_TIMEOUT + 5)
+        with _BODY_CACHE_LOCK:
+            cached = _BODY_CACHE.get(url)
+        if cached is not None:
+            return cached
+        with _FETCH_INFLIGHT_LOCK:
+            done = _FETCH_DONE.get(url)
+        if done and done[0]:
+            return done[0]
+        if timeout is not None:
+            raise RuntimeError(done[1] if done else "prefetch missed")
     session = requests.Session()
     session.trust_env = False
     session.verify = False
@@ -835,16 +858,25 @@ def fetch_text(
                         text = response.content.decode("utf-8", errors="replace")
                         with _BODY_CACHE_LOCK:
                             _BODY_CACHE[url] = text
+                        with _FETCH_INFLIGHT_LOCK:
+                            _FETCH_DONE[url] = (text, "")
                         return text
             except Exception as exc:
                 last = exc
-                _mark_host_fail(url)
+                if count_fail:
+                    _mark_host_fail(url)
+        with _FETCH_INFLIGHT_LOCK:
+            _FETCH_DONE[url] = (None, str(last or "fetch failed"))
         if last is not None:
             raise last
         raise RuntimeError("fetch failed")
     finally:
         if slow is not None:
             slow.release()
+        if owner:
+            inflight.set()
+            with _FETCH_INFLIGHT_LOCK:
+                _FETCH_INFLIGHT.pop(url, None)
 
 
 def format_reason(exc: object | None = None, fallback: str = "") -> str:
@@ -3712,12 +3744,18 @@ def _toolkit_nodes_from_file(path: Path) -> list[dict[str, Any]]:
 
 
 def _toolkit_scan_file(path: Path) -> tuple[list[str], list[dict[str, Any]]]:
-    if not _file_looks_text(path):
-        return [], []
     try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
+        blob = path.read_bytes()
     except Exception:
         return [], []
+    if b"\x00" in blob[:8192]:
+        return [], []
+    sample = blob[:8192].decode("utf-8", errors="replace")
+    bad = sample.count("\ufffd")
+    printable = sum(ch.isprintable() or ch.isspace() for ch in sample)
+    if sample and (bad / max(len(sample), 1) > 0.12 or printable / max(len(sample), 1) < 0.85):
+        return [], []
+    text = blob.decode("utf-8", errors="ignore")
     urls = _toolkit_urls_from_text(text) if _name_matches_exts(path.name, _TOOLKIT_TEXT_EXT) else []
     return urls, extract_proxies(text)
 
@@ -3732,10 +3770,12 @@ def _collect_toolkit_tree(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
             _SCAN_BUSY += 1
         try:
             workers = min(32, max(1, _scan_worker_count(len(files))))
+            started = time.time()
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
                     urls.extend(piece_urls)
                     embedded.extend(piece_nodes)
+            _SCAN_ELAPSED.append(time.time() - started)
         finally:
             with _SCAN_BUSY_LOCK:
                 _SCAN_BUSY = max(0, _SCAN_BUSY - 1)
@@ -3755,10 +3795,11 @@ def _collect_toolkit_embedded_proxies(root: Path) -> list[dict[str, Any]]:
 def _toolkit_collect_payload(root: Path, archive_name: str = "") -> tuple[list[str], list[dict[str, Any]]]:
     urls, embedded = _collect_toolkit_tree(root)
     tag = f" archive={archive_name}" if archive_name else ""
+    scan = f" | scan={_SCAN_ELAPSED[-1]:.1f}s" if _SCAN_ELAPSED else ""
     if urls or embedded:
         print(
             f"[OK] toolkit discovered | subs={len(urls)} "
-            f"| embedded={len(embedded)}{(' |' + tag) if tag else ''}"
+            f"| embedded={len(embedded)}{scan}{(' |' + tag) if tag else ''}"
         )
     return urls, embedded
 
@@ -3991,7 +4032,7 @@ def _parse_1vpn_crx_bundle(root: Path) -> list[dict[str, Any]]:
         return user, passwd, found_hosts
 
     if files:
-        workers = max(1, min(_FILE_SCAN_WORKERS, len(files), max(4, (os.cpu_count() or 2) * 4)))
+        workers = max(1, min(32, len(files), max(4, (os.cpu_count() or 2) * 4)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for user, passwd, found_hosts in pool.map(_from_file, files):
                 if user and passwd and not username:
@@ -4990,6 +5031,8 @@ def _ensure_geo_coords(json_path: Path | None = None) -> None:
 
 def prepare_geo_score() -> None:
     global _GEOIP_READER, _GEO_READY_LOG
+    if _prefetch_quiet():
+        _wait_scan_idle()
     pending = _FOLLOWUP_LOGS.pop("prepare_geo_score", None) or []
     if pending and not _prefetch_quiet():
         for line in pending:
@@ -5119,7 +5162,18 @@ def find_or_install_mihomo() -> Path:
 _CHECKSUM_TEXT: dict[str, str | None] = {}
 
 
+def _wait_scan_idle(limit: float = 180.0) -> None:
+    deadline = time.time() + limit
+    while time.time() < deadline:
+        with _SCAN_BUSY_LOCK:
+            busy = _SCAN_BUSY > 0
+        if not busy:
+            return
+        time.sleep(0.4)
+
+
 def _prefetch_checksum_pages(urls: list[str]) -> None:
+    _wait_scan_idle()
     for url in urls:
         try:
             _fetch_checksum_text(url)
@@ -5775,7 +5829,6 @@ def _warmup_raw_index() -> None:
             index = _load_raw_index(path)
             _RAW_WARM = {key: [dict(item) for item in group] for key, group in index.items()}
             _RAW_WARM_META = (path.name, stamp)
-            _load_clash_names()
     except Exception as exc:
         _note_debug(exc, where="raw-warm")
         _RAW_WARM = {}
@@ -5806,6 +5859,7 @@ def _prefetch_pull(url: str, user_agent: str = "", referer: str = "", source: st
             referer=referer,
             timeout=CFG_FETCH_TIMEOUT,
             retries=CFG_FETCH_RETRIES,
+            count_fail=False,
         )
     except Exception as exc:
         _note_debug(exc, where="prefetch", url=url, source=source)
@@ -6830,6 +6884,8 @@ def build_direct_fallback_metric() -> ProxyMetric:
 
 
 def load_existing_metrics() -> list[ProxyMetric]:
+    if not _CLASH_WARM:
+        _load_clash_names()
     if _CLASH_WARM:
         metrics = []
         for proxy in _CLASH_WARM:
