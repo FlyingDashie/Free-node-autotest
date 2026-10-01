@@ -197,15 +197,35 @@ def _prefetch_quiet() -> bool:
     return bool(getattr(_PREFETCH_QUIET, "on", False))
 
 
-def _note_debug(exc: BaseException | str) -> None:
-    text = format_reason(exc) if not isinstance(exc, str) else exc
-    text = " ".join(str(text).split())
-    if len(text) > 180:
-        text = text[:177] + "..."
+def _note_debug(
+    exc: BaseException | str,
+    *,
+    where: str = "run",
+    url: str = "",
+    source: str = "",
+) -> None:
+    raw = str(exc)
+    brief = format_reason(exc) if not isinstance(exc, str) else str(exc)
+    where = str(where or "run").strip() or "run"
+    head = f"[NOTE-{where}]"
+    bits = []
+    if source:
+        bits.append(f"source={source}")
+    if url:
+        bits.append(f"url={url}")
+    if brief:
+        bits.append(f"brief={brief}")
+    lines = [head + ((" " + " | ".join(bits)) if bits else "")]
+    body = raw.strip()
+    if body and body != brief:
+        for part in body.splitlines():
+            piece = part.rstrip()
+            if piece:
+                lines.append(f"{head} {piece}")
     with _STAMP_LOCK:
-        _DEBUG_NOTES.append(text)
-        if len(_DEBUG_NOTES) > 80:
-            del _DEBUG_NOTES[:-80]
+        _DEBUG_NOTES.extend(lines)
+        if len(_DEBUG_NOTES) > 200:
+            del _DEBUG_NOTES[:-200]
 
 
 def _yaml_escape_count(text: str) -> int:
@@ -2119,7 +2139,7 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
         try:
             write_raw_backup(snapshot)
         except Exception as exc:
-            _note_debug(exc)
+            _note_debug(exc, where="raw-write")
             global _RAW_WRITE_LOG
             _RAW_WRITE_LOG = ""
         finally:
@@ -5510,7 +5530,26 @@ def write_scored_history(
                 ranked.extend(pool.map(_scored_line_from_row, leftover))
     ranked.sort(key=lambda pair: pair[0], reverse=True)
     global _SCORED_LINES
-    _SCORED_LINES = [line for _score, line in ranked if line]
+
+    def _visual_width(text: str) -> int:
+        return sum(2 if ord(ch) > 127 else 1 for ch in text)
+
+    tagged: list[tuple[str, str]] = []
+    for _score, line in ranked:
+        if not line:
+            continue
+        name = line.rsplit(" | ", 1)[-1] if " | " in line else line
+        key = source_prefix_of(name)
+        if key.startswith("[") and key.endswith("]"):
+            key = key[1:-1]
+        key = key.strip() or "-"
+        tagged.append((key, line))
+    width = max((_visual_width(key) for key, _line in tagged), default=0)
+    rows: list[str] = []
+    for key, line in tagged:
+        dash_n = max(1, width - _visual_width(key) + 1)
+        rows.append(f"[SCORED{'-' * dash_n}{key}] {line}")
+    _SCORED_LINES = rows
 
 
 def write_debug_history() -> None:
@@ -5536,7 +5575,7 @@ def write_debug_history() -> None:
         chunks.append("\n".join(_DEBUG_FILES))
         chunks.append("============================================================")
     if _DEBUG_NOTES:
-        chunks.append("\n".join(f"[NOTE] reason={row}" for row in _DEBUG_NOTES))
+        chunks.append("\n".join(_DEBUG_NOTES))
         chunks.append("============================================================")
     if _SCORED_LINES:
         chunks.append("\n".join(_SCORED_LINES))
@@ -5599,7 +5638,7 @@ def _warmup_raw_index() -> None:
             _RAW_WARM = {key: [dict(item) for item in group] for key, group in index.items()}
             _RAW_WARM_META = (path.name, stamp)
     except Exception as exc:
-        _note_debug(exc)
+        _note_debug(exc, where="raw-warm")
         _RAW_WARM = {}
         _RAW_WARM_META = ("", "")
     finally:
@@ -5620,11 +5659,11 @@ def _source_is_toolkit(source: dict[str, Any]) -> bool:
     return False
 
 
-def _prefetch_pull(url: str, user_agent: str = "", referer: str = "") -> None:
+def _prefetch_pull(url: str, user_agent: str = "", referer: str = "", source: str = "") -> None:
     try:
         fetch_text(url, user_agent=user_agent, referer=referer)
     except Exception as exc:
-        _note_debug(exc)
+        _note_debug(exc, where="prefetch", url=url, source=source)
         return
 
 
@@ -5657,21 +5696,28 @@ def _prefetch_one_source(source: dict[str, Any]) -> None:
                 else:
                     links = [url]
             except Exception as exc:
-                _note_debug(exc)
+                _note_debug(
+                    exc,
+                    where="prefetch",
+                    url=url,
+                    source=source_bracket(source),
+                )
                 continue
             pending = unique_ordered(links)
             if not pending:
                 continue
             pool = _PREFETCH_PULL_POOL
+            label = source_bracket(source)
             if pool is None:
                 for link in pending:
-                    _prefetch_pull(link, ua, ref)
+                    _prefetch_pull(link, ua, ref, source=label)
                 continue
-            futs = [pool.submit(_prefetch_pull, link, ua, ref) for link in pending]
+            futs = [pool.submit(_prefetch_pull, link, ua, ref, label) for link in pending]
             for fut in futs:
                 try:
                     fut.result()
-                except Exception:
+                except Exception as exc:
+                    _note_debug(exc, where="prefetch", source=label)
                     continue
     finally:
         _PREFETCH_QUIET.on = False
