@@ -218,7 +218,7 @@ def _record_yaml_debug(kind: str, path: Path, text: str, proxies: int) -> None:
     except Exception:
         size = str(len(text))
     line = (
-        f"[DEBUG] file | kind={kind} | path={path} | size={size} "
+        f"[WRITE] kind={kind} | path={path} | size={size} "
         f"| proxies={proxies} | esc={_yaml_escape_count(text)}"
     )
     with _STAMP_LOCK:
@@ -2063,7 +2063,7 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
             extra = ""
         print(f"[OK] proxies={len(source_found)} | source={source_bracket(source)}{extra}")
     _SOURCE_SPANS.append(
-        f"[DEBUG] span | source={source_bracket(source)} | elapsed={time.time() - started:.1f}s "
+        f"[SOURCE] name={source_bracket(source)} | elapsed={time.time() - started:.1f}s "
         f"| proxies={len(source_found)}"
     )
     return source_found
@@ -5523,10 +5523,10 @@ def write_debug_history() -> None:
     procs = [f"{index}={row}" for index, row in enumerate(_RUN_PROC, start=1)]
     queues = [f"{index}={row}" for index, row in enumerate(_RUN_QUEUE, start=1)]
     chunks = [
-        "[DEBUG] time | " + " | ".join(stamps),
-        "[DEBUG] host | " + " | ".join(usages),
-        "[DEBUG] proc | " + " | ".join(procs),
-        "[DEBUG] queue | " + " | ".join(queues),
+        "[STAMP] " + " | ".join(stamps),
+        "[HOST] " + " | ".join(usages),
+        "[PROC] " + " | ".join(procs),
+        "[QUEUE] " + " | ".join(queues),
         "============================================================",
     ]
     if _SOURCE_SPANS:
@@ -5536,7 +5536,7 @@ def write_debug_history() -> None:
         chunks.append("\n".join(_DEBUG_FILES))
         chunks.append("============================================================")
     if _DEBUG_NOTES:
-        chunks.append("\n".join(f"[DEBUG] note | reason={row}" for row in _DEBUG_NOTES))
+        chunks.append("\n".join(f"[NOTE] reason={row}" for row in _DEBUG_NOTES))
         chunks.append("============================================================")
     if _SCORED_LINES:
         chunks.append("\n".join(_SCORED_LINES))
