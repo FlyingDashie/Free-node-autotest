@@ -134,9 +134,15 @@ _BENCH_FINISHED: set[int] = set()
 _BRANCH_NEXT = 1
 _RUN_STAMPS: list[str] = []
 _RUN_USAGE: list[str] = []
+_RUN_PROC: list[str] = []
+_RUN_QUEUE: list[str] = []
 _SCORED_LINES: list[str] = []
+_DEBUG_NOTES: list[str] = []
+_SOURCE_SPANS: list[str] = []
+_DEBUG_FILES: list[str] = []
 _STAMP_LOCK = threading.Lock()
 _CPU_LAST: tuple[int, int] | None = None
+_SELF_CPU_LAST: tuple[int, int, float] | None = None
 
 
 _PREFETCH_QUIET = threading.local()
@@ -191,10 +197,62 @@ def _prefetch_quiet() -> bool:
     return bool(getattr(_PREFETCH_QUIET, "on", False))
 
 
+def _note_debug(exc: BaseException | str) -> None:
+    text = format_reason(exc) if not isinstance(exc, str) else exc
+    text = " ".join(str(text).split())
+    if len(text) > 180:
+        text = text[:177] + "..."
+    with _STAMP_LOCK:
+        _DEBUG_NOTES.append(text)
+        if len(_DEBUG_NOTES) > 80:
+            del _DEBUG_NOTES[:-80]
+
+
+def _yaml_escape_count(text: str) -> int:
+    return len(re.findall(r"\\U[0-9a-fA-F]{8}|\\u[0-9a-fA-F]{4}", text or ""))
+
+
+def _record_yaml_debug(kind: str, path: Path, text: str, proxies: int) -> None:
+    try:
+        size = format_size(len(text.encode("utf-8")))
+    except Exception:
+        size = str(len(text))
+    line = (
+        f"[DEBUG] file | kind={kind} | path={path} | size={size} "
+        f"| proxies={proxies} | esc={_yaml_escape_count(text)}"
+    )
+    with _STAMP_LOCK:
+        _DEBUG_FILES.append(line)
+
+
+def _child_count() -> int:
+    pid = os.getpid()
+    n = 0
+    try:
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                status = (entry / "status").read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+            for line in status.splitlines():
+                if line.startswith("PPid:"):
+                    if line.split(":", 1)[1].strip() == str(pid):
+                        n += 1
+                    break
+    except Exception:
+        pass
+    return n
+
+
 def _sample_cpu_ram() -> str:
-    global _CPU_LAST
+    global _CPU_LAST, _SELF_CPU_LAST
     cpu = 0.0
     ram = 0.0
+    self_cpu = 0.0
+    rss = "0b"
+    threads = 0
     try:
         parts = Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0].split()
         nums = [int(item) for item in parts[1:8]]
@@ -222,7 +280,45 @@ def _sample_cpu_ram() -> str:
             ram = max(0.0, (1.0 - avail / total) * 100.0)
     except Exception:
         pass
-    return f"cpu={cpu:.0f}%,ram={ram:.0f}%"
+    try:
+        status = Path("/proc/self/status").read_text(encoding="utf-8")
+        for line in status.splitlines():
+            if line.startswith("VmRSS:"):
+                kb = int(line.split()[1])
+                rss = format_size(kb * 1024)
+            elif line.startswith("Threads:"):
+                threads = int(line.split()[1])
+    except Exception:
+        pass
+    try:
+        fields = Path("/proc/self/stat").read_text(encoding="utf-8").split()
+        ticks = int(fields[13]) + int(fields[14])
+        now = time.time()
+        prev = _SELF_CPU_LAST
+        _SELF_CPU_LAST = (ticks, os.cpu_count() or 1, now)
+        if prev:
+            dt = now - prev[2]
+            hz = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
+            if dt > 0:
+                self_cpu = max(0.0, (ticks - prev[0]) / hz / dt * 100.0)
+    except Exception:
+        pass
+    with _DL_INFLIGHT_LOCK:
+        flying = len(_DL_INFLIGHT)
+    rest = max(0, int(_TEST_TOTAL) - int(_TEST_DONE))
+    try:
+        target = OUTPUT_PATH.parent if "OUTPUT_PATH" in globals() else Path(".")
+        disk = shutil.disk_usage(str(target))
+        free = format_size(disk.free)
+    except Exception:
+        free = "-"
+    host = f"cpu={cpu:.0f}% | ram={ram:.0f}%"
+    proc = (
+        f"self={self_cpu:.0f}% | rss={rss} | thr={threads} "
+        f"| child={_child_count()} | dl={flying}"
+    )
+    queue = f"rest={rest} | branch={_BRANCH_NEXT} | free={free}"
+    return host, proc, queue
 
 
 class _StampStream:
@@ -244,7 +340,10 @@ class _StampStream:
             self._buf = self._buf.split("\n", 1)[1]
             with _STAMP_LOCK:
                 _RUN_STAMPS.append(datetime.now(timezone.utc).isoformat())
-                _RUN_USAGE.append(_sample_cpu_ram())
+                host, proc, queue = _sample_cpu_ram()
+                _RUN_USAGE.append(host)
+                _RUN_PROC.append(proc)
+                _RUN_QUEUE.append(queue)
         return written
 
     def flush(self) -> None:
@@ -1699,6 +1798,7 @@ def _run_toolkit_item(
 
 
 def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
+    started = time.time()
     source_found: list[dict[str, Any]] = []
     source_seen: set[str] = set()
     used_url = ""
@@ -1962,6 +2062,10 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
         else:
             extra = ""
         print(f"[OK] proxies={len(source_found)} | source={source_bracket(source)}{extra}")
+    _SOURCE_SPANS.append(
+        f"[DEBUG] span | source={source_bracket(source)} | elapsed={time.time() - started:.1f}s "
+        f"| proxies={len(source_found)}"
+    )
     return source_found
 
 
@@ -2014,7 +2118,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     def _write_raw_bg() -> None:
         try:
             write_raw_backup(snapshot)
-        except Exception:
+        except Exception as exc:
+            _note_debug(exc)
             global _RAW_WRITE_LOG
             _RAW_WRITE_LOG = ""
         finally:
@@ -5321,6 +5426,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     raw_hist = history_named("raw")
     RAW_PATH.write_text(rendered, encoding="utf-8")
     raw_hist.write_text(rendered, encoding="utf-8")
+    _record_yaml_debug("raw", RAW_PATH, rendered, len(nodes))
     grouped = _index_raw_nodes(nodes)
     _RAW_FILE_INDEX[str(RAW_PATH.resolve())] = grouped
     _RAW_FILE_INDEX[str(raw_hist.resolve())] = grouped
@@ -5414,11 +5520,24 @@ def write_debug_history() -> None:
     sys.stderr.flush()
     stamps = [f"{index}={ts}" for index, ts in enumerate(_RUN_STAMPS, start=1)]
     usages = [f"{index}={row}" for index, row in enumerate(_RUN_USAGE, start=1)]
+    procs = [f"{index}={row}" for index, row in enumerate(_RUN_PROC, start=1)]
+    queues = [f"{index}={row}" for index, row in enumerate(_RUN_QUEUE, start=1)]
     chunks = [
-        " ".join(stamps),
-        " ".join(usages),
+        "[DEBUG] time | " + " | ".join(stamps),
+        "[DEBUG] host | " + " | ".join(usages),
+        "[DEBUG] proc | " + " | ".join(procs),
+        "[DEBUG] queue | " + " | ".join(queues),
         "============================================================",
     ]
+    if _SOURCE_SPANS:
+        chunks.append("\n".join(_SOURCE_SPANS))
+        chunks.append("============================================================")
+    if _DEBUG_FILES:
+        chunks.append("\n".join(_DEBUG_FILES))
+        chunks.append("============================================================")
+    if _DEBUG_NOTES:
+        chunks.append("\n".join(f"[DEBUG] note | reason={row}" for row in _DEBUG_NOTES))
+        chunks.append("============================================================")
     if _SCORED_LINES:
         chunks.append("\n".join(_SCORED_LINES))
     path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
@@ -5479,7 +5598,8 @@ def _warmup_raw_index() -> None:
             index = _load_raw_index(path)
             _RAW_WARM = {key: [dict(item) for item in group] for key, group in index.items()}
             _RAW_WARM_META = (path.name, stamp)
-    except Exception:
+    except Exception as exc:
+        _note_debug(exc)
         _RAW_WARM = {}
         _RAW_WARM_META = ("", "")
     finally:
@@ -5503,7 +5623,8 @@ def _source_is_toolkit(source: dict[str, Any]) -> bool:
 def _prefetch_pull(url: str, user_agent: str = "", referer: str = "") -> None:
     try:
         fetch_text(url, user_agent=user_agent, referer=referer)
-    except Exception:
+    except Exception as exc:
+        _note_debug(exc)
         return
 
 
@@ -5535,7 +5656,8 @@ def _prefetch_one_source(source: dict[str, Any]) -> None:
                     )
                 else:
                     links = [url]
-            except Exception:
+            except Exception as exc:
+                _note_debug(exc)
                 continue
             pending = unique_ordered(links)
             if not pending:
@@ -6652,6 +6774,7 @@ def write_config(config: dict[str, Any]) -> None:
     OUTPUT_PATH.write_text(text, encoding="utf-8")
     clash_hist = history_named("clash")
     clash_hist.write_text(text, encoding="utf-8")
+    _record_yaml_debug("clash", OUTPUT_PATH, text, len(config.get("proxies") or []))
     print(f"[INFO] clash history written | path={clash_hist}")
 
 
