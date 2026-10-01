@@ -248,8 +248,8 @@ _FILE_SCAN_WORKERS = 50
 SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
-        "primary": "discover:sublink:https://end-gfw.com",
-        "also": [
+        "primary": [
+            "discover:sublink:https://end-gfw.com",
             "https://end-gfw.com/ss-key",
             "discover:sublink:https://github.com/hello-world-1989/cn-news",
         ],
@@ -271,8 +271,8 @@ SOURCE_GROUPS = [
     },
     {
         "name": "Freesocks",
-        "primary": "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
-        "also": [
+        "primary": [
+            "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
             "https://freesocks.org/api/v1/sub/4cae35810e6f5c4d92e28e32104e0080",
         ],
     },
@@ -287,8 +287,8 @@ SOURCE_GROUPS = [
     },
     {
         "name": "V2Rayshare-RSS",
-        "primary": "discover:article:https://v2rayshare.com",
-        "also": [
+        "primary": [
+            "discover:article:https://v2rayshare.com",
             "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription",
         ],
         "bare_link": "none",
@@ -359,8 +359,8 @@ SOURCE_GROUPS = [
     },
     {
         "name": "ChromeGO-Merge",
-        "primary": "discover:sublink:https://github.com/shangui999/chromego_merge",
-        "also": [
+        "primary": [
+            "discover:sublink:https://github.com/shangui999/chromego_merge",
             "discover:sublink:https://github.com/yaney01/chromego",
             "discover:sublink:https://github.com/Misaka-blog/chromego_merge",
         ],
@@ -1687,9 +1687,9 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
         _print_ingest_groups(ordered)
         ingest_hits = []
 
-    also_count = len(source.get("also") or [])
+    main_count = len(_primary_items(source))
     for item_index, item in enumerate(_source_queue(source)):
-        if source_found and item_index > also_count:
+        if source_found and item_index >= main_count:
             break
         spec = _item_spec(item, source)
         url = spec["url"]
@@ -1997,9 +1997,17 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     return len(collected), sanitized, collected_counts
 
 
+def _primary_items(source: dict[str, Any]) -> list[Any]:
+    value = source.get("primary")
+    if value is None or value == "":
+        return []
+    if isinstance(value, list):
+        return list(value)
+    return [value]
+
+
 def _source_queue(source: dict[str, Any]) -> list[Any]:
-    items = [source["primary"]]
-    items.extend(source.get("also") or [])
+    items = list(_primary_items(source))
     items.extend(source.get("fallbacks") or [])
     return items
 
@@ -5460,9 +5468,9 @@ def _prefetch_pull(url: str, user_agent: str = "", referer: str = "") -> None:
 def _prefetch_one_source(source: dict[str, Any]) -> None:
     _PREFETCH_QUIET.on = True
     try:
-        also_count = len(source.get("also") or [])
+        main_count = len(_primary_items(source))
         for item_index, item in enumerate(_source_queue(source)):
-            if item_index > also_count + 8:
+            if item_index >= main_count + 8:
                 break
             spec = _item_spec(item, source)
             url = spec["url"]
