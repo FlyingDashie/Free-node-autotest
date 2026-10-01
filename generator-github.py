@@ -133,8 +133,10 @@ _BENCH_INUSE_LOCK = threading.Lock()
 _BENCH_FINISHED: set[int] = set()
 _BRANCH_NEXT = 1
 _RUN_STAMPS: list[str] = []
+_RUN_USAGE: list[str] = []
 _SCORED_LINES: list[str] = []
 _STAMP_LOCK = threading.Lock()
+_CPU_LAST: tuple[int, int] | None = None
 
 
 _PREFETCH_QUIET = threading.local()
@@ -189,6 +191,40 @@ def _prefetch_quiet() -> bool:
     return bool(getattr(_PREFETCH_QUIET, "on", False))
 
 
+def _sample_cpu_ram() -> str:
+    global _CPU_LAST
+    cpu = 0.0
+    ram = 0.0
+    try:
+        parts = Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0].split()
+        nums = [int(item) for item in parts[1:8]]
+        idle = nums[3] + nums[4]
+        total = sum(nums)
+        prev = _CPU_LAST
+        _CPU_LAST = (idle, total)
+        if prev:
+            delta_idle = idle - prev[0]
+            delta_total = total - prev[1]
+            if delta_total > 0:
+                cpu = max(0.0, (1.0 - delta_idle / delta_total) * 100.0)
+    except Exception:
+        pass
+    try:
+        info: dict[str, int] = {}
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if ":" not in line:
+                continue
+            key, raw = line.split(":", 1)
+            info[key] = int(raw.split()[0])
+        total = info.get("MemTotal") or 0
+        avail = info.get("MemAvailable") or info.get("MemFree") or 0
+        if total:
+            ram = max(0.0, (1.0 - avail / total) * 100.0)
+    except Exception:
+        pass
+    return f"cpu={cpu:.0f}%,ram={ram:.0f}%"
+
+
 class _StampStream:
     def __init__(self, inner: Any) -> None:
         self.inner = inner
@@ -208,6 +244,7 @@ class _StampStream:
             self._buf = self._buf.split("\n", 1)[1]
             with _STAMP_LOCK:
                 _RUN_STAMPS.append(datetime.now(timezone.utc).isoformat())
+                _RUN_USAGE.append(_sample_cpu_ram())
         return written
 
     def flush(self) -> None:
@@ -5376,7 +5413,12 @@ def write_debug_history() -> None:
     sys.stdout.flush()
     sys.stderr.flush()
     stamps = [f"{index}={ts}" for index, ts in enumerate(_RUN_STAMPS, start=1)]
-    chunks = [" ".join(stamps), "============================================================"]
+    usages = [f"{index}={row}" for index, row in enumerate(_RUN_USAGE, start=1)]
+    chunks = [
+        " ".join(stamps),
+        " ".join(usages),
+        "============================================================",
+    ]
     if _SCORED_LINES:
         chunks.append("\n".join(_SCORED_LINES))
     path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
