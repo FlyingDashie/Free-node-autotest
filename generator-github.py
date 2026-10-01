@@ -832,8 +832,6 @@ def fetch_text(
             done = _FETCH_DONE.get(url)
         if done and done[0]:
             return done[0]
-        if timeout is not None:
-            raise RuntimeError(done[1] if done else "prefetch missed")
     session = requests.Session()
     session.trust_env = False
     session.verify = False
@@ -3769,12 +3767,22 @@ def _collect_toolkit_tree(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
         with _SCAN_BUSY_LOCK:
             _SCAN_BUSY += 1
         try:
-            workers = min(32, max(1, _scan_worker_count(len(files))))
+            workers = max(1, min(32, os.cpu_count() or 2))
             started = time.time()
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
-                    urls.extend(piece_urls)
-                    embedded.extend(piece_nodes)
+            try:
+                ctx = multiprocessing.get_context("forkserver")
+            except ValueError:
+                ctx = multiprocessing.get_context("spawn")
+            try:
+                with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+                    for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
+                        urls.extend(piece_urls)
+                        embedded.extend(piece_nodes)
+            except Exception:
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
+                        urls.extend(piece_urls)
+                        embedded.extend(piece_nodes)
             _SCAN_ELAPSED.append(time.time() - started)
         finally:
             with _SCAN_BUSY_LOCK:
@@ -5081,6 +5089,8 @@ def prepare_geo_score() -> None:
 
 
 def find_or_install_mihomo() -> Path:
+    if not _prefetch_quiet() and threading.current_thread().name != "prefetch-mihomo":
+        _MIHOMO_PREFETCH_DONE.wait(timeout=180)
     pending = _FOLLOWUP_LOGS.pop("find_or_install_mihomo", None) or []
     if pending and not _prefetch_quiet():
         for line in pending:
@@ -5160,6 +5170,7 @@ def find_or_install_mihomo() -> Path:
 
 
 _CHECKSUM_TEXT: dict[str, str | None] = {}
+_MIHOMO_PREFETCH_DONE = threading.Event()
 
 
 def _wait_scan_idle(limit: float = 180.0) -> None:
@@ -5947,12 +5958,29 @@ def _prefetch_toolkit_assets() -> None:
             if not source.get("prefetch") and not _source_is_toolkit(source):
                 continue
             jobs.append(source)
+        def _run_mihomo() -> None:
+            chunks: list[str] = []
+            _LOG_CAPTURE.buf = chunks
+            try:
+                result = find_or_install_mihomo()
+                _FOLLOWUP_RESULT["find_or_install_mihomo"] = result
+            except Exception:
+                result = None
+            finally:
+                _LOG_CAPTURE.buf = None
+            _FOLLOWUP_LOGS["find_or_install_mihomo"] = _capture_chunks_to_lines(chunks)
+            _MIHOMO_PREFETCH_DONE.set()
+
+        mihomo = threading.Thread(target=_run_mihomo, name="prefetch-mihomo", daemon=True)
+        mihomo.start()
+
         def _run_followups() -> None:
             ordered = _toolkit_followup_steps()
             have = {getattr(step, "__name__", "") for step in ordered}
-            for extra in (prepare_geo_score, find_or_install_mihomo):
+            for extra in (prepare_geo_score,):
                 if extra.__name__ not in have:
                     ordered.append(extra)
+            ordered = [step for step in ordered if step is not find_or_install_mihomo]
             for step in ordered:
                 chunks: list[str] = []
                 _LOG_CAPTURE.buf = chunks
@@ -5979,6 +6007,8 @@ def _prefetch_toolkit_assets() -> None:
                     except Exception:
                         continue
         follow.join(timeout=180)
+        mihomo.join(timeout=180)
+        _MIHOMO_PREFETCH_DONE.set()
     finally:
         _PREFETCH_QUIET.on = False
 
@@ -6383,10 +6413,7 @@ def _benchmark_batch(
             _TEST_DONE += 1
         return []
 
-    if len(proxies) <= 8:
-        parts_n = len(proxies)
-    else:
-        parts_n = max(2, min(_BENCH_LIMIT, len(proxies)))
+    parts_n = _start_fail_parts(len(proxies))
     size = (len(proxies) + parts_n - 1) // parts_n
     chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
     ids = [_alloc_branch() for _ in chunks]
@@ -6412,6 +6439,14 @@ def _benchmark_batch(
     return _flatten_metrics(parts)
 
 
+def _start_fail_parts(n: int) -> int:
+    if n <= 1:
+        return 1
+    if n <= 500:
+        return 2
+    return max(2, min(_BENCH_LIMIT, n))
+
+
 def _benchmark_reshard(
     engine: Path,
     temp_dir: Path,
@@ -6425,11 +6460,7 @@ def _benchmark_reshard(
         return _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, proxies, branch=branch
         )
-    parts_n = max(1, min(_BENCH_LIMIT, len(proxies)))
-    if parts_n <= 1:
-        return _benchmark_batch(
-            engine, temp_dir, config_path, controller_url, controller_port, proxies, branch=branch
-        )
+    parts_n = 2 if len(proxies) <= 500 else max(2, min(_BENCH_LIMIT, len(proxies)))
     size = (len(proxies) + parts_n - 1) // parts_n
     chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
     ids = [_alloc_branch() for _ in chunks]
