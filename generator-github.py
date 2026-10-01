@@ -125,6 +125,7 @@ CFG_FETCH_RETRIES = 1
 _DROP_NAMES: list[str] = []
 _TEST_TOTAL = 0
 _TEST_DONE = 0
+_LAT_TABLE: dict[str, int] = {}
 _TEST_LOCK = threading.Lock()
 _BENCH_LIMIT = 4
 _BENCH_SLOTS = threading.Semaphore(_BENCH_LIMIT)
@@ -185,6 +186,14 @@ def _download_front_hit(url: str) -> bool:
         limit = _DL_FRONT_DEADLINE.get(url)
     return limit is not None and time.time() >= limit
 _FETCH_SLOTS = threading.Semaphore(50)
+_HOST_FETCH_SLOTS: dict[str, threading.Semaphore] = {}
+_HOST_FETCH_LOCK = threading.Lock()
+_HOST_FETCH_LIMIT = 8
+_HOST_FAIL_N: dict[str, int] = {}
+_HOST_SLOW: dict[str, threading.Lock] = {}
+_SCAN_BUSY = 0
+_SCAN_BUSY_LOCK = threading.Lock()
+_SCORED_PATH: Path | None = None
 _PREFETCH_PULL_POOL: ThreadPoolExecutor | None = None
 _GEO_READY_LOG = ""
 _ENGINE_READY_LOG = ""
@@ -749,6 +758,40 @@ def _safe_http_url(url: str) -> str:
     return urlunparse((parsed.scheme, parsed.netloc, path, parsed.params, query, parsed.fragment))
 
 
+def _host_key(url: str) -> str:
+    return (urlparse(str(url or "")).netloc or "").lower() or "-"
+
+
+def _host_fetch_slot(url: str) -> threading.Semaphore:
+    host = _host_key(url)
+    with _HOST_FETCH_LOCK:
+        slot = _HOST_FETCH_SLOTS.get(host)
+        if slot is None:
+            slot = threading.Semaphore(_HOST_FETCH_LIMIT)
+            _HOST_FETCH_SLOTS[host] = slot
+        return slot
+
+
+def _host_slow_lock(url: str) -> threading.Lock | None:
+    host = _host_key(url)
+    if host.endswith("githubusercontent.com") or host.endswith("github.com"):
+        return None
+    with _HOST_FETCH_LOCK:
+        if _HOST_FAIL_N.get(host, 0) < 4:
+            return None
+        lock = _HOST_SLOW.get(host)
+        if lock is None:
+            lock = threading.Lock()
+            _HOST_SLOW[host] = lock
+        return lock
+
+
+def _mark_host_fail(url: str) -> None:
+    host = _host_key(url)
+    with _HOST_FETCH_LOCK:
+        _HOST_FAIL_N[host] = _HOST_FAIL_N.get(host, 0) + 1
+
+
 def fetch_text(
     url: str,
     retries: int = MAX_RETRIES,
@@ -772,18 +815,36 @@ def fetch_text(
     session.trust_env = False
     session.verify = False
     wait = SOURCE_TIMEOUT if timeout is None else timeout
-    with _FETCH_SLOTS:
-        response = session.get(
-            url,
-            headers=headers,
-            timeout=wait,
-            proxies=PROXIES,
-        )
-        response.raise_for_status()
-        text = response.content.decode("utf-8", errors="replace")
-        with _BODY_CACHE_LOCK:
-            _BODY_CACHE[url] = text
-        return text
+    attempts = max(1, int(retries if retries is not None else MAX_RETRIES) + 1)
+    last: Exception | None = None
+    slow = _host_slow_lock(url)
+    if slow is not None:
+        slow.acquire()
+    try:
+        for _attempt in range(attempts):
+            try:
+                with _host_fetch_slot(url):
+                    with _FETCH_SLOTS:
+                        response = session.get(
+                            url,
+                            headers=headers,
+                            timeout=wait,
+                            proxies=PROXIES,
+                        )
+                        response.raise_for_status()
+                        text = response.content.decode("utf-8", errors="replace")
+                        with _BODY_CACHE_LOCK:
+                            _BODY_CACHE[url] = text
+                        return text
+            except Exception as exc:
+                last = exc
+                _mark_host_fail(url)
+        if last is not None:
+            raise last
+        raise RuntimeError("fetch failed")
+    finally:
+        if slow is not None:
+            slow.release()
 
 
 def format_reason(exc: object | None = None, fallback: str = "") -> str:
@@ -2156,6 +2217,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
             continue
         key = source_prefix_of(str(proxy.get("name") or ""))
         collected_counts[key] = collected_counts.get(key, 0) + 1
+    with _BODY_CACHE_LOCK:
+        _BODY_CACHE.clear()
     return len(collected), sanitized, collected_counts
 
 
@@ -2978,6 +3041,13 @@ def _expand_github_release_assets(
         urls = official_urls
     global _LAST_CHECKSUM_LINKS
     _LAST_CHECKSUM_LINKS = list(checksum_links)
+    if checksum_links:
+        threading.Thread(
+            target=_prefetch_checksum_pages,
+            args=(list(checksum_links),),
+            name="prefetch-hash",
+            daemon=True,
+        ).start()
     return urls
 
 
@@ -3656,12 +3726,19 @@ def _collect_toolkit_tree(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
     files = [path for path in root.rglob("*") if path.is_file()]
     urls: list[str] = []
     embedded: list[dict[str, Any]] = []
+    global _SCAN_BUSY
     if files:
-        workers = min(32, max(1, _scan_worker_count(len(files))))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
-                urls.extend(piece_urls)
-                embedded.extend(piece_nodes)
+        with _SCAN_BUSY_LOCK:
+            _SCAN_BUSY += 1
+        try:
+            workers = min(32, max(1, _scan_worker_count(len(files))))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
+                    urls.extend(piece_urls)
+                    embedded.extend(piece_nodes)
+        finally:
+            with _SCAN_BUSY_LOCK:
+                _SCAN_BUSY = max(0, _SCAN_BUSY - 1)
     return unique_ordered(urls), embedded
 
 
@@ -3914,7 +3991,7 @@ def _parse_1vpn_crx_bundle(root: Path) -> list[dict[str, Any]]:
         return user, passwd, found_hosts
 
     if files:
-        workers = max(1, min(_FILE_SCAN_WORKERS, len(files)))
+        workers = max(1, min(_FILE_SCAN_WORKERS, len(files), max(4, (os.cpu_count() or 2) * 4)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for user, passwd, found_hosts in pool.map(_from_file, files):
                 if user and passwd and not username:
@@ -5042,6 +5119,14 @@ def find_or_install_mihomo() -> Path:
 _CHECKSUM_TEXT: dict[str, str | None] = {}
 
 
+def _prefetch_checksum_pages(urls: list[str]) -> None:
+    for url in urls:
+        try:
+            _fetch_checksum_text(url)
+        except Exception:
+            continue
+
+
 def _fetch_checksum_text(url: str) -> str:
     if url in _CHECKSUM_TEXT:
         cached = _CHECKSUM_TEXT[url]
@@ -5384,6 +5469,7 @@ _LAST_RAW_NODES: list[dict[str, Any]] = []
 _RAW_WARM: dict[str, list[dict[str, Any]]] = {}
 _RAW_WARM_META: tuple[str, str] = ("", "")
 _RAW_WARM_DONE = threading.Event()
+_CLASH_WARM: list[dict[str, Any]] = []
 _RAW_WRITE_DONE = threading.Event()
 _RAW_WRITE_DONE.set()
 _RAW_WRITE_LOG = ""
@@ -5560,12 +5646,31 @@ def write_scored_history(
             dash_n += 1
             tag = f"[SCORED{'-' * dash_n}{key}]"
         rows.append(f"{tag} {line}")
+    global _SCORED_PATH
     _SCORED_LINES = rows
+    try:
+        scored_path = Path(tempfile.gettempdir()) / "free-node-autotest-scored.log"
+        scored_path.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
+        _SCORED_PATH = scored_path
+        _SCORED_LINES = []
+        rows.clear()
+        tagged.clear()
+        ranked.clear()
+    except Exception:
+        _SCORED_PATH = None
 
 
 def write_debug_history() -> None:
     path = history_named("debug", "log")
-    print(f"[INFO] debug history written | path={path} | proxies={len(_SCORED_LINES)}")
+    scored_n = len(_SCORED_LINES)
+    scored_text = ""
+    if _SCORED_PATH is not None and _SCORED_PATH.is_file():
+        scored_text = _SCORED_PATH.read_text(encoding="utf-8")
+        scored_n = scored_text.count("\n")
+    elif _SCORED_LINES:
+        scored_text = "\n".join(_SCORED_LINES) + "\n"
+        scored_n = len(_SCORED_LINES)
+    print(f"[INFO] debug history written | path={path} | proxies={scored_n}")
     sys.stdout.flush()
     sys.stderr.flush()
     stamps = [f"{index}={ts}" for index, ts in enumerate(_RUN_STAMPS, start=1)]
@@ -5588,9 +5693,10 @@ def write_debug_history() -> None:
     if _DEBUG_NOTES:
         chunks.append("\n".join(_DEBUG_NOTES))
         chunks.append("============================================================")
-    if _SCORED_LINES:
-        chunks.append("\n".join(_SCORED_LINES))
+    if scored_text:
+        chunks.append(scored_text.rstrip("\n"))
     path.write_text("\n".join(chunks) + "\n", encoding="utf-8")
+    _SCORED_LINES.clear()
 
 
 def history_file_stamp(name: str) -> str:
@@ -5639,6 +5745,27 @@ def _latest_raw_path() -> tuple[str, Path] | None:
     return ranked[0]
 
 
+def _load_clash_names() -> None:
+    global _CLASH_WARM
+    ranked: list[tuple[str, Path]] = []
+    if HISTORY_DIR.is_dir():
+        for path in HISTORY_DIR.glob("*clash*.yaml"):
+            stamp = history_file_stamp(path.name)
+            if stamp:
+                ranked.append((stamp, path))
+    if not ranked:
+        return
+    ranked.sort(reverse=True)
+    try:
+        data = yaml.safe_load(ranked[0][1].read_text(encoding="utf-8"))
+    except Exception:
+        return
+    items = data.get("proxies") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return
+    _CLASH_WARM = [item for item in items if isinstance(item, dict)]
+
+
 def _warmup_raw_index() -> None:
     global _RAW_WARM, _RAW_WARM_META
     try:
@@ -5648,6 +5775,7 @@ def _warmup_raw_index() -> None:
             index = _load_raw_index(path)
             _RAW_WARM = {key: [dict(item) for item in group] for key, group in index.items()}
             _RAW_WARM_META = (path.name, stamp)
+            _load_clash_names()
     except Exception as exc:
         _note_debug(exc, where="raw-warm")
         _RAW_WARM = {}
@@ -5672,7 +5800,13 @@ def _source_is_toolkit(source: dict[str, Any]) -> bool:
 
 def _prefetch_pull(url: str, user_agent: str = "", referer: str = "", source: str = "") -> None:
     try:
-        fetch_text(url, user_agent=user_agent, referer=referer)
+        fetch_text(
+            url,
+            user_agent=user_agent,
+            referer=referer,
+            timeout=CFG_FETCH_TIMEOUT,
+            retries=CFG_FETCH_RETRIES,
+        )
     except Exception as exc:
         _note_debug(exc, where="prefetch", url=url, source=source)
         return
@@ -6233,7 +6367,7 @@ def _benchmark_reshard(
     proxies: list[dict[str, Any]],
     branch: str,
 ) -> list[ProxyMetric]:
-    if len(proxies) <= 500:
+    if len(proxies) <= 32:
         return _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, proxies, branch=branch
         )
@@ -6346,8 +6480,8 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                 alone = _BENCH_INUSE <= 1
             if (
                 alone
-                and rest > 500
-                and len(pending) > 500
+                and rest > 32
+                and len(pending) > 32
                 and completed != len(futures)
             ):
                 leftover = [item for item in proxies if id(item) in pending]
@@ -6373,6 +6507,8 @@ def test_single_proxy(controller_url: str, proxy: dict[str, Any]) -> ProxyMetric
     latency = int(data.get("delay", 0))
     if latency <= 0 or latency > LATENCY_TIMEOUT_MS:
         return None
+    with _TEST_LOCK:
+        _LAT_TABLE[name] = latency
     return build_proxy_metric(proxy, latency)
 
 
@@ -6694,6 +6830,14 @@ def build_direct_fallback_metric() -> ProxyMetric:
 
 
 def load_existing_metrics() -> list[ProxyMetric]:
+    if _CLASH_WARM:
+        metrics = []
+        for proxy in _CLASH_WARM:
+            name = str(proxy.get("name", ""))
+            metrics.append(build_proxy_metric(dict(proxy), LATENCY_TIMEOUT_MS))
+        if metrics:
+            print(f"[INFO] reused previous clash | proxies={len(metrics)} | file=warmup")
+            return metrics
     if not HISTORY_DIR.is_dir():
         print("[WARN] clash fallback dir missing, skip reuse")
         return []
@@ -7030,11 +7174,16 @@ def print_live_geo_score_stats(metrics: list[ProxyMetric]) -> None:
     geos: list[float] = []
     adjs: list[float] = []
     for item in metrics:
-        _group, coords, code, _via = detect_geo(item.proxy)
+        _group, coords, code, _via = (item.geo_region, None, item.geo_iso, item.geo_via)
+        if item.score_parts:
+            parts = item.score_parts
+            coords = None
+        else:
+            _group, coords, code, _via = detect_geo(item.proxy)
+            parts = health_score_parts(str(item.proxy.get("name") or ""), int(item.latency), coords, iso=code)
         code = str(code or "-").upper() or "-"
         tallies[code] = tallies.get(code, 0) + 1
         scores.append(float(item.health_score))
-        parts = health_score_parts(str(item.proxy.get("name") or ""), int(item.latency), coords, iso=code)
         geos.append(float(parts["geo"]))
         adjs.append(float(parts["adj"]))
     featured = ["HK", "JP", "KR", "TW", "SG", "US", "GB", "FR", "DE", "NL", "CA"]
@@ -7083,6 +7232,8 @@ def main() -> None:
     start_raw_warmup()
     start_prefetch()
     total_nodes, candidates, collected_counts = collect_proxies()
+    with _BODY_CACHE_LOCK:
+        _BODY_CACHE.clear()
     metrics: list[ProxyMetric] = []
     tested_metrics: list[ProxyMetric] = []
 
@@ -7115,13 +7266,21 @@ def main() -> None:
                 raw_nodes = [item for item in raw_doc["proxies"] if isinstance(item, dict)]
         except Exception:
             raw_nodes = []
-    lat_map = {
+    lat_map = dict(_LAT_TABLE)
+    lat_map.update({
         str(item.proxy.get("name") or ""): int(item.latency)
         for item in tested_metrics
         if isinstance(item.proxy, dict)
-    }
+    })
+    scored_thread: threading.Thread | None = None
     if raw_nodes:
-        write_scored_history(raw_nodes, lat_map, tested_metrics)
+        scored_thread = threading.Thread(
+            target=write_scored_history,
+            args=(raw_nodes, lat_map, tested_metrics),
+            name="scored-write",
+            daemon=True,
+        )
+        scored_thread.start()
     raw_live = count_live_by_prefix(metrics)
     metrics = limit_metrics_per_source(metrics)
     metrics = limit_metrics_total(metrics)
@@ -7133,6 +7292,8 @@ def main() -> None:
     config = build_config(metrics)
     validate_config(config)
     write_config(config)
+    if scored_thread is not None:
+        scored_thread.join()
     print_summary(total_nodes, len(candidates), metrics)
 
 
