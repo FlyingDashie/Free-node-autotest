@@ -1427,7 +1427,7 @@ def start_parse_pool() -> ProcessPoolExecutor | None:
     with _PARSE_POOL_LOCK:
         if _PARSE_POOL is not None:
             return _PARSE_POOL
-        workers = max(2, min(4, os.cpu_count() or 2))
+        workers = max(2, min(8, os.cpu_count() or 2))
         try:
             ctx = multiprocessing.get_context("forkserver")
         except ValueError:
@@ -2187,36 +2187,56 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     skipped = len(SOURCE_GROUPS) - len(jobs)
     for _ in range(skipped):
         print("[WARN] skip source without name")
-    captured: dict[int, tuple[list[str], list[dict[str, Any]]]] = {}
+    live: dict[int, list[str]] = {}
+    done: dict[int, threading.Event] = {}
+    found_box: dict[int, list[dict[str, Any]]] = {}
     next_i = 0
     first = True
 
-    def _run(index: int, source: dict[str, Any]) -> tuple[int, list[str], list[dict[str, Any]]]:
+    def _run(index: int, source: dict[str, Any]) -> int:
         chunks: list[str] = []
+        live[index] = chunks
+        done[index] = threading.Event()
         _LOG_CAPTURE.buf = chunks
         try:
-            found = _collect_single_source(source)
+            found_box[index] = _collect_single_source(source)
         finally:
             _LOG_CAPTURE.buf = None
-        return index, chunks, found
+            done[index].set()
+        return index
 
     workers = min(3, max(1, len(jobs)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futs = [pool.submit(_run, index, source) for index, source in enumerate(jobs)]
-        for fut in as_completed(futs):
-            index, chunks, found = fut.result()
-            captured[index] = (chunks, found)
-            while next_i in captured:
-                chunks, found = captured.pop(next_i)
-                if not first:
-                    _SEP_JUST_PRINTED = False
-                    print_sep()
-                first = False
-                text = "".join(chunks)
-                if text:
-                    print(text, end="" if text.endswith("\n") else "\n")
-                collected.extend(found)
-                next_i += 1
+        while next_i < len(jobs):
+            if not first:
+                _SEP_JUST_PRINTED = False
+                print_sep()
+                sys.stdout.flush()
+            first = False
+            printed = 0
+            while True:
+                chunks = live.get(next_i)
+                if chunks is not None:
+                    text = "".join(chunks)
+                    fresh = text[printed:]
+                    if "\n" in fresh:
+                        head, tail = fresh.rsplit("\n", 1)
+                        print(head)
+                        sys.stdout.flush()
+                        printed = len(text) - len(tail)
+                ev = done.get(next_i)
+                if ev is not None and ev.is_set():
+                    rest = "".join(live.get(next_i) or [])[printed:]
+                    if rest:
+                        print(rest, end="" if rest.endswith("\n") else "\n")
+                        sys.stdout.flush()
+                    collected.extend(found_box.get(next_i) or [])
+                    next_i += 1
+                    break
+                time.sleep(0.05)
+        for fut in futs:
+            fut.result()
 
     _SEP_JUST_PRINTED = False
     print_sep()
@@ -3769,18 +3789,16 @@ def _collect_toolkit_tree(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
         try:
             workers = max(1, min(32, os.cpu_count() or 2))
             started = time.time()
+            pool = start_parse_pool()
             try:
-                ctx = multiprocessing.get_context("forkserver")
-            except ValueError:
-                ctx = multiprocessing.get_context("spawn")
-            try:
-                with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-                    for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
-                        urls.extend(piece_urls)
-                        embedded.extend(piece_nodes)
+                if pool is None:
+                    raise RuntimeError("scan pool unavailable")
+                for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
+                    urls.extend(piece_urls)
+                    embedded.extend(piece_nodes)
             except Exception:
-                with ThreadPoolExecutor(max_workers=workers) as pool:
-                    for piece_urls, piece_nodes in pool.map(_toolkit_scan_file, files):
+                with ThreadPoolExecutor(max_workers=workers) as fallback:
+                    for piece_urls, piece_nodes in fallback.map(_toolkit_scan_file, files):
                         urls.extend(piece_urls)
                         embedded.extend(piece_nodes)
             _SCAN_ELAPSED.append(time.time() - started)
@@ -5997,7 +6015,7 @@ def _prefetch_toolkit_assets() -> None:
 
         follow = threading.Thread(target=_run_followups, name="prefetch-followup", daemon=True)
         follow.start()
-        workers = max(1, min(4, len(jobs)))
+        workers = max(1, len(jobs))
         if jobs:
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futs = [pool.submit(_prefetch_toolkit_source, source) for source in jobs]
