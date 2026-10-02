@@ -2247,7 +2247,8 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
             page = str(used_url)
         else:
             page = str(source.get("primary") or "")
-        print(f"[WARN] discovery failed | url={page}")
+        label = "discovery failed" if discover_pages else "source failed"
+        print(f"[WARN] {label} | url={page}")
     if source_found:
         if crg_archive:
             extra = f" | url={crg_archive}"
