@@ -2121,7 +2121,7 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                     found = extract_proxies(text)
             if not found:
                 if not merge_all:
-                    print(f"[WARN] source try failed | reason=empty | url={url}")
+                    _note_debug("empty", where="source-try", url=url)
                 return False
             prefix = source_tag(source)
             marks, kept = _dedupe_proxies(found, source_seen, prefix=prefix)
@@ -2145,7 +2145,7 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                     return url, body, ""
                 except Exception as exc:
                     if not _link_missing(exc):
-                        print(f"[WARN] source try failed | reason={exc} | url={url}")
+                        _note_debug(exc, where="source-try", url=url)
                     return url, None, str(exc)
 
             def _fetch_pool(urls: list[str]) -> dict[str, str]:
@@ -2217,7 +2217,7 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                     text = fetch_text(url, user_agent=ua, referer=ref)
                 except Exception as exc:
                     if not _link_missing(exc):
-                        print(f"[WARN] source try failed | reason={format_reason(exc)} | url={url}")
+                        _note_debug(exc, where="source-try", url=url)
                     continue
                 if _ingest(url, text):
                     break
@@ -2683,7 +2683,7 @@ def discover_sublink(
     try:
         body = fetch_text(page_url)
     except Exception as exc:
-        print(f"[WARN] sublink discovery failed | reason={format_reason(exc)} | url={page_url}")
+        _note_debug(exc, where="sublink", url=page_url)
         return []
     file_links, bare_links, ranked = _collect_sub_links(
         body, page_url, prefer=prefer, exclude=exclude
@@ -2693,25 +2693,25 @@ def discover_sublink(
         found = unique_ordered(file_links + bare_links)
         if found:
             return found
-        print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
+        _note_debug("no links", where="sublink", url=page_url)
         return []
     if mode == "none":
         if file_links:
             return file_links
-        print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
+        _note_debug("no links", where="sublink", url=page_url)
         return []
     if _prefer_tokens(prefer):
         found = unique_ordered(file_links + bare_links[:3])
         if found:
             return found
-        print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
+        _note_debug("no links", where="sublink", url=page_url)
         return []
     if file_links:
         _bare_stash(extend=bare_links)
         return file_links
     if bare_links:
         return bare_links
-    print(f"[WARN] sublink discovery failed | reason=no links | url={page_url}")
+    _note_debug("no links", where="sublink", url=page_url)
     return []
 
 
@@ -3297,7 +3297,7 @@ def _download_archive(
         limit = None if quiet else _arm_download_front(url)
         wait_s = None if limit is None else max(0.1, limit - time.time())
         if not inflight.wait(timeout=wait_s):
-            print(f"[WARN] toolkit try failed | reason=download exceeded 120s | url={url}")
+            _note_debug("download exceeded 120s", where="toolkit-try", url=url)
             return None
         with _FILE_CACHE_LOCK:
             cached = _FILE_CACHE.get(url) or _FILE_CACHE.get(Path(str(save_as).strip()).name if save_as else "")
@@ -3316,7 +3316,7 @@ def _download_archive(
     try:
         while True:
           if _download_front_hit(url):
-            print(f"[WARN] toolkit try failed | reason=download exceeded 120s | url={url}")
+            _note_debug("download exceeded 120s", where="toolkit-try", url=url)
             dest.unlink(missing_ok=True)
             return None
           try:
@@ -3402,9 +3402,9 @@ def _download_archive(
                 front = url in _DL_FRONT_DEADLINE
             after = 0 if snap is None else retry_n - snap
             if front and after > 2:
-                print(f"[WARN] toolkit try failed | reason={reason} | url={url}")
+                _note_debug(reason, where="toolkit-try", url=url)
                 return None
-            print(f"[WARN] toolkit retry | count={retry_n} | reason={reason} | url={url}")
+            _note_debug(f"retry | count={retry_n} | reason={reason}", where="toolkit-try", url=url)
             if front and after >= 2:
                 return None
             if _download_front_hit(url):
@@ -4184,8 +4184,8 @@ def _discover_toolkit_1vpn_crx(page_url: str) -> tuple[list[dict[str, Any]], str
             )
             if nodes:
                 return nodes, archive_url
-            print(f"[WARN] toolkit 1vpn-crx discovery failed | reason=empty bundle | archive={archive.name}")
-        print(f"[WARN] toolkit 1vpn-crx discovery failed | reason=empty bundle | url={page_url}")
+            _note_debug(f"empty bundle | archive={archive.name}", where="toolkit-1vpn-crx")
+        _note_debug("empty bundle", where="toolkit-1vpn-crx", url=page_url)
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -4208,8 +4208,8 @@ def _discover_toolkit_crg(
             urls, embedded = _toolkit_collect_payload(unpack, archive.name)
             if embedded or urls:
                 return urls, embedded, archive_url
-            print(f"[WARN] toolkit crg discovery failed | reason=empty bundle | archive={archive.name}")
-        print(f"[WARN] toolkit crg discovery failed | reason=empty bundle | url={page_url}")
+            _note_debug(f"empty bundle | archive={archive.name}", where="toolkit-crg")
+        _note_debug("empty bundle", where="toolkit-crg", url=page_url)
         return [], [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -4735,9 +4735,9 @@ def _discover_toolkit_encrypted_apk(
         if last_err:
             extra += f" last={last_err[:80]}"
         if not opened:
-            print(f"[WARN] toolkit {kind} discovery failed | reason=no archive | url={page_url}")
+            _note_debug("no archive", where=f"toolkit-{kind}", url=page_url)
         else:
-            print(f"[WARN] toolkit {kind} discovery failed | reason={format_reason(None, last_err or 'failed')} | url={page_url}")
+            _note_debug(last_err or "failed", where=f"toolkit-{kind}", url=page_url)
         return [], ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -4861,7 +4861,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
 
     stamps = sorted(groups, reverse=True)
     if not stamps:
-        print(f"[WARN] article discovery failed | reason=no article links | url={feed_url}")
+        _note_debug("no article links", where="article", url=feed_url)
         return []
 
     for stamp in stamps:
@@ -4882,7 +4882,7 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
             if ok:
                 _discover_pages_set([page])
                 return found
-    print(f"[WARN] article discovery failed | reason=no article links | url={feed_url}")
+    _note_debug("no article links", where="article", url=feed_url)
     return []
 
 
