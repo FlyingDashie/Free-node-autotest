@@ -390,7 +390,38 @@ sys.stdout = _StampStream(sys.stdout)
 sys.stderr = _StampStream(sys.stderr)
 
 
+class _BenchCtx:
+    def __init__(self, total: int) -> None:
+        self.total = total
+        self.done = 0
+        self.drops: list[str] = []
+        self.branch_next = 2
+        self.logs: list[str] = []
+
+
+_BENCH_CTX = threading.local()
+_LIVE_BENCH_LOCK = threading.Lock()
+_LIVE_BENCH_READY = threading.Event()
+_LIVE_BENCH_ENGINE: Path | None = None
+_LIVE_BENCH_ENGINE_ERR = ""
+_LIVE_BENCH_ENGINE_LOGS: list[str] = []
+_LIVE_BENCH_LOGS: dict[int, list[str]] = {}
+_LIVE_BENCH_METRICS: dict[int, list] = {}
+_LIVE_BENCH_NAMES: dict[int, str] = {}
+_LIVE_BENCH_FUTS: list[Any] = []
+_LIVE_BENCH_POOL: ThreadPoolExecutor | None = None
+_LIVE_BENCH_ON = False
+
+
+def _bench_ctx() -> _BenchCtx | None:
+    return getattr(_BENCH_CTX, "ctx", None)
+
+
 def _bench_log(msg: str) -> None:
+    ctx = _bench_ctx()
+    if ctx is not None:
+        ctx.logs.append(str(msg))
+        return
     with _TEST_LOCK:
         sys.stdout.write(str(msg) + "\n")
         sys.stdout.flush()
@@ -398,6 +429,11 @@ def _bench_log(msg: str) -> None:
 
 
 def _alloc_branch() -> str:
+    ctx = _bench_ctx()
+    if ctx is not None:
+        n = ctx.branch_next
+        ctx.branch_next += 1
+        return str(n)
     global _BRANCH_NEXT
     with _TEST_LOCK:
         n = _BRANCH_NEXT
@@ -2202,6 +2238,8 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
     found_box: dict[int, list[dict[str, Any]]] = {}
     next_i = 0
     first = True
+    _print_front_assets()
+    _start_live_bench()
 
     def _run(index: int, source: dict[str, Any]) -> int:
         chunks: list[str] = []
@@ -2241,16 +2279,15 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
                     if rest:
                         print(rest, end="" if rest.endswith("\n") else "\n")
                         sys.stdout.flush()
-                    collected.extend(found_box.get(next_i) or [])
+                    found = found_box.get(next_i) or []
+                    collected.extend(found)
+                    _enqueue_source_bench(next_i, source_label(jobs[next_i]), found)
                     next_i += 1
                     break
                 time.sleep(0.05)
         for fut in futs:
             fut.result()
 
-    _SEP_JUST_PRINTED = False
-    print_sep()
-    prepare_geo_score()
     _SEP_JUST_PRINTED = False
     print_sep()
     snapshot = [dict(item) if isinstance(item, dict) else item for item in collected]
@@ -3040,7 +3077,15 @@ def _expand_github_release_assets(
         tags.append((_score_sub_link(tag, prefer=token, distance=dist), tag))
     if "latest" not in seen_tags:
         tags.append((15000, "latest"))
-    tags.sort(key=lambda item: item[0], reverse=True)
+    generic = {"apk", "zip", "7z", "gz", "exe", "dmg"}
+    tokens = {item.lower() for item in _prefer_tokens(token)}
+    if tokens and tokens <= generic:
+        def _tag_version(tag: str) -> tuple[int, ...]:
+            nums = re.findall(r"\d+", tag)
+            return tuple(int(num) for num in nums) if nums else (0,)
+        tags.sort(key=lambda item: (_tag_version(item[1]), item[0]), reverse=True)
+    else:
+        tags.sort(key=lambda item: item[0], reverse=True)
     ranked: list[tuple[int, str]] = []
     source_ranked: list[tuple[int, str]] = []
     seen: set[str] = set()
@@ -4584,10 +4629,10 @@ def _discover_toolkit_encrypted_apk(
                 try:
                     body = fetch_text(
                         url,
-                        retries=CFG_FETCH_RETRIES,
+                        retries=0,
                         user_agent=ua,
                         referer=referer,
-                        timeout=CFG_FETCH_TIMEOUT,
+                        timeout=4,
                     )
                     return url, body, ""
                 except Exception as exc:
@@ -5066,11 +5111,16 @@ def _ensure_geo_coords(json_path: Path | None = None) -> None:
         _GEO_COORDS = _parse_centroid_text(text)
 
 
+_FRONT_ASSETS_PRINTED = False
+
+
 def prepare_geo_score() -> None:
     global _GEOIP_READER, _GEO_READY_LOG
     if _prefetch_quiet():
         _wait_scan_idle()
     pending = _FOLLOWUP_LOGS.pop("prepare_geo_score", None) or []
+    if _FRONT_ASSETS_PRINTED and not _prefetch_quiet():
+        return
     if pending and not _prefetch_quiet():
         for line in pending:
             print(line)
@@ -5121,6 +5171,8 @@ def find_or_install_mihomo() -> Path:
     if not _prefetch_quiet() and threading.current_thread().name != "prefetch-mihomo":
         _MIHOMO_PREFETCH_DONE.wait(timeout=180)
     pending = _FOLLOWUP_LOGS.pop("find_or_install_mihomo", None) or []
+    if _FRONT_ASSETS_PRINTED and not _prefetch_quiet():
+        pending = []
     if pending and not _prefetch_quiet():
         for line in pending:
             print(line)
@@ -6437,9 +6489,14 @@ def _benchmark_batch(
             f"| server={bad.get('server')}:{bad.get('port')} | reason={reason or 'mihomo start failed'}"
         )
         with _TEST_LOCK:
-            _DROP_NAMES.append(str(bad.get("name") or ""))
-            global _TEST_DONE
-            _TEST_DONE += 1
+            ctx = _bench_ctx()
+            if ctx is not None:
+                ctx.drops.append(str(bad.get("name") or ""))
+                ctx.done += 1
+            else:
+                _DROP_NAMES.append(str(bad.get("name") or ""))
+                global _TEST_DONE
+                _TEST_DONE += 1
         return []
 
     parts_n = _start_fail_parts(len(proxies))
@@ -6515,8 +6572,129 @@ def _benchmark_reshard(
     return _flatten_metrics(out)
 
 
+def _print_front_assets() -> None:
+    global _FRONT_ASSETS_PRINTED, _SEP_JUST_PRINTED
+    _SEP_JUST_PRINTED = False
+    print_sep()
+    find_or_install_mihomo()
+    prepare_geo_score()
+    _FRONT_ASSETS_PRINTED = True
+    _SEP_JUST_PRINTED = False
+    print_sep()
+
+
+def _start_live_bench() -> None:
+    global _LIVE_BENCH_ON, _LIVE_BENCH_POOL, _LIVE_BENCH_ENGINE, _LIVE_BENCH_ENGINE_ERR
+    _LIVE_BENCH_ON = True
+    _LIVE_BENCH_READY.clear()
+    _LIVE_BENCH_ENGINE = None
+    _LIVE_BENCH_ENGINE_ERR = ""
+    _LIVE_BENCH_ENGINE_LOGS.clear()
+    _LIVE_BENCH_LOGS.clear()
+    _LIVE_BENCH_METRICS.clear()
+    _LIVE_BENCH_NAMES.clear()
+    _LIVE_BENCH_FUTS.clear()
+    if _LIVE_BENCH_POOL is None:
+        _LIVE_BENCH_POOL = ThreadPoolExecutor(max_workers=_BENCH_LIMIT, thread_name_prefix="live-bench")
+
+    def _engine() -> None:
+        global _LIVE_BENCH_ENGINE, _LIVE_BENCH_ENGINE_ERR
+        chunks: list[str] = []
+        _LOG_CAPTURE.buf = chunks
+        try:
+            _LIVE_BENCH_ENGINE = find_or_install_mihomo()
+        except Exception as exc:
+            _LIVE_BENCH_ENGINE_ERR = str(exc)
+        finally:
+            _LOG_CAPTURE.buf = None
+            _LIVE_BENCH_ENGINE_LOGS.extend(_capture_chunks_to_lines(chunks))
+            _LIVE_BENCH_READY.set()
+
+    threading.Thread(target=_engine, name="bench-engine", daemon=True).start()
+
+
+def _run_source_bench(index: int, name: str, proxies: list[dict[str, Any]]) -> None:
+    ctx = _BenchCtx(len(proxies))
+    _BENCH_CTX.ctx = ctx
+    ctx.logs.append(f"[TEST] source=[{name}] | proxies={len(proxies)}")
+    try:
+        if not _LIVE_BENCH_READY.wait(timeout=180):
+            ctx.logs.append(f"[WARN] source=[{name}] bench skipped | reason=engine timeout")
+            return
+        engine = _LIVE_BENCH_ENGINE
+        if engine is None:
+            ctx.logs.append(
+                f"[WARN] source=[{name}] bench skipped | reason={_LIVE_BENCH_ENGINE_ERR or 'no engine'}"
+            )
+            return
+        with tempfile.TemporaryDirectory(prefix="free-node-autotest-") as temp_name:
+            temp_dir = Path(temp_name)
+            config_path = temp_dir / "benchmark.yaml"
+            metrics = _flatten_metrics(
+                _benchmark_batch(
+                    engine, temp_dir, config_path, "http://127.0.0.1:0", 0, list(proxies), branch="1"
+                )
+            )
+        if ctx.drops:
+            tallies: dict[str, int] = {}
+            order: list[str] = []
+            for item in ctx.drops:
+                key = source_prefix_of(item)
+                if key not in tallies:
+                    tallies[key] = 0
+                    order.append(key)
+                tallies[key] += 1
+            bits = [f"{key} × {tallies[key]}" for key in order]
+            text = " | ".join(bits)
+            if len(text) > 400:
+                text = text[:397] + "..."
+            ctx.logs.append(f"[INFO] dropped={len(ctx.drops)} | {text}")
+        _LIVE_BENCH_METRICS[index] = metrics
+    except Exception as exc:
+        ctx.logs.append(f"[WARN] source=[{name}] bench failed | reason={format_reason(exc)}")
+    finally:
+        _LIVE_BENCH_LOGS[index] = list(ctx.logs)
+        _BENCH_CTX.ctx = None
+
+
+def _enqueue_source_bench(index: int, name: str, proxies: list[dict[str, Any]]) -> None:
+    if not proxies or _LIVE_BENCH_POOL is None:
+        _LIVE_BENCH_LOGS[index] = [f"[TEST] source=[{name}] | proxies=0"]
+        _LIVE_BENCH_METRICS[index] = []
+        return
+    _LIVE_BENCH_NAMES[index] = name
+    fut = _LIVE_BENCH_POOL.submit(_run_source_bench, index, name, proxies)
+    _LIVE_BENCH_FUTS.append(fut)
+
+
+def _finish_live_bench() -> list[ProxyMetric]:
+    global _SEP_JUST_PRINTED
+    for fut in list(_LIVE_BENCH_FUTS):
+        try:
+            fut.result()
+        except Exception:
+            continue
+    _SEP_JUST_PRINTED = False
+    print_sep()
+    metrics: list[ProxyMetric] = []
+    indexes = sorted(set(_LIVE_BENCH_LOGS) | set(_LIVE_BENCH_METRICS))
+    for pos, index in enumerate(indexes):
+        if pos:
+            print("-" * 60)
+        for line in _LIVE_BENCH_LOGS.get(index) or []:
+            print(line)
+        metrics.extend(_LIVE_BENCH_METRICS.get(index) or [])
+    _SEP_JUST_PRINTED = False
+    print_sep()
+    if not metrics:
+        raise RuntimeError("Mihomo benchmark produced no live proxies")
+    return metrics
+
+
 def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
     global _SEP_JUST_PRINTED
+    if _LIVE_BENCH_ON:
+        return _finish_live_bench()
     if not proxies:
         return []
 
@@ -6578,12 +6756,22 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
             try:
                 metric = future.result()
             except Exception:
-                _DROP_NAMES.append(str(proxy.get("name") or ""))
+                ctx = _bench_ctx()
+                if ctx is not None:
+                    ctx.drops.append(str(proxy.get("name") or ""))
+                else:
+                    _DROP_NAMES.append(str(proxy.get("name") or ""))
             if metric:
                 metrics.append(metric)
             with _TEST_LOCK:
-                _TEST_DONE += 1
-                rest = max(0, _TEST_TOTAL - _TEST_DONE)
+                ctx = _bench_ctx()
+                if ctx is not None:
+                    ctx.done += 1
+                    rest = max(0, ctx.total - ctx.done)
+                else:
+                    global _TEST_DONE
+                    _TEST_DONE += 1
+                    rest = max(0, _TEST_TOTAL - _TEST_DONE)
                 should_print = completed % 100 == 0 or completed == len(futures)
             if should_print:
                 _bench_log(
@@ -6602,7 +6790,11 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                 for item in leftover:
                     pending.pop(id(item), None)
                 with _TEST_LOCK:
-                    _TEST_DONE = max(0, _TEST_DONE - len(leftover))
+                    ctx = _bench_ctx()
+                    if ctx is not None:
+                        ctx.done = max(0, ctx.done - len(leftover))
+                    else:
+                        _TEST_DONE = max(0, _TEST_DONE - len(leftover))
                 executor.shutdown(wait=False, cancel_futures=True)
                 break
     return metrics, leftover
