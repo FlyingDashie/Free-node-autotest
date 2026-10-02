@@ -135,6 +135,7 @@ _TEST_LOCK = threading.Lock()
 _BENCH_LIMIT = 6
 _BENCH_SPLIT_AT = 32
 _BENCH_SLOTS = threading.Semaphore(_BENCH_LIMIT)
+_FIRST_HUNDRED = threading.Event()
 _BENCH_INUSE = 0
 _BENCH_INUSE_LOCK = threading.Lock()
 _BENCH_FINISHED: set[int] = set()
@@ -6500,8 +6501,14 @@ def _benchmark_batch(
     proxies: list[dict[str, Any]],
     branch: str = "1",
 ) -> list[ProxyMetric]:
+    global _TEST_DONE
     if not proxies:
         return []
+    with _TEST_LOCK:
+        rest = max(0, _TEST_TOTAL - _TEST_DONE)
+    _bench_log(
+        f"[TEST] {{{branch}}} tested=0/{len(proxies)} | kept=0 | rest={rest}"
+    )
 
     work = Path(tempfile.mkdtemp(prefix="batch-", dir=str(temp_dir)))
     local_config = work / "benchmark.yaml"
@@ -6572,7 +6579,6 @@ def _benchmark_batch(
         )
         with _TEST_LOCK:
             _DROP_NAMES.append(str(bad.get("name") or ""))
-            global _TEST_DONE
             _TEST_DONE += 1
         return []
 
@@ -6619,6 +6625,8 @@ def _benchmark_reshard(
     proxies: list[dict[str, Any]],
     branch: str,
 ) -> list[ProxyMetric]:
+    if branch != "1":
+        _FIRST_HUNDRED.wait(timeout=90)
     if len(proxies) <= _BENCH_SPLIT_AT:
         return _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, proxies, branch=branch
@@ -6732,6 +6740,8 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                     f"[TEST] {{{branch}}} tested={completed}/{len(futures)} "
                     f"| kept={len(metrics)} | rest={rest}"
                 )
+                if completed >= 100 and len(futures) > 500:
+                    _FIRST_HUNDRED.set()
             with _BENCH_INUSE_LOCK:
                 alone = _BENCH_INUSE <= 1
             if (
