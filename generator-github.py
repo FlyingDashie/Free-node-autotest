@@ -436,14 +436,18 @@ class _StampStream:
             return len(text)
         written = self.inner.write(text)
         self._buf += text
+        fresh = 0
         while "\n" in self._buf:
             self._buf = self._buf.split("\n", 1)[1]
+            fresh += 1
+        if fresh:
+            host, proc, queue = _sample_cpu_ram()
+            now = datetime.now(timezone.utc).isoformat()
             with _STAMP_LOCK:
-                _RUN_STAMPS.append(datetime.now(timezone.utc).isoformat())
-                host, proc, queue = _sample_cpu_ram()
-                _RUN_USAGE.append(host)
-                _RUN_PROC.append(proc)
-                _RUN_QUEUE.append(queue)
+                _RUN_STAMPS.extend([now] * fresh)
+                _RUN_USAGE.extend([host] * fresh)
+                _RUN_PROC.extend([proc] * fresh)
+                _RUN_QUEUE.extend([queue] * fresh)
         return written
 
     def flush(self) -> None:
@@ -5198,8 +5202,9 @@ def find_or_install_mihomo() -> Path:
             f"replay | logs={len(pending)} | failed={_MIHOMO_PREFETCH_FAILED}",
             where="prefetch-mihomo",
         )
-        for line in pending:
-            print(line)
+        if pending:
+            sys.stdout.write("\n".join(pending) + "\n")
+            sys.stdout.flush()
         cached = _FOLLOWUP_RESULT.get("find_or_install_mihomo")
         if isinstance(cached, Path) and cached.exists():
             return cached
