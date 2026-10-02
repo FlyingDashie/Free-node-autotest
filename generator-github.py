@@ -241,13 +241,20 @@ def _note_busy_snapshot() -> None:
     global _BUSY_NOTE_AT
     now = time.time()
     with _BUSY_LOCK:
-        rows = [(started, detail) for started, detail in _BUSY.values() if now - started >= 8]
-    if not rows or now - _BUSY_NOTE_AT < 8:
+        rows = [(started, detail) for started, detail in _BUSY.values()]
+    stuck = [(started, detail) for started, detail in rows if now - started >= 8]
+    if not stuck or now - _BUSY_NOTE_AT < 8:
         return
     _BUSY_NOTE_AT = now
     lines = []
-    for started, detail in rows:
-        lines.append(f"[NOTE-busy] elapsed={now - started:.0f}s | {detail}")
+    for started, detail in stuck:
+        others = [
+            f"{now - other:.0f}s {item}"
+            for other, item in rows
+            if item != detail
+        ]
+        tail = " | running=" + " ; ".join(others) if others else " | running=none"
+        lines.append(f"[NOTE-busy] elapsed={now - started:.0f}s | {detail}{tail}")
     with _STAMP_LOCK:
         _DEBUG_NOTES.extend(lines)
         if len(_DEBUG_NOTES) > 200:
@@ -5785,11 +5792,11 @@ def write_scored_history(
     for _score, line in ranked:
         if not line:
             continue
-        name = line.rsplit(" | ", 1)[-1] if " | " in line else line
-        match = re.match(r"\[([^\]]+)\]", name.strip())
+        match = re.search(r"\| \[([^\]]+)\]", line)
         if match:
             key = match.group(1).strip() or "-"
         else:
+            name = line.rsplit(" | ", 1)[-1] if " | " in line else line
             key = source_prefix_of(name)
             if key.startswith("[") and key.endswith("]"):
                 key = key[1:-1]
@@ -6469,6 +6476,9 @@ def _benchmark_batch(
     with _BENCH_SLOTS:
         with _BENCH_INUSE_LOCK:
             _BENCH_INUSE += 1
+        _busy_token = time.time()
+        with _BUSY_LOCK:
+            _BUSY[threading.get_ident()] = (_busy_token, f"bench | branch={{{branch}}} | size={len(proxies)}")
         try:
             process, error = _start_mihomo_for_batch(
                 engine, work, local_config, local_url, local_port, proxies, branch=branch
@@ -6482,6 +6492,10 @@ def _benchmark_batch(
         finally:
             with _BENCH_INUSE_LOCK:
                 _BENCH_INUSE = max(0, _BENCH_INUSE - 1)
+            with _BUSY_LOCK:
+                current = _BUSY.get(threading.get_ident())
+                if current and current[0] == _busy_token:
+                    _BUSY.pop(threading.get_ident(), None)
     if started:
         if leftover:
             return kept + _benchmark_reshard(
