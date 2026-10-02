@@ -6504,12 +6504,6 @@ def _benchmark_batch(
     global _TEST_DONE
     if not proxies:
         return []
-    with _TEST_LOCK:
-        rest = max(0, _TEST_TOTAL - _TEST_DONE)
-    _bench_log(
-        f"[TEST] {{{branch}}} tested=0/{len(proxies)} | kept=0 | rest={rest}"
-    )
-
     work = Path(tempfile.mkdtemp(prefix="batch-", dir=str(temp_dir)))
     local_config = work / "benchmark.yaml"
     local_port = find_free_port()
