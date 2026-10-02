@@ -5117,10 +5117,10 @@ def prepare_geo_score() -> None:
 
 
 def find_or_install_mihomo() -> Path:
-    if not _prefetch_quiet() and threading.current_thread().name != "prefetch-mihomo":
-        _MIHOMO_PREFETCH_DONE.wait(timeout=180)
-    pending = _FOLLOWUP_LOGS.pop("find_or_install_mihomo", None) or []
-    if pending and not _prefetch_quiet():
+    formal = not _prefetch_quiet() and threading.current_thread().name != "prefetch-mihomo"
+    if formal and _MIHOMO_PREFETCH_STARTED.is_set() and not _MIHOMO_PREFETCH_FAILED:
+        _MIHOMO_PREFETCH_DONE.wait()
+        pending = _FOLLOWUP_LOGS.pop("find_or_install_mihomo", None) or []
         for line in pending:
             print(line)
         cached = _FOLLOWUP_RESULT.get("find_or_install_mihomo")
@@ -5199,6 +5199,8 @@ def find_or_install_mihomo() -> Path:
 
 _CHECKSUM_TEXT: dict[str, str | None] = {}
 _MIHOMO_PREFETCH_DONE = threading.Event()
+_MIHOMO_PREFETCH_STARTED = threading.Event()
+_MIHOMO_PREFETCH_FAILED = False
 
 
 def _wait_scan_idle(limit: float = 180.0) -> None:
@@ -5987,13 +5989,17 @@ def _prefetch_toolkit_assets() -> None:
                 continue
             jobs.append(source)
         def _run_mihomo() -> None:
+            global _MIHOMO_PREFETCH_FAILED
+            _MIHOMO_PREFETCH_STARTED.set()
             chunks: list[str] = []
             _LOG_CAPTURE.buf = chunks
             try:
                 result = find_or_install_mihomo()
                 _FOLLOWUP_RESULT["find_or_install_mihomo"] = result
+                if not isinstance(result, Path) or not result.exists():
+                    _MIHOMO_PREFETCH_FAILED = True
             except Exception:
-                result = None
+                _MIHOMO_PREFETCH_FAILED = True
             finally:
                 _LOG_CAPTURE.buf = None
             _FOLLOWUP_LOGS["find_or_install_mihomo"] = _capture_chunks_to_lines(chunks)
@@ -6036,7 +6042,6 @@ def _prefetch_toolkit_assets() -> None:
                         continue
         follow.join(timeout=180)
         mihomo.join(timeout=180)
-        _MIHOMO_PREFETCH_DONE.set()
     finally:
         _PREFETCH_QUIET.on = False
 
@@ -6106,29 +6111,28 @@ def _flush_toolkit_job_logs(job: dict[str, Any], printed: list[int]) -> None:
 def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
     key = source_label(source)
     printed = [0]
-    deadline = time.time() + 180
-    while time.time() < deadline:
+    started = time.time()
+    while time.time() - started < 3:
         with _TOOLKIT_JOB_LOCK:
             job = _TOOLKIT_JOBS.get(key)
-        if not job:
+        if job:
+            break
+        time.sleep(0.05)
+    else:
+        return None
+    while True:
+        with _TOOLKIT_JOB_LOCK:
+            job = _TOOLKIT_JOBS.get(key) or job
+        _flush_toolkit_job_logs(job, printed)
+        if job.get("done"):
+            if job.get("failed"):
+                return None
+            return job
+        event = job.get("event")
+        if event is not None:
+            event.wait(timeout=1)
+        else:
             time.sleep(0.15)
-            continue
-        _flush_toolkit_job_logs(job, printed)
-        if not job.get("done"):
-            _arm_download_front()
-        if job.get("done"):
-            with _TOOLKIT_JOB_LOCK:
-                job = _TOOLKIT_JOBS.get(key) or job
-            _flush_toolkit_job_logs(job, printed)
-            return job
-        time.sleep(0.15)
-    with _TOOLKIT_JOB_LOCK:
-        job = _TOOLKIT_JOBS.get(key)
-    if job:
-        _flush_toolkit_job_logs(job, printed)
-        if job.get("done"):
-            return job
-    return None
 
 
 def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
@@ -6136,6 +6140,7 @@ def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
     event = threading.Event()
     chunks: list[str] = []
     packed: dict[str, Any] = {}
+    failed = False
     with _TOOLKIT_JOB_LOCK:
         _TOOLKIT_JOBS[key] = {
             "event": event,
@@ -6155,6 +6160,9 @@ def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
             break
     except Exception:
         packed = packed or {}
+        failed = True
+    else:
+        failed = not bool(packed.get("ok") or packed.get("direct") or packed.get("candidates"))
     finally:
         _LOG_CAPTURE.buf = None
         _PREFETCH_QUIET.on = False
@@ -6162,6 +6170,7 @@ def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
             _TOOLKIT_JOBS[key] = {
                 "event": event,
                 "done": True,
+                "failed": failed,
                 "logs": _capture_chunks_to_lines(chunks),
                 "packed": packed,
             }
