@@ -2144,8 +2144,7 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                     )
                     return url, body, ""
                 except Exception as exc:
-                    if not _link_missing(exc):
-                        _note_debug(exc, where="source-try", url=url)
+                    _note_debug(exc, where="source-try", url=url)
                     return url, None, str(exc)
 
             def _fetch_pool(urls: list[str]) -> dict[str, str]:
@@ -2216,8 +2215,7 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                 try:
                     text = fetch_text(url, user_agent=ua, referer=ref)
                 except Exception as exc:
-                    if not _link_missing(exc):
-                        _note_debug(exc, where="source-try", url=url)
+                    _note_debug(exc, where="source-try", url=url)
                     continue
                 if _ingest(url, text):
                     break
@@ -2242,9 +2240,14 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                 f"[INFO] reused previous raw | file={raw_name} | stamp={raw_stamp}"
             )
     if not source_found:
-        print(
-            f"[WARN] no proxies | found=0 | raw=0"
-        )
+        page = ""
+        if discover_pages:
+            page = str(discover_pages[0])
+        elif used_url:
+            page = str(used_url)
+        else:
+            page = str(source.get("primary") or "")
+        print(f"[WARN] discovery failed | url={page}")
     if source_found:
         if crg_archive:
             extra = f" | url={crg_archive}"
@@ -4870,7 +4873,8 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
                 found = unique_ordered(
                     discover_sublink(page, prefer=prefer, bare_link=bare_link)
                 )
-            except Exception:
+            except Exception as exc:
+                _note_debug(exc, where="article", url=page)
                 found = []
             file_hits = [
                 item for item in found
