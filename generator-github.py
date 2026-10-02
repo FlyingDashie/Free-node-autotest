@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import base64
+import contextvars
 import gzip
 import hashlib
 import html
@@ -35,9 +38,11 @@ try:
 except Exception:
     pass
 _orig_print = print
+_PRINT_LOCK = threading.Lock()
 def print(*args, **kwargs):
     kwargs.setdefault("flush", True)
-    return _orig_print(*args, **kwargs)
+    with _PRINT_LOCK:
+        return _orig_print(*args, **kwargs)
 
 _REQUIRED_PACKAGES = {
     "requests": "requests",
@@ -149,6 +154,7 @@ _SELF_CPU_LAST: tuple[int, int, float] | None = None
 
 _PREFETCH_QUIET = threading.local()
 _LOG_CAPTURE = threading.local()
+_CAPTURE_BUF: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar("capture_buf", default=None)
 _MAIN_TID = threading.get_ident()
 _TOOLKIT_JOBS: dict[str, dict[str, Any]] = {}
 _TOOLKIT_JOB_LOCK = threading.Lock()
@@ -209,6 +215,52 @@ _PREFETCH_DIR = Path(tempfile.gettempdir()) / "free-node-autotest-prefetch"
 
 def _prefetch_quiet() -> bool:
     return bool(getattr(_PREFETCH_QUIET, "on", False))
+
+
+_BUSY: dict[int, tuple[float, str]] = {}
+_BUSY_LOCK = threading.Lock()
+_BUSY_NOTE_AT = 0.0
+
+
+@contextmanager
+def _busy(detail: str):
+    token = time.time()
+    tid = threading.get_ident()
+    with _BUSY_LOCK:
+        _BUSY[tid] = (token, detail)
+    try:
+        yield
+    finally:
+        with _BUSY_LOCK:
+            current = _BUSY.get(tid)
+            if current and current[0] == token:
+                _BUSY.pop(tid, None)
+
+
+def _note_busy_snapshot() -> None:
+    global _BUSY_NOTE_AT
+    now = time.time()
+    with _BUSY_LOCK:
+        rows = [(started, detail) for started, detail in _BUSY.values() if now - started >= 8]
+    if not rows or now - _BUSY_NOTE_AT < 8:
+        return
+    _BUSY_NOTE_AT = now
+    lines = []
+    for started, detail in rows:
+        lines.append(f"[NOTE-busy] elapsed={now - started:.0f}s | {detail}")
+    with _STAMP_LOCK:
+        _DEBUG_NOTES.extend(lines)
+        if len(_DEBUG_NOTES) > 200:
+            del _DEBUG_NOTES[:-200]
+
+
+def _busy_watch() -> None:
+    while True:
+        time.sleep(4)
+        try:
+            _note_busy_snapshot()
+        except Exception:
+            continue
 
 
 def _note_debug(
@@ -363,6 +415,8 @@ class _StampStream:
     def write(self, data: str) -> int:
         text = str(data or "")
         cap = getattr(_LOG_CAPTURE, "buf", None)
+        if cap is None:
+            cap = _CAPTURE_BUF.get()
         if cap is not None:
             cap.append(text)
             return len(text)
@@ -857,12 +911,13 @@ def fetch_text(
             try:
                 with _host_fetch_slot(url):
                     with _FETCH_SLOTS:
-                        response = session.get(
-                            url,
-                            headers=headers,
-                            timeout=wait,
-                            proxies=PROXIES,
-                        )
+                        with _busy(f"fetch | url={url}"):
+                            response = session.get(
+                                url,
+                                headers=headers,
+                                timeout=wait,
+                                proxies=PROXIES,
+                            )
                         response.raise_for_status()
                         text = response.content.decode("utf-8", errors="replace")
                         with _BODY_CACHE_LOCK:
@@ -2207,10 +2262,12 @@ def collect_proxies() -> tuple[int, list[dict[str, Any]], dict[str, int]]:
         live[index] = chunks
         done[index] = threading.Event()
         _LOG_CAPTURE.buf = chunks
+        token = _CAPTURE_BUF.set(chunks)
         try:
             found_box[index] = _collect_single_source(source)
         finally:
             _LOG_CAPTURE.buf = None
+            _CAPTURE_BUF.reset(token)
             done[index].set()
         return index
 
@@ -3265,21 +3322,22 @@ def _download_archive(
                 os.makedirs(str(dest_dir), exist_ok=True)
                 part = dest.with_name(dest.name + ".part")
                 with part.open("wb") as handle:
-                    for chunk in response.iter_content(chunk_size=1024 * 256):
-                        if not chunk:
-                            continue
-                        handle.write(chunk)
-                        written += len(chunk)
-                        elapsed = time.time() - started
-                        if elapsed >= last_progress + 60:
-                            extra = f"/{format_size(total)}" if total else ""
-                            print(
-                                f"[INFO] toolkit download | file={dest.name} "
-                                f"| size={format_size(written)}{extra} | time={elapsed:.0f}s"
-                            )
-                            last_progress = elapsed
-                        if _download_front_hit(url):
-                            raise RuntimeError("download exceeded 120s")
+                    with _busy(f"download | file={dest.name} | url={url}"):
+                        for chunk in response.iter_content(chunk_size=1024 * 256):
+                            if not chunk:
+                                continue
+                            handle.write(chunk)
+                            written += len(chunk)
+                            elapsed = time.time() - started
+                            if elapsed >= last_progress + 60:
+                                extra = f"/{format_size(total)}" if total else ""
+                                print(
+                                    f"[INFO] toolkit download | file={dest.name} "
+                                    f"| size={format_size(written)}{extra} | time={elapsed:.0f}s"
+                                )
+                                last_progress = elapsed
+                            if _download_front_hit(url):
+                                raise RuntimeError("download exceeded 120s")
                 final_url = str(response.url or url)
                 resp_headers = dict(response.headers)
             if total and written < total:
@@ -5119,7 +5177,8 @@ def prepare_geo_score() -> None:
 def find_or_install_mihomo() -> Path:
     formal = not _prefetch_quiet() and threading.current_thread().name != "prefetch-mihomo"
     if formal and _MIHOMO_PREFETCH_STARTED.is_set() and not _MIHOMO_PREFETCH_FAILED:
-        _MIHOMO_PREFETCH_DONE.wait()
+        with _busy("wait mihomo prefetch"):
+            _MIHOMO_PREFETCH_DONE.wait()
         pending = _FOLLOWUP_LOGS.pop("find_or_install_mihomo", None) or []
         for line in pending:
             print(line)
@@ -6129,10 +6188,11 @@ def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
                 return None
             return job
         event = job.get("event")
-        if event is not None:
-            event.wait(timeout=1)
-        else:
-            time.sleep(0.15)
+        with _busy(f"wait toolkit prefetch | source={key}"):
+            if event is not None:
+                event.wait(timeout=1)
+            else:
+                time.sleep(0.15)
 
 
 def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
@@ -6150,6 +6210,7 @@ def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
             "packed": {},
         }
     _LOG_CAPTURE.buf = chunks
+    token = _CAPTURE_BUF.set(chunks)
     _PREFETCH_QUIET.on = True
     try:
         for item in _source_queue(source):
@@ -6165,6 +6226,7 @@ def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
         failed = not bool(packed.get("ok") or packed.get("direct") or packed.get("candidates"))
     finally:
         _LOG_CAPTURE.buf = None
+        _CAPTURE_BUF.reset(token)
         _PREFETCH_QUIET.on = False
         with _TOOLKIT_JOB_LOCK:
             _TOOLKIT_JOBS[key] = {
@@ -6178,6 +6240,9 @@ def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
 
 
 def start_prefetch() -> None:
+    if not getattr(start_prefetch, "_watch", False):
+        start_prefetch._watch = True
+        threading.Thread(target=_busy_watch, name="busy-watch", daemon=True).start()
     global _PREFETCH_PULL_POOL
     if _PREFETCH_PULL_POOL is None:
         _PREFETCH_PULL_POOL = ThreadPoolExecutor(
