@@ -462,9 +462,18 @@ sys.stderr = _StampStream(sys.stderr)
 
 
 def _bench_log(msg: str) -> None:
-    with _TEST_LOCK:
+    line = (str(msg) + "\n").encode()
+    try:
+        os.write(1, line)
+    except Exception:
         sys.stdout.write(str(msg) + "\n")
         sys.stdout.flush()
+    now = datetime.now(timezone.utc).isoformat()
+    with _STAMP_LOCK:
+        _RUN_STAMPS.append(now)
+        _RUN_USAGE.append("")
+        _RUN_PROC.append("")
+        _RUN_QUEUE.append("")
 # Temporary diagnostic prints must use prefix [DEBUG], not [INFO]/[OK]/[WARN].
 
 
@@ -6717,7 +6726,7 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
             with _TEST_LOCK:
                 _TEST_DONE += 1
                 rest = max(0, _TEST_TOTAL - _TEST_DONE)
-                should_print = completed % 100 == 0 or completed == len(futures)
+                should_print = completed == 1 or completed % 100 == 0 or completed == len(futures)
             if should_print:
                 _bench_log(
                     f"[TEST] {{{branch}}} tested={completed}/{len(futures)} "
