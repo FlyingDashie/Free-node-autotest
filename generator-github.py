@@ -419,12 +419,25 @@ def _bench_ctx() -> _BenchCtx | None:
 
 def _bench_log(msg: str) -> None:
     ctx = _bench_ctx()
+    line = str(msg)
     if ctx is not None:
-        ctx.logs.append(str(msg))
+        with _TEST_LOCK:
+            ctx.logs.append(line)
         return
     with _TEST_LOCK:
-        sys.stdout.write(str(msg) + "\n")
+        sys.stdout.write(line + "\n")
         sys.stdout.flush()
+
+
+def _bench_thread(target, args: tuple) -> threading.Thread:
+    ctx = _bench_ctx()
+
+    def _run() -> None:
+        if ctx is not None:
+            _BENCH_CTX.ctx = ctx
+        target(*args)
+
+    return threading.Thread(target=_run)
 # Temporary diagnostic prints must use prefix [DEBUG], not [INFO]/[OK]/[WARN].
 
 
@@ -1932,6 +1945,8 @@ def _run_toolkit_item(
             user_agent=spec.get("user_agent") or "",
             referer=spec.get("referer") or "",
         )
+        if apk_url:
+            result["used_url"] = apk_url
         if apk_found:
             _marks, kept = _dedupe_proxies(apk_found, seen, prefix=prefix)
             result["direct"] = kept
@@ -2043,9 +2058,10 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                 packed = job.get("packed") or {}
             else:
                 packed = _run_toolkit_item(source, spec, source_seen)
+            if packed.get("used_url"):
+                used_url = packed.get("used_url") or used_url
             if packed.get("direct"):
                 source_found.extend(packed["direct"])
-                used_url = packed.get("used_url") or used_url
                 continue
             if not packed.get("ok"):
                 continue
@@ -4584,6 +4600,7 @@ def _discover_toolkit_encrypted_apk(
     work = Path(tempfile.mkdtemp(prefix=f"{kind}-"))
     tried = 0
     last_err = ""
+    archive_url = ""
     try:
         opened = False
         for archive, unpack, archive_url in _toolkit_iter_packages(
@@ -4708,7 +4725,7 @@ def _discover_toolkit_encrypted_apk(
             print(f"[WARN] toolkit {kind} discovery failed | reason=no archive | url={page_url}")
         else:
             print(f"[WARN] toolkit {kind} discovery failed | reason={format_reason(None, last_err or 'failed')} | url={page_url}")
-        return [], ""
+        return [], archive_url if opened else ""
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -5148,8 +5165,10 @@ def prepare_geo_score() -> None:
                 import maxminddb
                 _GEOIP_READER = maxminddb.open_database(str(mmdb_path))
                 files.append(mmdb_path.name)
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[WARN] geo mmdb open failed | reason={format_reason(exc)}")
+        else:
+            print("[WARN] geo mmdb missing | file=country.mmdb")
     if not _GEO_COORDS:
         package = _toolkit_fetch_package(
             "https://github.com/mledoze/countries",
@@ -6148,12 +6167,16 @@ def _flush_toolkit_job_logs(job: dict[str, Any], printed: list[int]) -> None:
         lines = _capture_chunks_to_lines(list(chunks))
     else:
         lines = list(job.get("logs") or [])
-    if printed[0] < len(lines):
-        for line in lines[printed[0]:]:
-            print(line)
-        printed[0] = len(lines)
-        if not job.get("done"):
-            _arm_download_front()
+    seen = job.setdefault("_flushed", [])
+    start = len(seen)
+    for line in lines:
+        if line in seen:
+            continue
+        print(line)
+        seen.append(line)
+    printed[0] = max(printed[0], start, len(lines))
+    if not job.get("done") and len(seen) > start:
+        _arm_download_front()
 
 
 def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
@@ -6499,6 +6522,45 @@ def _benchmark_batch(
                 _TEST_DONE += 1
         return []
 
+    reason = _mihomo_reason(error)
+    config_bad = "parse config error" in str(error or "").lower() or "invalid" in reason.lower()
+    if not config_bad:
+        time.sleep(0.4)
+        process, error = _start_mihomo_for_batch(
+            engine, work, local_config, local_url, local_port, proxies, branch=branch
+        )
+        if process is not None:
+            try:
+                kept, leftover = run_delay_tests(local_url, proxies, branch=branch)
+            finally:
+                _stop_process(process)
+            if leftover:
+                return kept + _benchmark_reshard(
+                    engine, temp_dir, config_path, controller_url, controller_port, leftover, branch
+                )
+            return kept
+        reason = _mihomo_reason(error)
+        config_bad = "parse config error" in str(error or "").lower() or "invalid" in reason.lower()
+    if not config_bad:
+        _bench_log(
+            f"[WARN] batch start failed | size={len(proxies)} {{{branch}}} | reason={reason or 'controller not ready'}"
+        )
+        parts_n = 2 if len(proxies) > 1 else 1
+        size = (len(proxies) + parts_n - 1) // parts_n
+        chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
+        ids = [_alloc_branch() for _ in chunks]
+        bits = " + ".join(f"{len(chunk)} {{{child}}}" for chunk, child in zip(chunks, ids))
+        _bench_log(
+            f"[WARN] batch start failed | size={len(proxies)} {{{branch}}} | split={bits}"
+        )
+        out: list[ProxyMetric] = []
+        for chunk, child in zip(chunks, ids):
+            out.extend(
+                _benchmark_batch(
+                    engine, temp_dir, config_path, controller_url, controller_port, chunk, branch=child
+                )
+            )
+        return out
     parts_n = _start_fail_parts(len(proxies))
     size = (len(proxies) + parts_n - 1) // parts_n
     chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
@@ -6515,7 +6577,7 @@ def _benchmark_batch(
         )
 
     workers = [
-        threading.Thread(target=_run, args=(index, chunk, child))
+        _bench_thread(_run, (index, chunk, child))
         for index, (chunk, child) in enumerate(zip(chunks, ids))
     ]
     for worker in workers:
@@ -6562,7 +6624,7 @@ def _benchmark_reshard(
         )
 
     workers = [
-        threading.Thread(target=_run, args=(index, chunk, child))
+        _bench_thread(_run, (index, chunk, child))
         for index, (chunk, child) in enumerate(zip(chunks, ids))
     ]
     for worker in workers:
@@ -6574,8 +6636,6 @@ def _benchmark_reshard(
 
 def _print_front_assets() -> None:
     global _FRONT_ASSETS_PRINTED, _SEP_JUST_PRINTED
-    _SEP_JUST_PRINTED = False
-    print_sep()
     find_or_install_mihomo()
     prepare_geo_score()
     _FRONT_ASSETS_PRINTED = True
