@@ -11,14 +11,14 @@ on:
         default: ""
         type: string
       KILL:
-        description: "传入任意值则终止现有并新跑，留空则排队"
+        description: "Any non-empty value cancels the running run and starts this one. Leave empty to queue."
         required: false
         default: ""
         type: string
 
 # touch: re-register schedule
 concurrency:
-  group: autotest-clash
+  group: 'autotest-clash'
   cancel-in-progress: ${{ github.event.inputs.KILL != '' }}
 
 jobs:
