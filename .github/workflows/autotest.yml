@@ -36,6 +36,34 @@ jobs:
         with:
           # 确保能推送
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            generator-github.py
+            clash.yaml
+            .github
+
+      - name: Fetch latest raw
+        run: |
+          mkdir -p history
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+          url = "https://api.github.com/repos/FlyingDashie/Free-node-autotest/contents/history?ref=main"
+          req = urllib.request.Request(url, headers={"User-Agent": "autotest", "Accept": "application/vnd.github+json"})
+          with urllib.request.urlopen(req, timeout=30) as resp:
+              items = json.load(resp)
+          raws = [item for item in items if item.get("name", "").endswith(".yaml") and "-raw-" in item.get("name", "")]
+          raws.sort(key=lambda item: item.get("name", ""))
+          if not raws:
+              print("[INFO] no previous raw")
+              raise SystemExit(0)
+          item = raws[0]
+          dest = Path("history") / item["name"]
+          urllib.request.urlretrieve(item["download_url"], dest)
+          print(f"[INFO] previous raw {dest.name} size={dest.stat().st_size}")
+          PY
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -69,8 +97,12 @@ jobs:
           print("pip install " + " ".join(pkgs))
           subprocess.check_call([sys.executable, "-m", "pip", "install", *pkgs])
           PY
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full unrar || sudo apt-get install -y p7zip-full
+          if command -v 7z >/dev/null 2>&1; then
+            echo "[INFO] 7z present, skip apt"
+          else
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full unrar || sudo apt-get install -y p7zip-full
+          fi
 
       - name: Apply extra env
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.extra_env != ''
