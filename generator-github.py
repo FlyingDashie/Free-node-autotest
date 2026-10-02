@@ -766,7 +766,17 @@ def _host_key(url: str) -> str:
     return (urlparse(str(url or "")).netloc or "").lower() or "-"
 
 
-def _host_fetch_slot(url: str) -> threading.Semaphore:
+class _SlotBypass:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *_args: Any) -> bool:
+        return False
+
+
+def _host_fetch_slot(url: str) -> Any:
+    if threading.current_thread().name == "prefetch-mihomo":
+        return _SlotBypass()
     host = _host_key(url)
     with _HOST_FETCH_LOCK:
         slot = _HOST_FETCH_SLOTS.get(host)
