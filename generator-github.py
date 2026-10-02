@@ -128,6 +128,7 @@ _TEST_DONE = 0
 _LAT_TABLE: dict[str, int] = {}
 _TEST_LOCK = threading.Lock()
 _BENCH_LIMIT = 6
+_BENCH_SPLIT_AT = 32
 _BENCH_SLOTS = threading.Semaphore(_BENCH_LIMIT)
 _BENCH_INUSE = 0
 _BENCH_INUSE_LOCK = threading.Lock()
@@ -2000,10 +2001,7 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                 candidates = unique_ordered(first_pages + list(candidates))
         elif url.startswith("discover:toolkit:"):
             job = _take_toolkit_job(source)
-            if job:
-                for line in job.get("logs") or []:
-                    if line:
-                        print(line)
+            if job and job.get("done"):
                 packed = job.get("packed") or {}
             else:
                 packed = _run_toolkit_item(source, spec, source_seen)
@@ -2068,13 +2066,14 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                 try:
                     body = fetch_text(
                         url,
-                        retries=CFG_FETCH_RETRIES,
+                        retries=0,
                         user_agent=ua,
                         referer=ref,
-                        timeout=SOURCE_TIMEOUT,
+                        timeout=CFG_FETCH_TIMEOUT,
                     )
                     return url, body, ""
                 except Exception as exc:
+                    print(f"[WARN] source try failed | reason={exc} | url={url}")
                     return url, None, str(exc)
 
             def _fetch_pool(urls: list[str]) -> dict[str, str]:
@@ -6442,7 +6441,7 @@ def _benchmark_batch(
             _TEST_DONE += 1
         return []
 
-    parts_n = _start_fail_parts(len(proxies))
+    parts_n = _engine_parts(len(proxies))
     size = (len(proxies) + parts_n - 1) // parts_n
     chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
     ids = [_alloc_branch() for _ in chunks]
@@ -6468,12 +6467,12 @@ def _benchmark_batch(
     return _flatten_metrics(parts)
 
 
-def _start_fail_parts(n: int) -> int:
+def _engine_parts(n: int) -> int:
     if n <= 1:
         return 1
-    if n <= 500:
-        return 2
-    return max(2, min(_BENCH_LIMIT, n))
+    if n <= _BENCH_LIMIT:
+        return n
+    return _BENCH_LIMIT
 
 
 def _benchmark_reshard(
@@ -6485,11 +6484,11 @@ def _benchmark_reshard(
     proxies: list[dict[str, Any]],
     branch: str,
 ) -> list[ProxyMetric]:
-    if len(proxies) <= 32:
+    if len(proxies) <= _BENCH_SPLIT_AT:
         return _benchmark_batch(
             engine, temp_dir, config_path, controller_url, controller_port, proxies, branch=branch
         )
-    parts_n = 2 if len(proxies) <= 500 else max(2, min(_BENCH_LIMIT, len(proxies)))
+    parts_n = _engine_parts(len(proxies))
     size = (len(proxies) + parts_n - 1) // parts_n
     chunks = [proxies[i:i + size] for i in range(0, len(proxies), size)]
     ids = [_alloc_branch() for _ in chunks]
@@ -6533,11 +6532,19 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
         _TEST_TOTAL = len(proxies)
         _TEST_DONE = 0
         _BRANCH_NEXT = 2
-        metrics = _flatten_metrics(
-            _benchmark_batch(
-                engine, temp_dir, config_path, controller_url, controller_port, list(proxies), branch="1"
+        batch = list(proxies)
+        if len(batch) > _BENCH_SPLIT_AT:
+            metrics = _flatten_metrics(
+                _benchmark_reshard(
+                    engine, temp_dir, config_path, controller_url, controller_port, batch, branch="1"
+                )
             )
-        )
+        else:
+            metrics = _flatten_metrics(
+                _benchmark_batch(
+                    engine, temp_dir, config_path, controller_url, controller_port, batch, branch="1"
+                )
+            )
         if _DROP_NAMES:
             tallies: dict[str, int] = {}
             order: list[str] = []
@@ -6594,8 +6601,8 @@ def run_delay_tests(controller_url: str, proxies: list[dict[str, Any]], branch: 
                 alone = _BENCH_INUSE <= 1
             if (
                 alone
-                and rest > 32
-                and len(pending) > 32
+                and rest > _BENCH_SPLIT_AT
+                and len(pending) > _BENCH_SPLIT_AT
                 and completed != len(futures)
             ):
                 leftover = [item for item in proxies if id(item) in pending]
