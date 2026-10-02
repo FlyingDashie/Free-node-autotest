@@ -263,6 +263,11 @@ def _busy_watch() -> None:
             continue
 
 
+def _link_missing(exc: BaseException | str) -> bool:
+    text = str(exc)
+    return "404" in text or "Not Found" in text
+
+
 def _note_debug(
     exc: BaseException | str,
     *,
@@ -2128,7 +2133,8 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                     )
                     return url, body, ""
                 except Exception as exc:
-                    print(f"[WARN] source try failed | reason={exc} | url={url}")
+                    if not _link_missing(exc):
+                        print(f"[WARN] source try failed | reason={exc} | url={url}")
                     return url, None, str(exc)
 
             def _fetch_pool(urls: list[str]) -> dict[str, str]:
@@ -2199,7 +2205,8 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
                 try:
                     text = fetch_text(url, user_agent=ua, referer=ref)
                 except Exception as exc:
-                    print(f"[WARN] source try failed | reason={format_reason(exc)} | url={url}")
+                    if not _link_missing(exc):
+                        print(f"[WARN] source try failed | reason={format_reason(exc)} | url={url}")
                     continue
                 if _ingest(url, text):
                     break
