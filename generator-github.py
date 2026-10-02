@@ -191,7 +191,7 @@ _FETCH_INFLIGHT_LOCK = threading.Lock()
 _FETCH_DONE: dict[str, tuple[str | None, str]] = {}
 _HOST_FETCH_SLOTS: dict[str, threading.Semaphore] = {}
 _HOST_FETCH_LOCK = threading.Lock()
-_HOST_FETCH_LIMIT = 8
+_HOST_FETCH_LIMIT = 24
 _HOST_FAIL_N: dict[str, int] = {}
 _HOST_SLOW: dict[str, threading.Lock] = {}
 _SCAN_BUSY = 0
@@ -4632,9 +4632,10 @@ def _discover_toolkit_encrypted_apk(
                     left[gi] -= 1
                     if left[gi] != 0:
                         continue
-                    parsed = _extract_proxies_pool([item[3] for item in plains_g[gi]])
+                    plains = list(plains_g[gi])
+                    parsed = _extract_proxies_pool([item[3] for item in plains]) if plains else []
                     group_hits: list[tuple[str, list[str], int]] = []
-                    for (_url, short, fname, _plain), found in zip(plains_g[gi], parsed):
+                    for (_url, short, fname, _plain), found in zip(plains, parsed):
                         if not found:
                             continue
                         marks, kept = _dedupe_proxies(found, seen)
