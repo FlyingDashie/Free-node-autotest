@@ -5194,6 +5194,10 @@ def find_or_install_mihomo() -> Path:
         with _busy("wait mihomo prefetch"):
             _MIHOMO_PREFETCH_DONE.wait()
         pending = _FOLLOWUP_LOGS.pop("find_or_install_mihomo", None) or []
+        _note_debug(
+            f"replay | logs={len(pending)} | failed={_MIHOMO_PREFETCH_FAILED}",
+            where="prefetch-mihomo",
+        )
         for line in pending:
             print(line)
         cached = _FOLLOWUP_RESULT.get("find_or_install_mihomo")
@@ -6063,19 +6067,29 @@ def _prefetch_toolkit_assets() -> None:
             jobs.append(source)
         def _run_mihomo() -> None:
             global _MIHOMO_PREFETCH_FAILED
+            started = time.time()
             _MIHOMO_PREFETCH_STARTED.set()
+            _note_debug("started", where="prefetch-mihomo")
             chunks: list[str] = []
             _LOG_CAPTURE.buf = chunks
+            token = _CAPTURE_BUF.set(chunks)
             try:
                 result = find_or_install_mihomo()
                 _FOLLOWUP_RESULT["find_or_install_mihomo"] = result
                 if not isinstance(result, Path) or not result.exists():
                     _MIHOMO_PREFETCH_FAILED = True
-            except Exception:
+            except Exception as exc:
                 _MIHOMO_PREFETCH_FAILED = True
+                _note_debug(exc, where="prefetch-mihomo")
             finally:
                 _LOG_CAPTURE.buf = None
-            _FOLLOWUP_LOGS["find_or_install_mihomo"] = _capture_chunks_to_lines(chunks)
+                _CAPTURE_BUF.reset(token)
+            lines = _capture_chunks_to_lines(chunks)
+            _FOLLOWUP_LOGS["find_or_install_mihomo"] = lines
+            _note_debug(
+                f"done | failed={_MIHOMO_PREFETCH_FAILED} | logs={len(lines)} | elapsed={time.time()-started:.1f}s",
+                where="prefetch-mihomo",
+            )
             _MIHOMO_PREFETCH_DONE.set()
 
         mihomo = threading.Thread(target=_run_mihomo, name="prefetch-mihomo", daemon=True)
@@ -6101,6 +6115,7 @@ def _prefetch_toolkit_assets() -> None:
                 lines = _capture_chunks_to_lines(chunks)
                 name = getattr(step, "__name__", str(step))
                 _FOLLOWUP_LOGS[name] = lines
+                _note_debug(f"done | logs={len(lines)}", where=f"prefetch-{name}")
 
         follow = threading.Thread(target=_run_followups, name="prefetch-followup", daemon=True)
         follow.start()
@@ -6243,14 +6258,20 @@ def _prefetch_toolkit_source(source: dict[str, Any]) -> None:
         _CAPTURE_BUF.reset(token)
         _PREFETCH_QUIET.on = False
         with _TOOLKIT_JOB_LOCK:
+            logs = _capture_chunks_to_lines(chunks)
             _TOOLKIT_JOBS[key] = {
                 "event": event,
                 "done": True,
                 "failed": failed,
-                "logs": _capture_chunks_to_lines(chunks),
+                "logs": logs,
                 "packed": packed,
             }
         event.set()
+        _note_debug(
+            f"done | failed={failed} | logs={len(logs)} | ok={bool(packed.get('ok'))}",
+            where="prefetch-toolkit",
+            source=key,
+        )
 
 
 def start_prefetch() -> None:
