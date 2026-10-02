@@ -1,8 +1,6 @@
-name: Free Node Autotest
+name: 终止现有并新跑一个
 
 on:
-  repository_dispatch:
-    types: [trigger-clash-generation]
   workflow_dispatch:
     inputs:
       extra_env:
@@ -11,10 +9,9 @@ on:
         default: ""
         type: string
 
-# touch: re-register schedule
 concurrency:
   group: autotest-clash
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   generate:

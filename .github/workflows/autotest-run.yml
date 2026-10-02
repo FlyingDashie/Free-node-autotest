@@ -1,0 +1,197 @@
+name: Free Node Autotest Run
+
+on:
+  workflow_call:
+    inputs:
+      extra_env:
+        description: "Extra env vars, one KEY=VALUE per line"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    permissions:
+      contents: write   # 需要写回仓库权限
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 确保能推送
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: generator-github.py
+
+      - name: Install dependencies
+        run: |
+          python3 - <<'PY'
+          import ast
+          import pathlib
+          import subprocess
+          import sys
+
+          path = pathlib.Path("generator-github.py")
+          tree = ast.parse(path.read_text(encoding="utf-8"))
+          pkgs = []
+          for node in tree.body:
+              if not isinstance(node, ast.Assign):
+                  continue
+              names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+              if not any(name in {"_REQUIRED_PACKAGES", "_OPTIONAL_PACKAGES"} for name in names):
+                  continue
+              data = ast.literal_eval(node.value)
+              pkgs.extend(str(item) for item in data.values())
+          pkgs = sorted(set(pkgs))
+          if not pkgs:
+              raise SystemExit("no packages declared in generator-github.py")
+          print("pip install " + " ".join(pkgs))
+          subprocess.check_call([sys.executable, "-m", "pip", "install", *pkgs])
+          PY
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full unrar || sudo apt-get install -y p7zip-full
+
+      - name: Apply extra env
+        if: inputs.extra_env != ''
+        env:
+          EXTRA_ENV: ${{ inputs.extra_env }}
+        run: |
+          python3 - <<'PY'
+          import os
+          text = os.environ.get("EXTRA_ENV") or ""
+          path = os.environ["GITHUB_ENV"]
+          with open(path, "a", encoding="utf-8") as fh:
+              for raw in text.splitlines():
+                  line = raw.strip()
+                  if not line or line.startswith("#") or "=" not in line:
+                      continue
+                  key, _, val = line.partition("=")
+                  key = key.strip()
+                  if not key:
+                      continue
+                  fh.write(f"{key}={val}\n")
+                  print(f"[INFO] extra env {key}")
+          PY
+
+      - name: Run generator and capture log
+        id: run
+        run: |
+          mkdir -p output history
+          RUN_DATE=$(date -u +%Y%m%d)
+          RUN_HM=$(date -u +%H%M)
+          RUN_TIME="$RUN_HM-$RUN_DATE"
+          INV=$((999999999999 - 10#$RUN_DATE$RUN_HM))
+          echo "RUN_TIME=$RUN_TIME" >> $GITHUB_ENV
+          echo "INV=$INV" >> $GITHUB_ENV
+          export PYTHONUNBUFFERED=1
+          stdbuf -oL -eL python -u generator-github.py 2>&1 | stdbuf -oL -eL tee "history/"$INV"-log-"$RUN_TIME".log"
+          if [ ! -f output/clash.yaml ]; then
+            echo "生成失败，output/clash.yaml 不存在"
+            exit 1
+          fi
+          
+      - name: Prepare files
+        run: |
+          # 1. 覆盖仓库根目录的最新文件
+          cp output/clash.yaml ./clash.yaml
+
+          # 2. raw/clash/scored 由 generator-github.py 直接写入 history
+          # 2.5 旧文件名改成 INV-kind-HHMM-YYYYMMDD.ext
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          hist = Path("history")
+          kinds = r"run|log|clash|raw|scored"
+          target_re = re.compile(rf"^\d+-(?:{kinds})-\d{{4}}-20\d{{6}}\.(?:log|yaml)$")
+          patterns = [
+              re.compile(rf"^(?P<inv>\d+)-(?P<date>20\d{{6}})-(?P<hm>\d{{4}})-(?P<kind>{kinds})\.(?P<ext>log|yaml)$"),
+              re.compile(rf"^(?P<inv>\d+)-(?P<kind>{kinds})-(?P<date>20\d{{6}})-(?P<hm>\d{{4}})\.(?P<ext>log|yaml)$"),
+              re.compile(rf"^(?P<kind>{kinds})-(?P<date>20\d{{6}})-(?P<hm>\d{{4}})\.(?P<ext>log|yaml)$"),
+          ]
+          if hist.is_dir():
+              for p in list(hist.iterdir()):
+                  if not p.is_file() or target_re.match(p.name):
+                      continue
+                  parsed = None
+                  for pat in patterns:
+                      match = pat.match(p.name)
+                      if match:
+                          parsed = match.groupdict()
+                          break
+                  if not parsed:
+                      print(f" skip unknown {p.name}")
+                      continue
+                  date, hm, kind, ext = parsed["date"], parsed["hm"], parsed["kind"], parsed["ext"]
+                  inv = str(999999999999 - int(date + hm))
+                  new_name = f"{inv}-{kind}-{hm}-{date}.{ext}"
+                  dest = p.with_name(new_name)
+                  if dest.exists() and dest.resolve() != p.resolve():
+                      print(f" skip exists {p.name} -> {new_name}")
+                      continue
+                  p.rename(dest)
+                  print(f" renamed {p.name} -> {new_name}")
+          PY
+
+          # 3. 清理超过 48 小时的历史文件（按文件名时间）
+          python3 - <<'PY'
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+          import re
+
+          cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+          hist = Path("history")
+          removed = []
+
+          def history_file_stamp(name):
+              match = re.search(r"(\d{4})-(20\d{6})", name)
+              if match:
+                  return match.group(2) + match.group(1)
+              match = re.search(r"(20\d{6})-(\d{4})", name)
+              if match:
+                  return match.group(1) + match.group(2)
+              return ""
+
+          if hist.is_dir():
+              for p in hist.iterdir():
+                  if not p.is_file():
+                      continue
+                  stamp = history_file_stamp(p.name)
+                  if not stamp:
+                      continue
+                  try:
+                      ts = datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+                  except ValueError:
+                      continue
+                  if ts < cutoff:
+                      p.unlink(missing_ok=True)
+                      removed.append(p.name)
+          print(f"cutoff_utc={cutoff.strftime('%Y%m%d-%H%M')} removed={len(removed)}")
+          for name in sorted(removed):
+              print(f" deleted {name}")
+          PY
+          
+          echo "当前 history 目录内容："
+          ls -lh history/ || true
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A clash.yaml history/
+
+          if git diff --staged --quiet; then
+            echo "没有文件变更，跳过提交"
+          else
+            git commit -m "Auto update clash.yaml + history ${RUN_TIME}"
+            git pull --rebase origin main
+            git push
+          fi
