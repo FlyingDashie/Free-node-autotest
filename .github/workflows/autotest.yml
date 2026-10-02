@@ -10,8 +10,8 @@ on:
         required: false
         default: ""
         type: string
-      KILL:
-        description: "Any non-empty value cancels the running run and starts this one. Leave empty to queue."
+      mode:
+        description: "Contains queue to keep the running run. Empty or any other value cancels it."
         required: false
         default: ""
         type: string
@@ -19,7 +19,7 @@ on:
 # touch: re-register schedule
 concurrency:
   group: 'autotest-clash'
-  cancel-in-progress: ${{ github.event.inputs.KILL != '' }}
+  cancel-in-progress: ${{ !contains(github.event.inputs.mode, 'queue') }}
 
 jobs:
   generate:
@@ -28,7 +28,7 @@ jobs:
     permissions:
       contents: write   # 需要写回仓库权限
     env:
-      KILL: ${{ github.event.inputs.KILL }}
+      mode: ${{ github.event.inputs.mode }}
 
     steps:
       - name: Checkout
