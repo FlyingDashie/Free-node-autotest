@@ -5200,10 +5200,12 @@ def prepare_geo_score() -> None:
         _ensure_geo_coords(json_path)
         if json_path is not None and json_path.is_file():
             files.append(json_path.name)
-            src = package.name if package is not None else json_path.name
-            print(f"[OK] toolkit found | file={json_path.name} | from={src}")
-    names = ", ".join(files) if files else "-"
-    _GEO_READY_LOG = f"[OK] geo score ready | files={names} | centroids={len(_GEO_COORDS)}"
+    alias_n, catalog_files = _load_name_catalog(work)
+    files.extend(catalog_files)
+    names = ", ".join(dict.fromkeys(files)) if files else "-"
+    _GEO_READY_LOG = (
+        f"[OK] geo score ready | files={names} | centroids={len(_GEO_COORDS)} | aliases={alias_n}"
+    )
     print(_GEO_READY_LOG)
 
 
@@ -6875,6 +6877,90 @@ def _lookup_ip_geo(addr: str) -> tuple[str, tuple[float, float] | None, str] | N
     return group, coords, code
 
 
+_NAME_EXTRA: list[tuple[str, re.Pattern[str]]] = []
+
+
+def _flag_chars(code: str) -> str:
+    code = str(code or "").upper()
+    if len(code) != 2 or not code.isalpha():
+        return ""
+    return "".join(chr(0x1F1E6 + ord(ch) - 65) for ch in code)
+
+
+def _remember_alias(bucket: dict[str, set[str]], code: str, alias: str) -> None:
+    code = str(code or "").upper()
+    alias = str(alias or "").strip()
+    if len(code) != 2 or not code.isalpha() or len(alias) < 2:
+        return
+    if alias.upper() in {"CN", "US", "HK", "JP", "SG", "KR", "TW", "DE", "GB", "UK", "NL", "FR", "CA", "AU", "RU", "IN", "TR", "SE", "FI", "IR"}:
+        return
+    bucket.setdefault(code, set()).add(alias)
+
+
+def _load_name_catalog(work: Path) -> tuple[int, list[str]]:
+    global _NAME_EXTRA
+    if _NAME_EXTRA:
+        return sum(1 for _code, _pat in _NAME_EXTRA), []
+    aliases: dict[str, set[str]] = {}
+    catalog_files: list[str] = []
+    package = _toolkit_fetch_package(
+        "https://github.com/pycountry/pycountry",
+        work,
+        prefer=["iso3166-1.json"],
+    )
+    iso_path = _toolkit_named_file(package, work, "iso3166-1.json")
+    if iso_path is not None and iso_path.is_file():
+        try:
+            payload = json.loads(iso_path.read_text(encoding="utf-8"))
+            rows = payload.get("3166-1") if isinstance(payload, dict) else payload
+            for row in rows or []:
+                if not isinstance(row, dict):
+                    continue
+                code = str(row.get("alpha_2") or "")
+                _remember_alias(aliases, code, str(row.get("name") or ""))
+                _remember_alias(aliases, code, str(row.get("official_name") or ""))
+                _remember_alias(aliases, code, str(row.get("common_name") or ""))
+            catalog_files.append(iso_path.name)
+        except Exception as exc:
+            _note_debug(exc, where="name-catalog", url="https://github.com/pycountry/pycountry")
+    package = _toolkit_fetch_package(
+        "https://github.com/umpirsky/country-list",
+        work,
+        prefer=["country.json"],
+    )
+    zh_path = None
+    if package is not None and package.is_file():
+        unpacked = work / f"{package.stem}_zh"
+        os.makedirs(str(unpacked), exist_ok=True)
+        if not any(unpacked.iterdir()):
+            _extract_archive(package, unpacked)
+        found = [item for item in unpacked.rglob("country.json") if "/zh/" in str(item).replace("\\", "/")]
+        zh_path = found[0] if found else None
+    if zh_path is not None and zh_path.is_file():
+        try:
+            payload = json.loads(zh_path.read_text(encoding="utf-8"))
+            for code, alias in (payload or {}).items():
+                _remember_alias(aliases, str(code), str(alias))
+            catalog_files.append(zh_path.name)
+        except Exception as exc:
+            _note_debug(exc, where="name-catalog", url="https://github.com/umpirsky/country-list")
+    compiled: list[tuple[str, re.Pattern[str]]] = []
+    for code, words in aliases.items():
+        flag = _flag_chars(code)
+        parts = []
+        if flag:
+            parts.append(re.escape(flag))
+        for word in sorted(words, key=len, reverse=True):
+            if re.search(r"[A-Za-z]", word) and len(word) < 4:
+                continue
+            parts.append(re.escape(word))
+        if not parts:
+            continue
+        compiled.append((code, re.compile("|".join(parts), re.I)))
+    _NAME_EXTRA = compiled
+    return sum(len(words) for words in aliases.values()), catalog_files
+
+
 def _name_iso_hits(name: str) -> list[tuple[int, str]]:
     text = str(name or "")
     patterns = (
@@ -6901,6 +6987,9 @@ def _name_iso_hits(name: str) -> list[tuple[int, str]]:
     hits: list[tuple[int, str]] = []
     for code, pat in patterns:
         for m in re.finditer(pat, text, re.I):
+            hits.append((m.start(), code))
+    for code, pat in _NAME_EXTRA:
+        for m in pat.finditer(text):
             hits.append((m.start(), code))
     hits.sort()
     return hits
