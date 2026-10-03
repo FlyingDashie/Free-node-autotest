@@ -1,36 +1,160 @@
 from __future__ import annotations
+SOURCE_GROUPS = [
+    {
+        "name": "大FQ运动",
+        "primary": [
+            "discover:sublink:https://end-gfw.com",
+            "https://end-gfw.com/ss-key",
+            "discover:sublink:https://github.com/hello-world-1989/cn-news",
+        ],
+        "referer": "https://end-gfw.com",
+        "bare_link": "all",
+    },
+    {
+        "name": "Pawdroid",
+        "primary": "discover:sublink:https://github.com/Pawdroid/Free-servers",
+    },
+    {
+        "name": "FreeV2-Base64",
+        "primary": "https://xmxosfepggzm.503403.xyz",
+    },
+    {
+        "name": "Bocchi2b-Base64",
+        "primary": "https://links.bocchi2b.top/clash",
+        "user_agent": "Chrome",
+    },
+    {
+        "name": "Freesocks",
+        "primary": [
+            "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
+            "https://freesocks.org/api/v1/sub/4cae35810e6f5c4d92e28e32104e0080",
+        ],
+    },
+    {
+        "name": "NekoWarp",
+        "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
+    },
+    {
+        "name": "OpenRunner-RSS",
+        "primary": "discover:article:https://free.datiya.com",
+        "bare_link": "none",
+    },
+    {
+        "name": "V2Rayshare-RSS",
+        "primary": [
+            "discover:article:https://v2rayshare.com",
+            "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription",
+        ],
+        "bare_link": "none",
+    },
+    {
+        "name": "Mibei77-RSS",
+        "primary": "discover:article:https://www.mibei77.com",
+        "bare_link": "none",
+    },
+    {
+        "name": "Yoyapai-RSS",
+        "primary": "discover:article:https://yoyapai.com",
+        "bare_link": "none",
+    },
+    {
+        "name": "免费节点1",
+        "primary": "discover:sublink:https://github.com/free18/v2ray",
+    },
+    {
+        "name": "免费节点2",
+        "primary": "discover:sublink:https://github.com/ermaozi/get_subscribe",
+    },
+    {
+        "name": "免费节点3",
+        "primary": "discover:sublink:https://github.com/sunmiao4458/free-proxy-airport",
+    },
+    {
+        "name": "免费节点4",
+        "primary": "discover:sublink:https://github.com/mfuu/FreeProxies",
+    },
+    {
+        "name": "免费节点5",
+        "primary": "discover:sublink:https://github.com/vxiaov/free_proxies",
+    },
+    {
+        "name": "免费节点6",
+        "primary": "discover:sublink:https://github.com/anaer/Sub",
+    },
+    {
+        "name": "免费节点7",
+        "primary": "discover:sublink:https://github.com/snakem982/proxypool",
+    },
+    {
+        "name": "免费节点8",
+        "primary": "discover:sublink:https://github.com/mahdibland/V2RayAggregator",
+    },
+    {
+        "name": "免费节点9",
+        "primary": "discover:sublink:https://github.com/w1770946466/Auto_proxy",
+        "bare_link": "all",
+    },
+    {
+        "name": "免费节点10",
+        "primary": "discover:sublink:https://github.com/PuddinCat/BestClash",
+    },
+    {
+        "name": "免费节点11",
+        "primary": "discover:sublink:https://github.com/kooker/FreeSubsCheck",
+    },
+    {
+        "name": "ChromeGO-Toolkit",
+        "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang",
+        "prefer": "ChromeGo",
+    },
+    {
+        "name": "ChromeGO-ShiteThings",
+        "primary": "discover:sublink:https://github.com/ShiteThings/extractNodes",
+    },
+    {
+        "name": "ChromeGO-Merge",
+        "primary": [
+            "discover:sublink:https://github.com/shangui999/chromego_merge",
+            "discover:sublink:https://github.com/yaney01/chromego",
+            "discover:sublink:https://github.com/Misaka-blog/chromego_merge",
+        ],
+    },
+    {
+        "name": "Pawdroid-SR-APK",
+        "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android",
+        "prefer": "apk",
+    },
+    {
+        "name": "Pawdroid-SS-APK",
+        "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com",
+        "prefer": "apk",
+    },
+    {
+        "name": "1VPN-CRX",
+        "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
+    },
+    {
+        "name": "Clashfree",
+        "primary": "discover:sublink:https://github.com/free-nodes/clashfree",
+    },
+    {
+        "name": "Epodonios",
+        "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs",
+    },
+    {
+        "name": "Free-clash-v2ray",
+        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
+    },
+    {
+        "name": "V2rayclashfree-RSS",
+        "primary": "discover:article:https://v2rayclashfree.com",
+        "bare_link": "none",
+    },
+]
 
-from contextlib import contextmanager
 
-import base64
-import contextvars
-import gzip
-import hashlib
-import html
-import importlib.util
-import inspect
-import json
-import math
-import os
-import platform
-import random
-import re
-import shutil
-import socket
-import stat
-import subprocess
-import sys
-import tempfile
-import threading
-import time
-import zipfile
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-import multiprocessing
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse, urlunparse
+DEBUG_ONLY_SOURCES = []
+PROXIES = None
 
 try:
     sys.stdout.reconfigure(line_buffering=True)
@@ -111,8 +235,38 @@ import requests
 import urllib3
 import yaml
 
-# 代理设置（Clash 的 HTTP 端口）
-PROXIES = None
+
+from contextlib import contextmanager
+
+import base64
+import contextvars
+import gzip
+import hashlib
+import html
+import importlib.util
+import inspect
+import json
+import math
+import os
+import platform
+import random
+import re
+import shutil
+import socket
+import stat
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import zipfile
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+import multiprocessing
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse, urlunparse
 
 # 关闭 SSL 警告（配合 verify=False）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -492,162 +646,7 @@ MAX_WORKERS = int(os.getenv("FREE_NODE_AUTOTEST_MAX_WORKERS", "100"))
 MAX_CANDIDATES = int(os.getenv("FREE_NODE_AUTOTEST_MAX_CANDIDATES", "0"))
 MAX_LIVE_PER_SOURCE = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_PER_SOURCE", "50"))
 MAX_LIVE_TOTAL = int(os.getenv("FREE_NODE_AUTOTEST_MAX_LIVE_TOTAL", "400"))
-DEBUG_ONLY_SOURCES = []
 _FILE_SCAN_WORKERS = 50
-
-SOURCE_GROUPS = [
-    {
-        "name": "大FQ运动",
-        "primary": [
-            "discover:sublink:https://end-gfw.com",
-            "https://end-gfw.com/ss-key",
-            "discover:sublink:https://github.com/hello-world-1989/cn-news",
-        ],
-        "referer": "https://end-gfw.com",
-        "bare_link": "all",
-    },
-    {
-        "name": "Pawdroid",
-        "primary": "discover:sublink:https://github.com/Pawdroid/Free-servers",
-    },
-    {
-        "name": "FreeV2-Base64",
-        "primary": "https://xmxosfepggzm.503403.xyz",
-    },
-    {
-        "name": "Bocchi2b-Base64",
-        "primary": "https://links.bocchi2b.top/clash",
-        "user_agent": "Chrome",
-    },
-    {
-        "name": "Freesocks",
-        "primary": [
-            "https://freesocks.org/api/v1/sub/02b897e8e77f19176b0b9f2c75864b00",
-            "https://freesocks.org/api/v1/sub/4cae35810e6f5c4d92e28e32104e0080",
-        ],
-    },
-    {
-        "name": "NekoWarp",
-        "primary": "https://neko-warp.nloli.xyz/neko_warp.yaml",
-    },
-    {
-        "name": "OpenRunner-RSS",
-        "primary": "discover:article:https://free.datiya.com",
-        "bare_link": "none",
-    },
-    {
-        "name": "V2Rayshare-RSS",
-        "primary": [
-            "discover:article:https://v2rayshare.com",
-            "discover:sublink:https://github.com/firefoxmmx2/v2rayshare_subcription",
-        ],
-        "bare_link": "none",
-    },
-    {
-        "name": "Mibei77-RSS",
-        "primary": "discover:article:https://www.mibei77.com",
-        "bare_link": "none",
-    },
-    {
-        "name": "Yoyapai-RSS",
-        "primary": "discover:article:https://yoyapai.com",
-        "bare_link": "none",
-    },
-    {
-        "name": "免费节点1",
-        "primary": "discover:sublink:https://github.com/free18/v2ray",
-    },
-    {
-        "name": "免费节点2",
-        "primary": "discover:sublink:https://github.com/ermaozi/get_subscribe",
-    },
-    {
-        "name": "免费节点3",
-        "primary": "discover:sublink:https://github.com/sunmiao4458/free-proxy-airport",
-    },
-    {
-        "name": "免费节点4",
-        "primary": "discover:sublink:https://github.com/mfuu/FreeProxies",
-    },
-    {
-        "name": "免费节点5",
-        "primary": "discover:sublink:https://github.com/vxiaov/free_proxies",
-    },
-    {
-        "name": "免费节点6",
-        "primary": "discover:sublink:https://github.com/anaer/Sub",
-    },
-    {
-        "name": "免费节点7",
-        "primary": "discover:sublink:https://github.com/snakem982/proxypool",
-    },
-    {
-        "name": "免费节点8",
-        "primary": "discover:sublink:https://github.com/mahdibland/V2RayAggregator",
-    },
-    {
-        "name": "免费节点9",
-        "primary": "discover:sublink:https://github.com/w1770946466/Auto_proxy",
-        "bare_link": "all",
-    },
-    {
-        "name": "免费节点10",
-        "primary": "discover:sublink:https://github.com/PuddinCat/BestClash",
-    },
-    {
-        "name": "免费节点11",
-        "primary": "discover:sublink:https://github.com/kooker/FreeSubsCheck",
-    },
-    {
-        "name": "ChromeGO-Toolkit",
-        "primary": "discover:toolkit:crg:https://github.com/bannedbook/fanqiang",
-        "prefer": "ChromeGo",
-    },
-    {
-        "name": "ChromeGO-ShiteThings",
-        "primary": "discover:sublink:https://github.com/ShiteThings/extractNodes",
-    },
-    {
-        "name": "ChromeGO-Merge",
-        "primary": [
-            "discover:sublink:https://github.com/shangui999/chromego_merge",
-            "discover:sublink:https://github.com/yaney01/chromego",
-            "discover:sublink:https://github.com/Misaka-blog/chromego_merge",
-        ],
-    },
-    {
-        "name": "Pawdroid-SR-APK",
-        "primary": "discover:toolkit:sr-apk:https://github.com/Pawdroid/shadowrocket_for_android",
-        "prefer": "apk",
-    },
-    {
-        "name": "Pawdroid-SS-APK",
-        "primary": "discover:toolkit:ss-apk:https://shadowshare.v2cross.com",
-        "prefer": "apk",
-    },
-    {
-        "name": "1VPN-CRX",
-        "primary": "discover:toolkit:1vpn-crx:https://chromewebstore.google.com/detail/free-vpn-proxy-1vpn/akcocjjpkmlniicdeemdceeajlmoabhg",
-    },
-    {
-        "name": "Clashfree",
-        "primary": "discover:sublink:https://github.com/free-nodes/clashfree",
-    },
-    {
-        "name": "Epodonios",
-        "primary": "discover:sublink:https://github.com/Epodonios/v2ray-configs",
-    },
-    {
-        "name": "Free-clash-v2ray",
-        "primary": "discover:sublink:https://github.com/free-clash-v2ray/free-clash-v2ray.github.io",
-    },
-    {
-        "name": "V2rayclashfree-RSS",
-        "primary": "discover:article:https://v2rayclashfree.com",
-        "bare_link": "none",
-    },
-]
-
 
 _kept_sources: list[dict[str, Any]] = []
 _debug_only = [
