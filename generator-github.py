@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-# 源表。改这里即可。
 SOURCE_GROUPS = [
     {
         "name": "大FQ运动",
@@ -156,7 +154,6 @@ SOURCE_GROUPS = [
 
 
 DEBUG_ONLY_SOURCES = []
-# 代理设置（Clash 的 HTTP 端口）
 PROXIES = None
 
 try:
