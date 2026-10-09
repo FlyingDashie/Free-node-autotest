@@ -5279,12 +5279,17 @@ def find_or_install_mihomo() -> Path:
         arch_tokens = ["armv7", "armv6"]
     else:
         raise RuntimeError(f"unsupported architecture for Mihomo download: {machine}")
-    package = _toolkit_fetch_package(
-        "https://github.com/MetaCubeX/mihomo",
-        install_dir,
-        prefer=[os_token, *arch_tokens, "mihomo", r"v\d+\.", "gz", "zip", "7z"],
-        verify_hash=True,
-    )
+    package = None
+    for _attempt in range(4):
+        package = _toolkit_fetch_package(
+            "https://github.com/MetaCubeX/mihomo",
+            install_dir,
+            prefer=[os_token, *arch_tokens, "mihomo", r"v\d+\.", "gz", "zip", "7z"],
+            verify_hash=True,
+        )
+        if package is not None:
+            break
+        time.sleep(2)
     if package is None:
         raise RuntimeError("no matching Mihomo release asset found")
     extracted = extract_mihomo_binary(package, install_dir)
@@ -5509,7 +5514,11 @@ def _confirm_downloaded_hash(path: Path) -> bool:
     name = path.name
     expected = list(_HASH_BY_NAME.get(name.lower()) or [])
     if not expected:
-        expected = _lookup_hashes(name, _LAST_CHECKSUM_LINKS)
+        for _wait in range(8):
+            expected = _lookup_hashes(name, _LAST_CHECKSUM_LINKS)
+            if expected:
+                break
+            time.sleep(1)
     expected = _merge_hash_pairs(expected)
     if not expected:
         print(f"[WARN] toolkit skip | reason=no hash | file={name}")
@@ -6097,12 +6106,26 @@ def _prefetch_toolkit_assets() -> None:
             token = _CAPTURE_BUF.set(chunks)
             try:
                 result = find_or_install_mihomo()
+                if not isinstance(result, Path) or not result.exists():
+                    time.sleep(3)
+                    result = find_or_install_mihomo()
                 _FOLLOWUP_RESULT["find_or_install_mihomo"] = result
                 if not isinstance(result, Path) or not result.exists():
                     _MIHOMO_PREFETCH_FAILED = True
             except Exception as exc:
-                _MIHOMO_PREFETCH_FAILED = True
                 _note_debug(exc, where="prefetch-mihomo")
+                result = None
+                for _retry in range(2):
+                    try:
+                        time.sleep(4)
+                        result = find_or_install_mihomo()
+                        break
+                    except Exception as retry_exc:
+                        _note_debug(retry_exc, where="prefetch-mihomo")
+                        result = None
+                _FOLLOWUP_RESULT["find_or_install_mihomo"] = result
+                if not isinstance(result, Path) or not result.exists():
+                    _MIHOMO_PREFETCH_FAILED = True
             finally:
                 _LOG_CAPTURE.buf = None
                 _CAPTURE_BUF.reset(token)
