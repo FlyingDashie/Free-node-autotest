@@ -156,6 +156,44 @@ SOURCE_GROUPS = [
 DEBUG_ONLY_SOURCES = []
 PROXIES = None
 
+import requests
+import urllib3
+import yaml
+
+
+from contextlib import contextmanager
+
+import base64
+import contextvars
+import gzip
+import hashlib
+import html
+import importlib.util
+import inspect
+import json
+import math
+import os
+import platform
+import random
+import re
+import shutil
+import socket
+import stat
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import zipfile
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+import multiprocessing
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse, urlunparse
+
+
 try:
     sys.stdout.reconfigure(line_buffering=True)
     sys.stderr.reconfigure(line_buffering=True)
@@ -230,43 +268,6 @@ if _missing_required or _missing_optional:
     )
 if _missing_required:
     raise SystemExit(1)
-
-import requests
-import urllib3
-import yaml
-
-
-from contextlib import contextmanager
-
-import base64
-import contextvars
-import gzip
-import hashlib
-import html
-import importlib.util
-import inspect
-import json
-import math
-import os
-import platform
-import random
-import re
-import shutil
-import socket
-import stat
-import subprocess
-import sys
-import tempfile
-import threading
-import time
-import zipfile
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-import multiprocessing
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse, urlunparse
 
 # 关闭 SSL 警告（配合 verify=False）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
