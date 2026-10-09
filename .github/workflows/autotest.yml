@@ -186,15 +186,23 @@ jobs:
                   print(f" renamed {p.name} -> {new_name}")
           PY
 
-          # 3. 清理超过 48 小时的历史文件（按文件名时间）
+          echo "当前 history 目录内容："
+          ls -lh history/ || true
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git sparse-checkout disable
+
+          # 3. 按 48 小时的份数保留，中间断档也按份数算
           python3 - <<'PY'
-          from datetime import datetime, timedelta, timezone
           from pathlib import Path
           import re
 
-          cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
-          hist = Path("history")
-          removed = []
+          SLOT_MINUTES = 30
+          KEEP_GROUPS = 48 * 60 // SLOT_MINUTES
+          kinds = ("log", "clash", "raw", "debug", "scored")
 
           def history_file_stamp(name):
               match = re.search(r"(\d{4})-(20\d{6})", name)
@@ -205,33 +213,45 @@ jobs:
                   return match.group(1) + match.group(2)
               return ""
 
+          def history_kind(name):
+              for kind in kinds:
+                  if f"-{kind}-" in name:
+                      return kind
+              return ""
+
+          hist = Path("history")
+          groups = {}
           if hist.is_dir():
-              for p in hist.iterdir():
-                  if not p.is_file():
+              for path in hist.iterdir():
+                  if not path.is_file():
                       continue
-                  stamp = history_file_stamp(p.name)
-                  if not stamp:
+                  stamp = history_file_stamp(path.name)
+                  kind = history_kind(path.name)
+                  if not stamp or not kind:
                       continue
-                  try:
-                      ts = datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
-                  except ValueError:
-                      continue
-                  if ts < cutoff:
-                      p.unlink(missing_ok=True)
-                      removed.append(p.name)
-          print(f"cutoff_utc={cutoff.strftime('%Y%m%d-%H%M')} removed={len(removed)}")
+                  groups.setdefault(stamp, []).append(path.name)
+          ordered = sorted(groups)
+          extra = max(0, len(ordered) - KEEP_GROUPS)
+          removed = []
+          for stamp in ordered[:extra]:
+              for name in groups[stamp]:
+                  path = hist / name
+                  if path.is_file():
+                      path.unlink(missing_ok=True)
+                  removed.append(name)
+          if removed:
+              (hist / ".history-drop.txt").write_text("\n".join(removed) + "\n", encoding="utf-8")
+          print(f"keep_groups={KEEP_GROUPS} have={len(ordered)} drop_groups={extra} drop_files={len(removed)}")
           for name in sorted(removed):
               print(f" deleted {name}")
           PY
-          
-          echo "当前 history 目录内容："
-          ls -lh history/ || true
+          if [ -f history/.history-drop.txt ]; then
+            while IFS= read -r name; do
+              [ -n "$name" ] && git update-index --force-remove "history/$name" || true
+            done < history/.history-drop.txt
+            rm -f history/.history-drop.txt
+          fi
 
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git sparse-checkout disable
           git add -A clash.yaml history/
 
           if git diff --staged --quiet; then
