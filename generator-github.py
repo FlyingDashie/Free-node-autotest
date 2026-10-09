@@ -4874,6 +4874,23 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
                 print(f"[INFO] article try page | url={feed_url}")
 
     stamps = sorted(groups, reverse=True)
+    if stamps:
+        newest = stamps[0]
+        sample = groups.get(newest) or []
+        if re.fullmatch(r"20\d{6}", newest) and sample:
+            page = sample[0]
+            day = datetime.strptime(newest, "%Y%m%d")
+            for offset in range(1, 30):
+                if len(groups) >= 30:
+                    break
+                stamp = (day - timedelta(days=offset)).strftime("%Y%m%d")
+                if stamp in groups:
+                    continue
+                if newest not in page:
+                    break
+                _add_page(stamp, page.replace(newest, stamp, 1))
+        stamps = sorted(groups, reverse=True)[:30]
+        groups = {stamp: groups[stamp] for stamp in stamps}
     if not stamps:
         _note_debug("no article links", where="article", url=feed_url)
         return []
