@@ -5910,7 +5910,11 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
 def _scored_line_from_row(row: tuple[dict[str, Any], str, int]) -> tuple[float, str]:
     item, name, delay = row
     _group, coords, code, via, hits = detect_geo(item)
-    parts = health_score_parts(name, delay, coords, iso=code)
+    parts = health_score_parts(
+        name, delay, coords, iso=code,
+        server=str(item.get("server") or ""),
+        port=str(item.get("port") or ""),
+    )
     line = (
         f"score={parts['score']:.4f} "
         f"| latency={parts['latency']:.4f} "
@@ -5930,13 +5934,6 @@ def write_scored_history(
     latencies: dict[str, int],
     metrics: list[ProxyMetric] | None = None,
 ) -> None:
-    known: dict[str, ProxyMetric] = {}
-    for item in metrics or []:
-        if not isinstance(item.proxy, dict):
-            continue
-        key = str(item.proxy.get("name") or "")
-        if key:
-            known[key] = item
     ranked: list[tuple[float, str]] = []
     leftover: list[tuple[dict[str, Any], str, int]] = []
     seen_names: set[str] = set()
@@ -5948,24 +5945,6 @@ def write_scored_history(
         name = _unique_display_name(base, seen_names)
         item["name"] = name
         delay = int(latencies.get(name, 0) or latencies.get(base, 0) or 0)
-        cached = known.get(name) or known.get(base)
-        if cached is not None and cached.score_parts:
-            parts = cached.score_parts
-            code = cached.geo_iso
-            via = cached.geo_via
-            ranked.append((
-                float(parts["score"]),
-                f"score={parts['score']:.4f} "
-                f"| latency={parts['latency']:.4f} "
-                f"| time={delay}ms "
-                f"| geo={parts['geo']:.4f} "
-                f"| adj={parts['adj']:+.4f} "
-                f"| stab={parts['stab']:.4f} "
-                f"| hits={cached.geo_hits or via} | pick={via}:{code} "
-                f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
-                f"| {name}",
-            ))
-            continue
         leftover.append((item, name, delay))
     if leftover:
         workers = _scan_worker_count(len(leftover))
@@ -7297,7 +7276,11 @@ def build_proxy_metric(proxy: dict[str, Any], latency: int) -> ProxyMetric:
     name = str(proxy.get("name") or "")
     region = detect_region(str(proxy.get("_geo_name") or name))
     geo_region, coords, geo_code, via, hits = detect_geo(proxy)
-    parts = health_score_parts(name, latency, coords, iso=geo_code)
+    parts = health_score_parts(
+        name, latency, coords, iso=geo_code,
+        server=str(proxy.get("server") or ""),
+        port=str(proxy.get("port") or ""),
+    )
     return ProxyMetric(
         proxy=proxy,
         latency=latency,
@@ -7323,8 +7306,10 @@ def health_score_parts(
     coords: tuple[float, float] | None = None,
     iso: str = "",
     salt: str = "",
+    server: str = "",
+    port: str = "",
 ) -> dict[str, float]:
-    seed_src = f"{name}{salt}"
+    seed_src = f"{name}|{server}|{port}{salt}"
     stability_seed = int(hashlib.sha256(seed_src.encode("utf-8")).hexdigest()[:12], 16)
     stability = random.Random(stability_seed).random()
     if int(latency) <= 0:
@@ -7752,7 +7737,11 @@ def geo_score_lines(metrics: list[ProxyMetric]) -> list[str]:
             coords = None
         else:
             _group, coords, code, _via, _hits = detect_geo(item.proxy)
-            parts = health_score_parts(str(item.proxy.get("name") or ""), int(item.latency), coords, iso=code)
+            parts = health_score_parts(
+                str(item.proxy.get("name") or ""), int(item.latency), coords, iso=code,
+                server=str(item.proxy.get("server") or ""),
+                port=str(item.proxy.get("port") or ""),
+            )
         code = str(code or "-").upper() or "-"
         tallies[code] = tallies.get(code, 0) + 1
         scores.append(float(item.health_score))
