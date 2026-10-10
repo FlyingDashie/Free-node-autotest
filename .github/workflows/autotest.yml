@@ -136,6 +136,9 @@ jobs:
           INV=$((999999999999 - 10#$RUN_DATE$RUN_HM))
           echo "RUN_TIME=$RUN_TIME" >> $GITHUB_ENV
           echo "INV=$INV" >> $GITHUB_ENV
+          echo "RUN_HM=$RUN_HM" >> $GITHUB_ENV
+          echo "RUN_DATE=$RUN_DATE" >> $GITHUB_ENV
+          export INV RUN_HM RUN_DATE RUN_TIME
           export PYTHONUNBUFFERED=1
           stdbuf -oL -eL python -u generator-github.py 2>&1 | stdbuf -oL -eL tee "history/"$INV"-log-"$RUN_TIME".log"
           if [ ! -f output/clash.yaml ]; then
