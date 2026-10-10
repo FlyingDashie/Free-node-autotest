@@ -5693,6 +5693,8 @@ _CLASH_WARM: list[dict[str, Any]] = []
 _RAW_WRITE_DONE = threading.Event()
 _RAW_WRITE_DONE.set()
 _RAW_WRITE_LOG = ""
+_CLASH_WRITE_LOG = ""
+_DEBUG_WRITE_LOG = ""
 
 
 def _index_raw_nodes(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -5762,7 +5764,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     _RAW_WARM_META = (raw_hist.name, history_file_stamp(raw_hist.name))
     global _RAW_WRITE_LOG
     _RAW_WRITE_LOG = (
-        f"[INFO] raw backup written | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}"
+        f"[INFO] written | file=raw | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}"
     )
 
 
@@ -5890,7 +5892,8 @@ def write_debug_history() -> None:
     elif _SCORED_LINES:
         scored_text = "\n".join(_SCORED_LINES) + "\n"
         scored_n = len(_SCORED_LINES)
-    print(f"[INFO] debug history written | path={path} | proxies={scored_n}")
+    global _DEBUG_WRITE_LOG
+    _DEBUG_WRITE_LOG = f"[INFO] written | file=debug | path={path} | proxies={scored_n}"
     sys.stdout.flush()
     sys.stderr.flush()
     stamps = [f"{index}={ts}" for index, ts in enumerate(_RUN_STAMPS, start=1)]
@@ -7368,7 +7371,11 @@ def write_config(config: dict[str, Any]) -> None:
     clash_hist = history_named("clash")
     clash_hist.write_text(text, encoding="utf-8")
     _record_yaml_debug("clash", OUTPUT_PATH, text, len(config.get("proxies") or []))
-    print(f"[INFO] clash history written | path={clash_hist}")
+    global _CLASH_WRITE_LOG
+    _CLASH_WRITE_LOG = (
+        f"[INFO] written | file=clash | path={OUTPUT_PATH} | history={clash_hist.name} "
+        f"| proxies={len(config.get('proxies') or [])}"
+    )
 
 
 def validate_config(config: dict[str, Any]) -> None:
@@ -7558,9 +7565,9 @@ def print_sep() -> None:
 
 
 
-def print_live_geo_score_stats(metrics: list[ProxyMetric]) -> None:
+def geo_score_lines(metrics: list[ProxyMetric]) -> list[str]:
     if not metrics:
-        return
+        return []
     tallies: dict[str, int] = {}
     scores: list[float] = []
     geos: list[float] = []
@@ -7589,33 +7596,31 @@ def print_live_geo_score_stats(metrics: list[ProxyMetric]) -> None:
     other = len(metrics) - used
     if other:
         bits.append(f"other={other}")
-    print("[INFO] geo tally | " + " | ".join(bits))
+    lines = ["[SUMMARY] geo tally | " + " | ".join(bits)]
     scores.sort()
     def _pct(p: float) -> float:
         if not scores:
             return 0.0
         idx = min(len(scores) - 1, max(0, int(round((len(scores) - 1) * p))))
         return scores[idx]
-    print(
-        f"[INFO] score summary | n={len(scores)} "
+    lines.append(
+        f"[SUMMARY] score summary | n={len(scores)} "
         f"| max={scores[-1]:.4f} | p90={_pct(0.9):.4f} | p50={_pct(0.5):.4f} "
         f"| avg={sum(scores)/len(scores):.4f} | min={scores[0]:.4f} "
         f"| geo_avg={sum(geos)/len(geos):.4f} | adj_avg={sum(adjs)/len(adjs):+.4f}"
     )
+    return lines
 
 
 def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric]) -> None:
     print_sep()
-    hk_count = sum(1 for item in metrics if item.region == "HK" or item.geo_region == "HK")
-    jp_count = sum(1 for item in metrics if item.region == "JP" or item.geo_region == "JP")
-    us_count = sum(1 for item in metrics if item.region == "US" or item.geo_region == "US")
     avg_latency = round(sum(item.latency for item in metrics) / len(metrics), 2) if metrics else 0
     print(f"[SUMMARY] total_nodes={total_nodes}")
     print(f"[SUMMARY] legal_candidates={candidates}")
     print(f"[SUMMARY] passed_latency_test={len(metrics)}")
-    print(f"[SUMMARY] region_HK={hk_count} | region_JP={jp_count} | region_US={us_count}")
     print(f"[SUMMARY] avg_latency_ms={avg_latency}")
-    print(f"[SUMMARY] output={OUTPUT_PATH}")
+    for line in geo_score_lines(metrics):
+        print(line)
 
 
 def main() -> None:
@@ -7676,7 +7681,6 @@ def main() -> None:
     raw_live = count_live_by_prefix(metrics)
     metrics = limit_metrics_per_source(metrics)
     metrics = limit_metrics_total(metrics)
-    print_live_geo_score_stats(metrics)
     capped_live = count_live_by_prefix(metrics)
     print_source_live_stats(collected_counts, unique_counts, raw_live, capped_live)
     order = {str(proxy["name"]): index for index, proxy in enumerate(candidates)}
@@ -7700,7 +7704,8 @@ if __name__ == "__main__":
         _SEP_JUST_PRINTED = False
         print_sep()
         _RAW_WRITE_DONE.wait(timeout=180)
-        if _RAW_WRITE_LOG:
-            print(_RAW_WRITE_LOG)
         write_debug_history()
+        for line in (_CLASH_WRITE_LOG, _RAW_WRITE_LOG, _DEBUG_WRITE_LOG):
+            if line:
+                print(line)
         shutdown_parse_pool()
