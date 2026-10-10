@@ -2247,7 +2247,7 @@ def _collect_single_source(source: dict[str, Any]) -> list[dict[str, Any]]:
             _marks, kept = _dedupe_proxies(previous, source_seen)
             source_found.extend(kept)
             print(
-                f"[INFO] reused previous raw | file={raw_name} | stamp={raw_stamp}"
+                f"[REUSE] raw | file={raw_name} | stamp={raw_stamp}"
             )
     if not source_found:
         page = ""
@@ -5188,7 +5188,7 @@ def prepare_geo_score() -> None:
             print(_GEO_READY_LOG)
         return
     if importlib.util.find_spec("maxminddb") is None:
-        print("[INFO] geo score skipped | reason=maxminddb missing")
+        print("[WARN] geo score skipped | reason=maxminddb missing")
         return
     work = Path(tempfile.gettempdir()) / "free-node-autotest-geo-score"
     os.makedirs(str(work), exist_ok=True)
@@ -5764,7 +5764,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     _RAW_WARM_META = (raw_hist.name, history_file_stamp(raw_hist.name))
     global _RAW_WRITE_LOG
     _RAW_WRITE_LOG = (
-        f"[INFO] written | file=raw | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}"
+        f"[WRITTEN] file=raw | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}"
     )
 
 
@@ -5893,7 +5893,7 @@ def write_debug_history() -> None:
         scored_text = "\n".join(_SCORED_LINES) + "\n"
         scored_n = len(_SCORED_LINES)
     global _DEBUG_WRITE_LOG
-    _DEBUG_WRITE_LOG = f"[INFO] written | file=debug | path={path} | proxies={scored_n}"
+    _DEBUG_WRITE_LOG = f"[WRITTEN] file=debug | path={path} | proxies={scored_n}"
     sys.stdout.flush()
     sys.stderr.flush()
     stamps = [f"{index}={ts}" for index, ts in enumerate(_RUN_STAMPS, start=1)]
@@ -6740,7 +6740,7 @@ def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
             text = " | ".join(bits)
             if len(text) > 400:
                 text = text[:397] + "..."
-            print(f"[INFO] dropped={len(_DROP_NAMES)} | {text}")
+            print(f"[DROP] dropped={len(_DROP_NAMES)} | {text}")
         _DROP_NAMES = []
         _SEP_JUST_PRINTED = False
         print_sep()
@@ -7231,7 +7231,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
             name = str(proxy.get("name", ""))
             metrics.append(build_proxy_metric(dict(proxy), LATENCY_TIMEOUT_MS))
         if metrics:
-            print(f"[INFO] reused previous clash | proxies={len(metrics)} | file=warmup")
+            print(f"[REUSE] clash | proxies={len(metrics)} | file=warmup")
             return metrics
     if not HISTORY_DIR.is_dir():
         print("[WARN] clash fallback dir missing, skip reuse")
@@ -7262,7 +7262,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
             metrics.append(build_proxy_metric(dict(proxy), LATENCY_TIMEOUT_MS))
         if metrics:
             print(
-                f"[INFO] reused previous clash | proxies={len(metrics)} "
+                f"[REUSE] clash | proxies={len(metrics)} "
                 f"file={path.name} stamp={stamp}"
             )
             return metrics
@@ -7373,7 +7373,7 @@ def write_config(config: dict[str, Any]) -> None:
     _record_yaml_debug("clash", OUTPUT_PATH, text, len(config.get("proxies") or []))
     global _CLASH_WRITE_LOG
     _CLASH_WRITE_LOG = (
-        f"[INFO] written | file=clash | path={OUTPUT_PATH} | history={clash_hist.name} "
+        f"[WRITTEN] file=clash | path={OUTPUT_PATH} | history={clash_hist.name} "
         f"| proxies={len(config.get('proxies') or [])}"
     )
 
@@ -7500,7 +7500,7 @@ def limit_metrics_per_source(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
         group = grouped[key]
         if len(group) > MAX_LIVE_PER_SOURCE:
             print(
-                f"[INFO] cap live | source={key} | from={len(group)} | to={MAX_LIVE_PER_SOURCE}"
+                f"[CAP] source={key} | from={len(group)} | to={MAX_LIVE_PER_SOURCE}"
             )
             global _SEP_JUST_PRINTED
             _SEP_JUST_PRINTED = False
@@ -7513,7 +7513,7 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     if len(metrics) <= MAX_LIVE_TOTAL:
         return metrics
     print(
-        f"[INFO] cap live total | from={len(metrics)} | to={MAX_LIVE_TOTAL} "
+        f"[CAP] total | from={len(metrics)} | to={MAX_LIVE_TOTAL} "
         f"| floor=5 | by=health_score"
     )
     global _SEP_JUST_PRINTED
@@ -7538,7 +7538,7 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
     remain = max(0, MAX_LIVE_TOTAL - len(reserved))
     kept = reserved + pool[:remain]
     print(
-        f"[INFO] cap live | reserved={len(reserved)} | pool={len(pool)} "
+        f"[CAP] reserved={len(reserved)} | pool={len(pool)} "
         f"| taken={min(remain, len(pool))}"
     )
     after: dict[str, int] = {}
@@ -7549,7 +7549,7 @@ def limit_metrics_total(metrics: list[ProxyMetric]) -> list[ProxyMetric]:
         before_n = len(grouped[key])
         after_n = after.get(key, 0)
         if after_n < before_n:
-            print(f"[INFO] cap live | source={key} | from={before_n} | to={after_n}")
+            print(f"[CAP] source={key} | from={before_n} | to={after_n}")
     return kept
 
 
