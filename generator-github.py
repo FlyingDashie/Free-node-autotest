@@ -2451,19 +2451,43 @@ def _github_repo_home(url: str) -> tuple[str, str] | None:
 
 
 def _github_listing_paths(html_text: str, owner: str, repo: str, kind: str) -> list[tuple[str, str]]:
-    pattern = re.compile(
-        rf"/{re.escape(owner)}/{re.escape(repo)}/{kind}/([^/\"'?]+)/([^\"'?]+)",
-        re.I,
-    )
     rows: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for match in pattern.finditer(html_text or ""):
-        ref = unquote(match.group(1)).strip()
-        path = unquote(match.group(2)).split("#", 1)[0].split("?", 1)[0].strip("/")
+    wanted = "file" if kind == "blob" else "directory"
+
+    def _add(ref: str, path: str) -> None:
+        ref = unquote(str(ref or "")).strip()
+        path = unquote(str(path or "")).split("#", 1)[0].split("?", 1)[0].strip("/")
         if not ref or not path or (ref, path) in seen:
-            continue
+            return
         seen.add((ref, path))
         rows.append((ref, path))
+
+    for block in re.findall(r'<script type="application/json"[^>]*>(.*?)</script>', html_text or ""):
+        try:
+            payload = json.loads(block)
+        except Exception:
+            continue
+        route = (payload.get("payload") or {}).get("codeViewTreeRoute") or {}
+        tree = route.get("tree") or {}
+        items = tree.get("items") if isinstance(tree, dict) else None
+        if not isinstance(items, list):
+            continue
+        ref = (route.get("refInfo") or {}).get("name") or "master"
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("contentType") or "") != wanted:
+                continue
+            _add(ref, str(item.get("path") or ""))
+    if rows:
+        return rows
+    pattern = re.compile(
+        rf"/{re.escape(owner)}/{re.escape(repo)}/{kind}/([^/\"\'?]+)/([^\"\'?]+)",
+        re.I,
+    )
+    for match in pattern.finditer(html_text or ""):
+        _add(match.group(1), match.group(2))
     return rows
 
 
@@ -4150,9 +4174,7 @@ def _toolkit_repo_prefer_files(owner: str, repo: str, prefer: Any) -> list[str]:
                 item[1].lower(),
             )
         )
-        preferred = [item for item in trees if item[1].rsplit("/", 1)[-1].lower() in token_names]
-        rest = [item for item in trees if item not in preferred]
-        for ref, path in preferred + rest[:24]:
+        for ref, path in trees:
             if hits and any(part.lower() in token_names for part in hits[0][2].split("/")):
                 break
             try:
