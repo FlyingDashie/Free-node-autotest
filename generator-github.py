@@ -3750,6 +3750,11 @@ def _toolkit_iter_packages(
             )
             if not archive:
                 continue
+            with _FILE_CACHE_LOCK:
+                reused = _FILE_CACHE.get(f"unpack:{archive.name}")
+            if isinstance(reused, Path) and reused.is_dir() and any(reused.iterdir()):
+                yield archive, reused, archive_url
+                continue
             if verify_hash and not _confirm_downloaded_hash(archive):
                 archive.unlink(missing_ok=True)
                 continue
@@ -3757,6 +3762,8 @@ def _toolkit_iter_packages(
             os.makedirs(str(unpack), exist_ok=True)
             if not _extract_archive(archive, unpack):
                 continue
+            with _FILE_CACHE_LOCK:
+                _FILE_CACHE[f"unpack:{archive.name}"] = unpack
             nested = _extract_nested_packages(unpack)
             if nested:
                 print(f"[OK] toolkit nested unpacked | count={len(nested)}")
@@ -4143,8 +4150,10 @@ def _toolkit_repo_prefer_files(owner: str, repo: str, prefer: Any) -> list[str]:
                 item[1].lower(),
             )
         )
-        for ref, path in trees[:24]:
-            if hits and hits[0][0] >= 160:
+        preferred = [item for item in trees if item[1].rsplit("/", 1)[-1].lower() in token_names]
+        rest = [item for item in trees if item not in preferred]
+        for ref, path in preferred + rest[:24]:
+            if hits and any(part.lower() in token_names for part in hits[0][2].split("/")):
                 break
             try:
                 sub = fetch_text(
@@ -4772,12 +4781,21 @@ def _discover_toolkit_encrypted_apk(
             verify_hash=verify_hash,
         ):
             opened = True
-            prefixes, names, scanned, tokens = _apk_scan(unpack)
+            scan_key = f"scan:{kind}:{archive.name}"
+            with _FILE_CACHE_LOCK:
+                cached_scan = _FILE_CACHE.get(scan_key)
+            if isinstance(cached_scan, tuple) and len(cached_scan) == 4:
+                prefixes, names, scanned, tokens = cached_scan
+            else:
+                prefixes, names, scanned, tokens = _apk_scan(unpack)
+                with _FILE_CACHE_LOCK:
+                    _FILE_CACHE[scan_key] = (prefixes, names, scanned, tokens)
+                hard_keys = _apk_keys_for(source, scanned)
+                print(
+                    f"[OK] toolkit {kind} scanned | prefixes={len(prefixes)} "
+                    f"| files={len(names)} | keys={len(hard_keys)} | archive={archive.name}"
+                )
             hard_keys = _apk_keys_for(source, scanned)
-            print(
-                f"[OK] toolkit {kind} scanned | prefixes={len(prefixes)} "
-                f"| files={len(names)} | keys={len(hard_keys)} | archive={archive.name}"
-            )
             if not prefixes:
                 continue
             wanted = [item.lower() for item in name_order]
@@ -6380,12 +6398,12 @@ def _take_toolkit_job(source: dict[str, Any]) -> dict[str, Any] | None:
     key = source_label(source)
     printed = [0]
     started = time.time()
-    while time.time() - started < 3:
+    while time.time() - started < 120:
         with _TOOLKIT_JOB_LOCK:
             job = _TOOLKIT_JOBS.get(key)
         if job:
             break
-        time.sleep(0.05)
+        time.sleep(0.1)
     else:
         return None
     while True:
