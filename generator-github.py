@@ -675,6 +675,12 @@ def run_history_ids() -> tuple[str, str, str]:
     global _RUN_IDS
     if _RUN_IDS:
         return _RUN_IDS
+    env_inv = os.getenv("INV", "").strip()
+    env_hm = os.getenv("RUN_HM", "").strip()
+    env_date = os.getenv("RUN_DATE", "").strip()
+    if env_inv and env_hm and env_date:
+        _RUN_IDS = (env_inv, env_hm, env_date)
+        return _RUN_IDS
     now = datetime.now(timezone.utc)
     date = now.strftime("%Y%m%d")
     hm = now.strftime("%H%M")
@@ -4128,11 +4134,16 @@ def _toolkit_repo_prefer_files(owner: str, repo: str, prefer: Any) -> list[str]:
         if depth <= 0:
             return
         trees = _github_listing_paths(page, owner, repo, "tree")
+        token_names = {token.lower() for token in tokens}
         trees.sort(
-            key=lambda item: (-_prefer_path_score(item[1], tokens), item[1].lower())
+            key=lambda item: (
+                0 if item[1].rsplit("/", 1)[-1].lower() in token_names else 1,
+                -_prefer_path_score(item[1], tokens),
+                item[1].lower(),
+            )
         )
-        for ref, path in trees[:12]:
-            if hits and hits[0][0] >= 120:
+        for ref, path in trees[:24]:
+            if hits and hits[0][0] >= 160:
                 break
             try:
                 sub = fetch_text(
