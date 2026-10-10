@@ -7168,9 +7168,9 @@ def _name_iso_hits(name: str) -> list[tuple[int, str, str]]:
         ("SG", r"新加坡|\bSG\b|Singapore|\U0001f1f8\U0001f1ec"),
         ("KR", r"韩国|韓國|\bKR\b|Korea|Seoul|\U0001f1f0\U0001f1f7"),
         ("TW", r"台湾|台灣|\bTW\b|Taiwan|\U0001f1f9\U0001f1fc"),
-        ("US", r"美国|美國|\bUSA\b|\bUS\b|United\s*States|America|\U0001f1fa\U0001f1f8"),
+        ("US", r"美国|美國|(?<![A-Za-z])USA(?![A-Za-z])|(?<![A-Za-z])US(?![A-Za-z])|United[\s+_]*States|Los[\s+_]*Angeles|New[\s+_]*York|America|\U0001f1fa\U0001f1f8"),
         ("DE", r"德国|德國|\bDE\b|Germany|Frankfurt|\U0001f1e9\U0001f1ea"),
-        ("GB", r"英国|英國|\bUK\b|\bGB\b|London|\U0001f1ec\U0001f1e7"),
+        ("GB", r"英国|英國|\bUK\b|\bGB\b|United[\s+_]*Kingdom|London|\U0001f1ec\U0001f1e7"),
         ("NL", r"荷兰|荷蘭|\bNL\b|Netherlands|Amsterdam|\U0001f1f3\U0001f1f1"),
         ("FR", r"法国|法國|\bFR\b|France|Paris|\U0001f1eb\U0001f1f7"),
         ("CA", r"加拿大|\bCA\b|Canada|\U0001f1e8\U0001f1e6"),
@@ -7182,6 +7182,7 @@ def _name_iso_hits(name: str) -> list[tuple[int, str, str]]:
         ("FI", r"芬兰|芬蘭|\bFI\b|Finland|\U0001f1eb\U0001f1ee"),
         ("IR", r"伊朗|\bIR\b|Iran|\U0001f1ee\U0001f1f7"),
         ("CN", r"中国|中國|\bCN\b|China|\U0001f1e8\U0001f1f3"),
+        ("CZ", r"捷克|Czechia|Czech"),
     )
     hits: list[tuple[int, str, str]] = []
     for code, pat in patterns:
@@ -7267,8 +7268,10 @@ def detect_geo(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, 
             cands.append((geo_distance_weight(addr_coords), addr_group, addr_coords, addr_code, key[0]))
     if not cands:
         return "OTHER", None, "-", "none", ""
-    cands.sort(key=lambda item: item[0], reverse=True)
-    _w, group, coords, code, pick = cands[0]
+    non_country = {"CLOUDFLARE", "FASTLY", "PRIVATE", "AKAMAI", "CLOUDFRONT"}
+    real = [item for item in cands if item[3] not in non_country and len(item[3]) == 2 and item[3].isalpha()]
+    ranked = sorted(real or cands, key=lambda item: item[0], reverse=True)
+    _w, group, coords, code, pick = ranked[0]
     hits = ",".join(f"{kind}:{iso}" for _w, _group, _coords, iso, kind in cands)
     return group, coords, code, pick, hits
 
