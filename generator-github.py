@@ -769,6 +769,7 @@ class ProxyMetric:
     score_parts: dict[str, float] | None = None
     geo_iso: str = ""
     geo_via: str = ""
+    geo_hits: str = ""
 
 
 UA_PRESETS = {
@@ -5908,7 +5909,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
 
 def _scored_line_from_row(row: tuple[dict[str, Any], str, int]) -> tuple[float, str]:
     item, name, delay = row
-    _group, coords, code, via = detect_geo(item)
+    _group, coords, code, via, hits = detect_geo(item)
     parts = health_score_parts(name, delay, coords, iso=code)
     line = (
         f"score={parts['score']:.4f} "
@@ -5917,7 +5918,7 @@ def _scored_line_from_row(row: tuple[dict[str, Any], str, int]) -> tuple[float, 
         f"| geo={parts['geo']:.4f} "
         f"| adj={parts['adj']:+.4f} "
         f"| stab={parts['stab']:.4f} "
-        f"| iso={code} | via={via} "
+        f"| hits={hits or via} | pick={via}:{code} "
         f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
         f"| {name}"
     )
@@ -5960,7 +5961,7 @@ def write_scored_history(
                 f"| geo={parts['geo']:.4f} "
                 f"| adj={parts['adj']:+.4f} "
                 f"| stab={parts['stab']:.4f} "
-                f"| iso={code} | via={via} "
+                f"| hits={cached.geo_hits or via} | pick={via}:{code} "
                 f"| km={parts['km']:.0f} | w={parts['w']:.4f} "
                 f"| {name}",
             ))
@@ -7148,7 +7149,18 @@ def _load_name_catalog(work: Path) -> tuple[int, list[str]]:
     return sum(len(words) for words in aliases.values()), catalog_files
 
 
-def _name_iso_hits(name: str) -> list[tuple[int, str]]:
+def _match_kind(token: str) -> str:
+    text = str(token or "")
+    if re.search(r"[\U0001F1E6-\U0001F1FF]", text):
+        return "flag"
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return "zh"
+    if re.fullmatch(r"[A-Za-z]{2,3}", text):
+        return "code"
+    return "en"
+
+
+def _name_iso_hits(name: str) -> list[tuple[int, str, str]]:
     text = str(name or "")
     patterns = (
         ("HK", r"香港|\bHK\b|Hong\s*Kong|\U0001f1ed\U0001f1f0"),
@@ -7171,34 +7183,40 @@ def _name_iso_hits(name: str) -> list[tuple[int, str]]:
         ("IR", r"伊朗|\bIR\b|Iran|\U0001f1ee\U0001f1f7"),
         ("CN", r"中国|中國|\bCN\b|China|\U0001f1e8\U0001f1f3"),
     )
-    hits: list[tuple[int, str]] = []
+    hits: list[tuple[int, str, str]] = []
     for code, pat in patterns:
         for m in re.finditer(pat, text, re.I):
-            hits.append((m.start(), code))
+            hits.append((m.start(), code, _match_kind(m.group(0))))
     for code, pat in _NAME_EXTRA:
         for m in pat.finditer(text):
-            hits.append((m.start(), code))
+            kind = _match_kind(m.group(0))
+            hits.append((m.start(), code, "alias" if kind == "en" else kind))
     hits.sort()
     return hits
 
 
-def _name_iso(name: str) -> str:
+def _pick_name_hit(name: str) -> tuple[str, str]:
     text = str(name or "")
     hits = _name_iso_hits(text)
     if not hits:
-        return ""
+        return "", ""
     hop = list(re.finditer(r"→|->|=>|➔|➡|➜|/\s*to\s*|中转|中轉", text, re.I))
+    chosen = hits
     if hop:
         cut = hop[-1].end()
-        after = [code for pos, code in hits if pos >= cut]
-        after = [code for code in after if code != "CN"] or after
+        after = [item for item in hits if item[0] >= cut]
+        after = [item for item in after if item[1] != "CN"] or after
         if after:
-            return after[-1]
-    codes = [code for _pos, code in hits]
-    dest = [code for code in codes if code != "CN"]
-    if dest:
-        return dest[-1]
-    return codes[-1]
+            chosen = after
+    else:
+        dest = [item for item in hits if item[1] != "CN"]
+        chosen = dest or hits
+    _pos, code, kind = chosen[-1]
+    return code, kind
+
+
+def _name_iso(name: str) -> str:
+    return _pick_name_hit(name)[0]
 
 
 def _detect_geo_addr(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, str, str]:
@@ -7232,20 +7250,27 @@ def _detect_geo_addr(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | 
     return "OTHER", None, "-", "none"
 
 
-def detect_geo(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, str, str]:
-    addr_group, addr_coords, addr_code, addr_via = _detect_geo_addr(proxy)
-    name_code = _name_iso(str(proxy.get("_geo_name") or proxy.get("name") or ""))
+def detect_geo(proxy: dict[str, Any]) -> tuple[str, tuple[float, float] | None, str, str, str]:
     cands: list[tuple[float, str, tuple[float, float] | None, str, str]] = []
-    if name_code:
-        group, coords, code = _iso_geo(name_code)
-        cands.append((geo_distance_weight(coords), group, coords, code, "name"))
+    seen: set[tuple[str, str]] = set()
+    for _pos, code, kind in _name_iso_hits(str(proxy.get("_geo_name") or proxy.get("name") or "")):
+        group, coords, iso = _iso_geo(code)
+        key = (kind or "name", iso)
+        if key in seen:
+            continue
+        seen.add(key)
+        cands.append((geo_distance_weight(coords), group, coords, iso, key[0]))
+    addr_group, addr_coords, addr_code, addr_via = _detect_geo_addr(proxy)
     if addr_code and addr_code not in {"", "-"}:
-        cands.append((geo_distance_weight(addr_coords), addr_group, addr_coords, addr_code, addr_via))
+        key = (addr_via or "addr", addr_code)
+        if key not in seen:
+            cands.append((geo_distance_weight(addr_coords), addr_group, addr_coords, addr_code, key[0]))
     if not cands:
-        return "OTHER", None, "-", "none"
+        return "OTHER", None, "-", "none", ""
     cands.sort(key=lambda item: item[0], reverse=True)
-    _w, group, coords, code, via = cands[0]
-    return group, coords, code, via
+    _w, group, coords, code, pick = cands[0]
+    hits = ",".join(f"{kind}:{iso}" for _w, _group, _coords, iso, kind in cands)
+    return group, coords, code, pick, hits
 
 
 def _haversine_km(src: tuple[float, float], dst: tuple[float, float]) -> float:
@@ -7268,7 +7293,7 @@ def geo_distance_weight(coords: tuple[float, float] | None) -> float:
 def build_proxy_metric(proxy: dict[str, Any], latency: int) -> ProxyMetric:
     name = str(proxy.get("name") or "")
     region = detect_region(str(proxy.get("_geo_name") or name))
-    geo_region, coords, geo_code, via = detect_geo(proxy)
+    geo_region, coords, geo_code, via, hits = detect_geo(proxy)
     parts = health_score_parts(name, latency, coords, iso=geo_code)
     return ProxyMetric(
         proxy=proxy,
@@ -7279,6 +7304,7 @@ def build_proxy_metric(proxy: dict[str, Any], latency: int) -> ProxyMetric:
         score_parts=parts,
         geo_iso=geo_code,
         geo_via=via,
+        geo_hits=hits,
     )
 
 
@@ -7722,7 +7748,7 @@ def geo_score_lines(metrics: list[ProxyMetric]) -> list[str]:
             parts = item.score_parts
             coords = None
         else:
-            _group, coords, code, _via = detect_geo(item.proxy)
+            _group, coords, code, _via, _hits = detect_geo(item.proxy)
             parts = health_score_parts(str(item.proxy.get("name") or ""), int(item.latency), coords, iso=code)
         code = str(code or "-").upper() or "-"
         tallies[code] = tallies.get(code, 0) + 1
