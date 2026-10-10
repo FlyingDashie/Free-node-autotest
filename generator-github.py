@@ -2564,6 +2564,20 @@ def _prefer_tokens(prefer: Any) -> list[str]:
     return [item.strip() for item in items if item and item.strip()]
 
 
+def _prefer_match_tokens(prefer: Any) -> list[str]:
+    return [item for item in _prefer_tokens(prefer) if not item.lower().startswith("priority:")]
+
+
+def _prefer_priority(prefer: Any) -> list[str]:
+    found: list[str] = []
+    for item in _prefer_tokens(prefer):
+        if item.lower().startswith("priority:"):
+            name = item.split(":", 1)[1].strip().lower()
+            if name and name not in found:
+                found.append(name)
+    return found
+
+
 def _prefer_literal(pattern: str) -> bool:
     text = str(pattern or "").strip()
     if not text:
@@ -2602,7 +2616,7 @@ def _prefer_spans(pattern: str, text: str) -> list[tuple[int, int]]:
 
 
 def _score_sub_link(url: str, context: str = "", prefer: Any = "", distance: int = 9999) -> int:
-    tokens = _prefer_tokens(prefer)
+    tokens = _prefer_match_tokens(prefer)
     if not tokens:
         return 0
     blob = f"{url} {context}"
@@ -2871,7 +2885,7 @@ def _package_allowed(link: str) -> bool:
 
 
 def _prefer_distance(text: str, hint: Any, pos: int) -> int:
-    tokens = _prefer_tokens(hint)
+    tokens = _prefer_match_tokens(hint)
     if not tokens or pos < 0:
         return 9999
     best = 9999
@@ -3066,7 +3080,7 @@ def _store_package_urls(kind: str, page_url: str) -> list[str]:
 
 
 def _prefer_strong_asset(url: str, prefer: Any) -> bool:
-    tokens = _prefer_tokens(prefer)
+    tokens = _prefer_match_tokens(prefer)
     if not tokens:
         return True
     blob = unquote(str(url or "")).lower()
@@ -4070,6 +4084,70 @@ def _ingest_url_groups(urls: list[str]) -> list[list[str]]:
     return groups
 
 
+
+def _prefer_path_score(path: str, tokens: list[str]) -> int:
+    name = path.rsplit("/", 1)[-1].lower()
+    low = path.lower()
+    score = 0
+    for index, token in enumerate(tokens):
+        weight = (len(tokens) - index) * 20
+        hint = token.lower()
+        if name == hint:
+            score += 100 + weight
+        elif _prefer_spans(token, name) or _prefer_spans(token, low):
+            score += weight
+    return score - low.count("/")
+
+
+def _toolkit_repo_prefer_files(owner: str, repo: str, prefer: Any) -> list[str]:
+    tokens = _prefer_match_tokens(prefer)
+    if not tokens:
+        return []
+    home = f"https://github.com/{owner}/{repo}"
+    print(f"[INFO] toolkit try tree | url={home}")
+    try:
+        html_text = fetch_text(home, retries=1, timeout=15)
+    except Exception:
+        html_text = ""
+    hits: list[tuple[int, str, str]] = []
+
+    def _take(ref: str, path: str) -> None:
+        score = _prefer_path_score(path, tokens)
+        if score <= 0:
+            return
+        raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}"
+        hits.append((score, raw, path))
+
+    def _scan(page: str, depth: int) -> None:
+        blobs = _github_listing_paths(page, owner, repo, "blob")
+        for ref, path in blobs:
+            _take(ref, path)
+        if depth <= 0:
+            return
+        trees = _github_listing_paths(page, owner, repo, "tree")
+        trees.sort(
+            key=lambda item: (-_prefer_path_score(item[1], tokens), item[1].lower())
+        )
+        for ref, path in trees[:12]:
+            if hits and hits[0][0] >= 120:
+                break
+            try:
+                sub = fetch_text(
+                    f"https://github.com/{owner}/{repo}/tree/{ref}/{path}",
+                    retries=1,
+                    timeout=10,
+                )
+            except Exception:
+                continue
+            _scan(sub, depth - 1)
+
+    _scan(html_text, 2)
+    hits.sort(key=lambda item: item[0], reverse=True)
+    if hits:
+        print(f"[OK] toolkit selected | file={hits[0][2]}")
+    return unique_ordered([raw for _score, raw, _path in hits])
+
+
 def _collect_toolkit_candidates(
     page_url: str,
     prefer: str = "",
@@ -4090,16 +4168,21 @@ def _collect_toolkit_candidates(
     if kind == "direct":
         return [page_url]
     if kind == "release":
-        found = _expand_github_release_assets(
-            page_url,
-            prefer=prefer,
-            verify_hash=verify_hash,
-        )
-        if found:
-            return found
         match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
-        if match:
-            home = f"https://github.com/{match.group(1)}/{match.group(2)}"
+        owner = match.group(1) if match else ""
+        repo = match.group(2) if match else ""
+
+        def _from_release() -> list[str]:
+            return _expand_github_release_assets(
+                page_url,
+                prefer=prefer,
+                verify_hash=verify_hash,
+            )
+
+        def _from_page() -> list[str]:
+            if not owner:
+                return []
+            home = f"https://github.com/{owner}/{repo}"
             readme = _resolve_github_readme(home)
             print(f"[INFO] toolkit try page | url={readme}")
             body = ""
@@ -4109,6 +4192,19 @@ def _collect_toolkit_candidates(
                 body = ""
             links = _collect_archive_links(body, readme)
             return _rank_package_links(links, prefer=prefer, page_text=body)
+
+        def _from_tree() -> list[str]:
+            if not owner:
+                return []
+            return _toolkit_repo_prefer_files(owner, repo, prefer)
+
+        channels = {"release": _from_release, "page": _from_page, "tree": _from_tree}
+        order = [name for name in _prefer_priority(prefer) if name in channels]
+        order.extend(name for name in ("release", "page", "tree") if name not in order)
+        for name in order:
+            found = channels[name]()
+            if found:
+                return found
         return []
     body = ""
     try:
@@ -5150,6 +5246,8 @@ def _toolkit_named_file(package: Path | None, dest_dir: Path, name: str) -> Path
                 _extract_archive(package, unpacked)
             found = list(unpacked.rglob(name))
             if found:
+                rel = found[0].relative_to(unpacked).as_posix()
+                print(f"[OK] toolkit selected | file={rel}")
                 return found[0]
         if package.is_file() and package.suffix.lower() == Path(name).suffix.lower():
             return package
@@ -6966,19 +7064,26 @@ def _load_name_catalog(work: Path) -> tuple[int, list[str]]:
             catalog_files.append(iso_path.name)
         except Exception as exc:
             _note_debug(exc, where="name-catalog", url="https://github.com/pycountry/pycountry")
+    country_prefer = ["priority:tree", "country.json", "zh"]
     package = _toolkit_fetch_package(
         "https://github.com/umpirsky/country-list",
         work,
-        prefer=["country.json"],
+        prefer=country_prefer,
     )
     zh_path = None
-    if package is not None and package.is_file():
+    if package is not None and package.is_file() and package.name.lower() == "country.json":
+        zh_path = package
+    elif package is not None and package.is_file():
         unpacked = work / f"{package.stem}_zh"
         os.makedirs(str(unpacked), exist_ok=True)
         if not any(unpacked.iterdir()):
             _extract_archive(package, unpacked)
-        found = [item for item in unpacked.rglob("country.json") if "/zh/" in str(item).replace("\\", "/")]
+        found = list(unpacked.rglob("country.json"))
+        found.sort(key=lambda item: -_prefer_path_score(item.as_posix(), _prefer_match_tokens(country_prefer)))
         zh_path = found[0] if found else None
+        if zh_path is not None:
+            rel = zh_path.relative_to(unpacked).as_posix()
+            print(f"[OK] toolkit selected | file={rel}")
     if zh_path is not None and zh_path.is_file():
         try:
             payload = json.loads(zh_path.read_text(encoding="utf-8"))
