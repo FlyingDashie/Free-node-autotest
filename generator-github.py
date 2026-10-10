@@ -6022,6 +6022,9 @@ def write_scored_history(
         while _visual_width(tag) < target:
             dash_n += 1
             tag = f"[SCORED{'-' * dash_n}{key}]"
+        if any(ord(ch) > 127 for ch in key):
+            dash_n = max(1, dash_n - 3)
+            tag = f"[SCORED{'-' * dash_n}{key}]"
         rows.append(f"{tag} {line}")
     global _SCORED_PATH
     _SCORED_LINES = rows
