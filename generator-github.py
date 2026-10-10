@@ -4158,8 +4158,6 @@ def _toolkit_repo_prefer_files(owner: str, repo: str, prefer: Any) -> list[str]:
 
     _scan(html_text, 2)
     hits.sort(key=lambda item: item[0], reverse=True)
-    if hits:
-        print(f"[OK] toolkit selected | file={hits[0][2]}")
     return unique_ordered([raw for _score, raw, _path in hits])
 
 
