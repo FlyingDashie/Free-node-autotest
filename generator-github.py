@@ -3109,11 +3109,19 @@ def _github_tag_source_asset(url: str, name: str, tag: str) -> bool:
     }
 
 
+_RELEASE_SPLIT: dict[str, tuple[list[str], list[str]]] = {}
+
+
 def _expand_github_release_assets(
     page_url: str,
     prefer: str = "",
     verify_hash: bool = False,
+    asset_kind: str = "release",
 ) -> list[str]:
+    cached = _RELEASE_SPLIT.get(page_url)
+    if cached is not None:
+        official_urls, source_urls = cached
+        return source_urls if asset_kind == "sourcecode" else official_urls
     match = re.search(r"github\.com/([^/]+)/([^/]+)", page_url, re.I)
     if not match:
         return []
@@ -3194,13 +3202,8 @@ def _expand_github_release_assets(
     source = sorted(source_ranked, key=lambda item: item[0], reverse=True)
     official_urls = unique_ordered([url for _, url in official])
     source_urls = unique_ordered([url for _, url in source]) if prefer_on else []
-    strong = any(_prefer_strong_asset(url, token) for url in official_urls)
-    if strong:
-        urls = unique_ordered(official_urls + source_urls)
-    elif source_urls:
-        urls = unique_ordered(source_urls + official_urls)
-    else:
-        urls = official_urls
+    _RELEASE_SPLIT[page_url] = (official_urls, source_urls)
+    urls = source_urls if asset_kind == "sourcecode" else official_urls
     global _LAST_CHECKSUM_LINKS
     _LAST_CHECKSUM_LINKS = list(checksum_links)
     if checksum_links:
@@ -4177,14 +4180,20 @@ def _collect_toolkit_candidates(
                 page_url,
                 prefer=prefer,
                 verify_hash=verify_hash,
+                asset_kind="release",
             )
 
-        def _from_page() -> list[str]:
+        def _from_tree() -> list[str]:
+            if not owner:
+                return []
+            return _toolkit_repo_prefer_files(owner, repo, prefer)
+
+        def _from_readme() -> list[str]:
             if not owner:
                 return []
             home = f"https://github.com/{owner}/{repo}"
             readme = _resolve_github_readme(home)
-            print(f"[INFO] toolkit try page | url={readme}")
+            print(f"[INFO] toolkit try readme | url={readme}")
             body = ""
             try:
                 body = fetch_text(readme)
@@ -4193,14 +4202,33 @@ def _collect_toolkit_candidates(
             links = _collect_archive_links(body, readme)
             return _rank_package_links(links, prefer=prefer, page_text=body)
 
-        def _from_tree() -> list[str]:
-            if not owner:
-                return []
-            return _toolkit_repo_prefer_files(owner, repo, prefer)
+        def _from_sourcecode() -> list[str]:
+            found = _expand_github_release_assets(
+                page_url,
+                prefer=prefer,
+                verify_hash=verify_hash,
+                asset_kind="sourcecode",
+            )
+            if found:
+                print(f"[INFO] toolkit try sourcecode | url={found[0]}")
+            return found
 
-        channels = {"release": _from_release, "page": _from_page, "tree": _from_tree}
-        order = [name for name in _prefer_priority(prefer) if name in channels]
-        order.extend(name for name in ("release", "page", "tree") if name not in order)
+        channels = {
+            "release": _from_release,
+            "tree": _from_tree,
+            "readme": _from_readme,
+            "page": _from_readme,
+            "sourcecode": _from_sourcecode,
+        }
+        aliases = {"page": "readme"}
+        order: list[str] = []
+        for name in _prefer_priority(prefer):
+            canonical = aliases.get(name, name)
+            if canonical in {"release", "tree", "readme", "sourcecode"} and canonical not in order:
+                order.append(canonical)
+        for name in ("release", "tree", "readme", "sourcecode"):
+            if name not in order:
+                order.append(name)
         for name in order:
             found = channels[name]()
             if found:
@@ -5309,7 +5337,7 @@ def prepare_geo_score() -> None:
         package = _toolkit_fetch_package(
             "https://github.com/mledoze/countries",
             work,
-            prefer=["countries.json"],
+            prefer=["priority:tree", "countries.json"],
         )
         json_path = _toolkit_named_file(package, work, "countries.json")
         _ensure_geo_coords(json_path)
@@ -7047,7 +7075,7 @@ def _load_name_catalog(work: Path) -> tuple[int, list[str]]:
     package = _toolkit_fetch_package(
         "https://github.com/pycountry/pycountry",
         work,
-        prefer=["iso3166-1.json"],
+        prefer=["priority:tree", "iso3166-1.json"],
     )
     iso_path = _toolkit_named_file(package, work, "iso3166-1.json")
     if iso_path is not None and iso_path.is_file():
