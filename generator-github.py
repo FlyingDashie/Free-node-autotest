@@ -5995,7 +5995,7 @@ def write_scored_history(
     global _SCORED_LINES
 
     def _visual_width(text: str) -> int:
-        return sum(2 if ord(ch) > 127 else 1 for ch in text)
+        return len(text)
 
     tagged: list[tuple[str, str]] = []
     for _score, line in ranked:
@@ -6018,8 +6018,6 @@ def write_scored_history(
     rows: list[str] = []
     for key, line in tagged:
         dash_n = 1
-        if any(ord(ch) > 127 for ch in key):
-            dash_n += 1
         tag = f"[SCORED{'-' * dash_n}{key}]"
         while _visual_width(tag) < target:
             dash_n += 1
