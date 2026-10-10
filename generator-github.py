@@ -7586,7 +7586,7 @@ def geo_score_lines(metrics: list[ProxyMetric]) -> list[str]:
         geos.append(float(parts["geo"]))
         adjs.append(float(parts["adj"]))
     featured = ["HK", "JP", "KR", "TW", "SG", "US", "GB", "FR", "DE", "NL", "CA"]
-    bits = [f"live={len(metrics)}"]
+    bits = []
     used = 0
     for code in featured:
         n = tallies.get(code, 0)
@@ -7596,7 +7596,7 @@ def geo_score_lines(metrics: list[ProxyMetric]) -> list[str]:
     other = len(metrics) - used
     if other:
         bits.append(f"other={other}")
-    lines = ["[SUMMARY] geo tally | " + " | ".join(bits)]
+    lines = ["[SUMMARY] geo | " + " | ".join(bits)]
     scores.sort()
     def _pct(p: float) -> float:
         if not scores:
@@ -7604,8 +7604,7 @@ def geo_score_lines(metrics: list[ProxyMetric]) -> list[str]:
         idx = min(len(scores) - 1, max(0, int(round((len(scores) - 1) * p))))
         return scores[idx]
     lines.append(
-        f"[SUMMARY] score summary | n={len(scores)} "
-        f"| max={scores[-1]:.4f} | p90={_pct(0.9):.4f} | p50={_pct(0.5):.4f} "
+        f"[SUMMARY] score | max={scores[-1]:.4f} | p90={_pct(0.9):.4f} | p50={_pct(0.5):.4f} "
         f"| avg={sum(scores)/len(scores):.4f} | min={scores[0]:.4f} "
         f"| geo_avg={sum(geos)/len(geos):.4f} | adj_avg={sum(adjs)/len(adjs):+.4f}"
     )
@@ -7615,10 +7614,10 @@ def geo_score_lines(metrics: list[ProxyMetric]) -> list[str]:
 def print_summary(total_nodes: int, candidates: int, metrics: list[ProxyMetric]) -> None:
     print_sep()
     avg_latency = round(sum(item.latency for item in metrics) / len(metrics), 2) if metrics else 0
-    print(f"[SUMMARY] total_nodes={total_nodes}")
-    print(f"[SUMMARY] legal_candidates={candidates}")
-    print(f"[SUMMARY] passed_latency_test={len(metrics)}")
-    print(f"[SUMMARY] avg_latency_ms={avg_latency}")
+    print(
+        f"[SUMMARY] collected={total_nodes} | candidates={candidates} "
+        f"| kept={len(metrics)} | avg={avg_latency}ms"
+    )
     for line in geo_score_lines(metrics):
         print(line)
 
