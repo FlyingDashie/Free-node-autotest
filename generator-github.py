@@ -4971,6 +4971,55 @@ def _article_feed_candidates(home: str) -> list[str]:
     return unique_ordered(cands)
 
 
+def _expand_aggregate_url(url: str) -> list[str]:
+    """Turn an aggregated url back into the pages it came from."""
+    text = str(url or "").strip()
+    if "{" not in text or "}" not in text:
+        return [text] if text else []
+    parts = re.split(r"(\{[^{}]+\})", text)
+    options: list[list[str]] = []
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith("{") and part.endswith("}"):
+            options.append([item for item in part[1:-1].split("|") if item])
+        else:
+            options.append([part])
+    if not options:
+        return [text]
+    expanded = [""]
+    for group in options:
+        expanded = [left + right for left in expanded for right in group]
+    return unique_ordered([item for item in expanded if item])
+
+
+def _previous_article_pages(feed_url: str) -> list[str]:
+    """Last round's successful article pages for this feed, from history logs."""
+    host = urlparse(feed_url).netloc.lower()
+    if not host or not HISTORY_DIR.is_dir():
+        return []
+    ranked: list[tuple[str, Path]] = []
+    for path in HISTORY_DIR.glob("*log*.log"):
+        if "debug" in path.name:
+            continue
+        stamp = history_file_stamp(path.name)
+        if stamp:
+            ranked.append((stamp, path))
+    ranked.sort(reverse=True)
+    for _stamp, path in ranked[:4]:
+        try:
+            body = path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        for line in body.splitlines():
+            if " source=[" not in line or host not in line:
+                continue
+            match = re.search(r"url=(https?://\S+)", line)
+            if match and host in match.group(1):
+                return _expand_aggregate_url(match.group(1).rstrip("|").strip())
+    return []
+
+
 def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> list[str]:
     _discover_pages_set([])
     body = ""
@@ -5069,24 +5118,44 @@ def discover_article(feed_url: str, prefer: str = "", bare_link: str = "") -> li
         _note_debug("no article links", where="article", url=feed_url)
         return []
 
+    def _try_page(page: str, reused: bool = False) -> list[str]:
+        if reused:
+            print(f"[INFO] article try reuse | url={page}")
+        try:
+            found = unique_ordered(
+                discover_sublink(page, prefer=prefer, bare_link=bare_link)
+            )
+        except Exception as exc:
+            _note_debug(exc, where="article", url=page)
+            found = []
+        file_hits = [
+            item for item in found
+            if re.search(r"\.(?:yaml|yml|txt|json)(?:$|[?#])", item, re.I)
+        ]
+        ok = bool(file_hits)
+        if not ok and str(bare_link or "").strip().lower() != "none":
+            ok = bool(found)
+        if ok:
+            _discover_pages_set([page])
+            return found
+        return []
+
+    reused_pages = _previous_article_pages(feed_url)
+    tried = 0
+    reused_done = False
     for stamp in stamps:
         for page in unique_ordered(groups[stamp]):
-            try:
-                found = unique_ordered(
-                    discover_sublink(page, prefer=prefer, bare_link=bare_link)
-                )
-            except Exception as exc:
-                _note_debug(exc, where="article", url=page)
-                found = []
-            file_hits = [
-                item for item in found
-                if re.search(r"\.(?:yaml|yml|txt|json)(?:$|[?#])", item, re.I)
-            ]
-            ok = bool(file_hits)
-            if not ok and str(bare_link or "").strip().lower() != "none":
-                ok = bool(found)
-            if ok:
-                _discover_pages_set([page])
+            tried += 1
+            if tried == 5 and reused_pages and not reused_done:
+                reused_done = True
+                for reused_page in reused_pages:
+                    found = _try_page(reused_page, reused=True)
+                    if found:
+                        return found
+                if page in reused_pages:
+                    continue
+            found = _try_page(page)
+            if found:
                 return found
     _note_debug("no article links", where="article", url=feed_url)
     return []
