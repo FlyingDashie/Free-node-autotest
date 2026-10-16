@@ -56,6 +56,8 @@ jobs:
               items = json.load(resp)
           raws = [item for item in items if item.get("name", "").endswith(".yaml") and "-raw-" in item.get("name", "")]
           raws.sort(key=lambda item: item.get("name", ""))
+          logs = [item for item in items if item.get("name", "").endswith(".log") and "-log-" in item.get("name", "") and "-debug-" not in item.get("name", "")]
+          logs.sort(key=lambda item: item.get("name", ""))
           if not raws:
               print("[INFO] no previous raw")
               raise SystemExit(0)
@@ -63,6 +65,11 @@ jobs:
           dest = Path("history") / item["name"]
           urllib.request.urlretrieve(item["download_url"], dest)
           print(f"[INFO] previous raw {dest.name} size={dest.stat().st_size}")
+          if logs:
+              item = logs[-1]
+              dest = Path("history") / item["name"]
+              urllib.request.urlretrieve(item["download_url"], dest)
+              print(f"[INFO] previous log {dest.name} size={dest.stat().st_size}")
           PY
 
       - name: Set up Python
