@@ -7282,6 +7282,16 @@ def _name_iso_hits(name: str) -> list[tuple[int, str, str]]:
         for m in pat.finditer(text):
             kind = _match_kind(m.group(0))
             hits.append((m.start(), code, "alias" if kind == "en" else kind))
+    # garbled flag keeps the ISO between underscores: рџ‡…_DE_
+    for m in re.finditer(r"_([A-Z]{2})_", text):
+        code = m.group(1)
+        if code in _GEO_COORDS or code in {"UK"}:
+            hits.append((m.start(1), "GB" if code == "UK" else code, "code"))
+    # bare ISO then number: UA 55, NO 7, BR 1
+    for m in re.finditer(r"(?<![A-Za-z])([A-Z]{2})\s+\d+", text):
+        code = m.group(1)
+        if code in _GEO_COORDS or code in {"UK"}:
+            hits.append((m.start(1), "GB" if code == "UK" else code, "code"))
     hits.sort()
     return hits
 
