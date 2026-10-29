@@ -5553,7 +5553,13 @@ def find_or_install_mihomo() -> Path:
             break
         time.sleep(2)
     if package is None:
-        raise RuntimeError("no matching Mihomo release asset found")
+        bundled = Path(__file__).resolve().parent / "vendor" / "mihomo-linux-amd64-compatible.gz"
+        if bundled.is_file():
+            print(f"[WARN] mihomo download failed, using bundled | file={bundled.name}")
+            package = install_dir / bundled.name
+            shutil.copy2(bundled, package)
+        else:
+            raise RuntimeError("no matching Mihomo release asset found")
     extracted = extract_mihomo_binary(package, install_dir)
     extracted.chmod(extracted.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     if extracted != binary:
