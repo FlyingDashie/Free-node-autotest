@@ -5471,6 +5471,55 @@ def prepare_geo_score() -> None:
     print(_GEO_READY_LOG)
 
 
+
+def _mihomo_smoke_ok(binary: Path) -> bool:
+    """Start with a minimal config; True if the controller answers."""
+    if not binary.is_file():
+        return False
+    with tempfile.TemporaryDirectory(prefix="mihomo-smoke-") as tmp:
+        work = Path(tmp)
+        cfg = work / "smoke.yaml"
+        port = find_free_port()
+        cfg.write_text(
+            f"mixed-port: 0\n"
+            f"external-controller: 127.0.0.1:{port}\n"
+            "proxies: []\n"
+            "proxy-groups:\n"
+            "  - name: SMOKE\n"
+            "    type: select\n"
+            "    proxies: [DIRECT]\n"
+            "rules:\n"
+            "  - MATCH,SMOKE\n",
+            encoding="utf-8",
+        )
+        proc = subprocess.Popen(
+            [str(binary), "-d", str(work), "-f", str(cfg)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            deadline = time.time() + 8
+            while time.time() < deadline:
+                if proc.poll() is not None:
+                    return False
+                try:
+                    r = requests.get(f"http://127.0.0.1:{port}/version", timeout=0.5, verify=False)
+                    if r.status_code == 200:
+                        return True
+                except Exception:
+                    pass
+                time.sleep(0.3)
+            return False
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except Exception:
+                    proc.kill()
+
+
 def find_or_install_mihomo() -> Path:
     formal = not _prefetch_quiet() and threading.current_thread().name != "prefetch-mihomo"
     if formal and _MIHOMO_PREFETCH_STARTED.is_set() and not _MIHOMO_PREFETCH_FAILED:
@@ -5565,6 +5614,16 @@ def find_or_install_mihomo() -> Path:
     if extracted != binary:
         shutil.copy2(extracted, binary)
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    def _smoke_bg() -> None:
+        global _MIHOMO_SMOKE_OK
+        try:
+            _MIHOMO_SMOKE_OK = _mihomo_smoke_ok(binary)
+        except Exception:
+            _MIHOMO_SMOKE_OK = False
+        finally:
+            _MIHOMO_SMOKE_DONE.set()
+    _MIHOMO_SMOKE_DONE.clear()
+    threading.Thread(target=_smoke_bg, name="mihomo-smoke", daemon=True).start()
     print(f"[OK] proxy engine ready, starting latency test | package={package.name}")
     return binary
 
@@ -5573,6 +5632,8 @@ _CHECKSUM_TEXT: dict[str, str | None] = {}
 _MIHOMO_PREFETCH_DONE = threading.Event()
 _MIHOMO_PREFETCH_STARTED = threading.Event()
 _MIHOMO_PREFETCH_FAILED = False
+_MIHOMO_SMOKE_DONE = threading.Event()
+_MIHOMO_SMOKE_OK = True
 
 
 def _wait_scan_idle(limit: float = 180.0) -> None:
@@ -6929,12 +6990,36 @@ def _benchmark_reshard(
     return _flatten_metrics(out)
 
 
+
+def _resolve_mihomo_engine(engine: Path) -> Path:
+    """Wait for the background smoke test; swap to bundled if it failed."""
+    if not _MIHOMO_SMOKE_DONE.is_set():
+        _MIHOMO_SMOKE_DONE.wait(timeout=30)
+    if _MIHOMO_SMOKE_OK:
+        return engine
+    bundled = Path(__file__).resolve().parent / "vendor" / "mihomo-linux-amd64-compatible.gz"
+    if not bundled.is_file():
+        raise RuntimeError("Mihomo failed to start and no bundled fallback")
+    print(f"[WARN] mihomo start failed, using bundled | file={bundled.name}")
+    install_dir = engine.parent
+    fallback = install_dir / bundled.name
+    shutil.copy2(bundled, fallback)
+    extracted = extract_mihomo_binary(fallback, install_dir)
+    extracted.chmod(extracted.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    if extracted != engine:
+        shutil.copy2(extracted, engine)
+        engine.chmod(engine.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    if not _mihomo_smoke_ok(engine):
+        raise RuntimeError("bundled Mihomo also failed to start")
+    return engine
+
+
 def benchmark_proxies(proxies: list[dict[str, Any]]) -> list[ProxyMetric]:
     global _SEP_JUST_PRINTED
     if not proxies:
         return []
 
-    engine = find_or_install_mihomo()
+    engine = _resolve_mihomo_engine(find_or_install_mihomo())
     _SEP_JUST_PRINTED = False
     print_sep()
     with tempfile.TemporaryDirectory(prefix="free-node-autotest-") as temp_name:
