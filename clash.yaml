@@ -7,11 +7,11 @@ unified-delay: true
 tcp-concurrent: true
 global-client-fingerprint: chrome
 generated-by: free-node-autotest
-generated-at: '2026-11-05T14:06:21.880622+00:00'
+generated-at: '2026-11-05T14:36:25.331121+00:00'
 proxies:
 - name: '[大FQ运动] end-gfw-kr64-VLESS'
   type: vless
-  server: 54.180.236.157
+  server: 43.201.85.185
   port: 443
   uuid: 7e68e32f-8015-4f37-9082-70e8b0b58043
   network: tcp
@@ -24,9 +24,17 @@ proxies:
     public-key: DHOrfoin7TeRpnIoU3d6qT5Yrq3QPVFp49kApATA4iE
     short-id: e04a526b0b09c765
   encryption: none
+- name: '[大FQ运动] end-gfw-kr64-HY2'
+  type: hysteria2
+  server: 43.201.85.185
+  port: 443
+  password: 7e68e32f-8015-4f37-9082-70e8b0b58043
+  sni: www.bing.com
+  skip-cert-verify: true
+  fingerprint: 896186feb20cb7403187a45ff3bd5ddc8bfbdd419d779d55d786189d36731a69
 - name: '[大FQ运动] end-gfw-kr64-SS'
   type: ss
-  server: 54.180.236.157
+  server: 43.201.85.185
   port: 8443
   cipher: chacha20-ietf-poly1305
   password: 7e68e32f-8015-4f37-9082-70e8b0b58043
@@ -61,28 +69,6 @@ proxies:
   cipher: chacha20-ietf-poly1305
   password: 7e68e32f-8015-4f37-9082-70e8b0b58043
   udp: true
-- name: '[Pawdroid] 美国+CloudFlare节点'
-  type: vless
-  server: 104.18.26.90
-  port: 443
-  udp: true
-  uuid: b8d8a5b0-867f-4491-b4e4-30edc04bb10e
-  encryption: none
-  tls: true
-  servername: u.srilankangrill.online
-  client-fingerprint: chrome
-  network: ws
-  ws-opts:
-    path: /
-    headers:
-      Host: u.srilankangrill.online
-- name: '[Pawdroid] 新西兰+V2CROSS.COM-2'
-  type: ss
-  server: 202.50.253.27
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
 - name: '[Pawdroid] 新加坡+V2CROSS.COM'
   type: vless
   server: 103.25.202.25
@@ -98,30 +84,47 @@ proxies:
     path: /
     headers:
       Host: u.srilankangrill.online
+- name: '[Pawdroid] 美国+CloudFlare节点'
+  type: vless
+  server: 104.18.26.90
+  port: 443
+  udp: true
+  uuid: b8d8a5b0-867f-4491-b4e4-30edc04bb10e
+  encryption: none
+  tls: true
+  servername: u.srilankangrill.online
+  client-fingerprint: chrome
+  network: ws
+  ws-opts:
+    path: /
+    headers:
+      Host: u.srilankangrill.online
 - name: '[Pawdroid] 美国+V2CROSS.COM'
+  type: hysteria2
+  server: starlink-ft.251313.xyz
+  port: 443
+  udp: true
+  password: 'https://xship.best'
+  tls: true
+  servername: xship.top
+  skip-cert-verify: true
+  network: tcp
+- name: '[Pawdroid] 新西兰+V2CROSS.COM-2'
+  type: ss
+  server: 202.50.253.27
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: '[Pawdroid] 美国+V2CROSS.COM-2'
   type: ss
   server: 154.36.158.197
   port: 8388
   cipher: aes-256-gcm
   password: BeaUf9c0AEWH40Pu
   udp: true
-- name: '[Pawdroid] 美国+Xerox'
-  type: vless
-  server: 13.140.80.136
-  port: 443
-  udp: true
-  uuid: e07a6d05-f665-4811-91f0-9b3dc1094e4d
-  encryption: none
-  flow: xtls-rprx-vision
-  tls: true
-  servername: tradingview.com
-  client-fingerprint: firefox
-  reality-opts:
-    public-key: yr_opKG6DGTppNDXkk-DhGSYJZXbb9o-caexk2FZO38
-    short-id: 8f3c6e2a1b5d4f09
-  network: tcp
 - name: "[FreeV2-Base64] 🇺🇸 US-LN"
-  server: ct.877774.xyz
+  server: freev2.cloudflare.182682.xyz
   port: 443
   type: vless
   uuid: ea81763f-e534-4700-aa28-9ac98156771b
@@ -135,22 +138,6 @@ proxies:
     path: /announcement
     headers:
       Host: us-lax.862400.xyz
-  encryption: none
-- name: "[FreeV2-Base64] 🇸🇬 SG-LN"
-  server: freev2.cloudflare.182682.xyz
-  port: 443
-  type: vless
-  uuid: ea81763f-e534-4700-aa28-9ac98156771b
-  tls: true
-  tfo: false
-  skip-cert-verify: true
-  servername: ap-south.862400.xyz
-  client-fingerprint: random
-  network: ws
-  ws-opts:
-    path: /announcement
-    headers:
-      Host: ap-south.862400.xyz
   encryption: none
 - name: "[Freesocks] 🌐 via CDN 1"
   type: vless
@@ -288,16 +275,6 @@ proxies:
   udp: true
 - ip: 172.16.0.2
   mtu: 1280
-  name: "[NekoWarp] 🇳🇱 NL-CF-WARP-8"
-  port: 8886
-  private-key: KEeuUuY+SnmMzlogzyOVH+50jUtjlcro3HyafPHIKHk=
-  public-key: bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
-  remote-dns-resolve: true
-  server: 188.114.97.34
-  type: wireguard
-  udp: true
-- ip: 172.16.0.2
-  mtu: 1280
   name: "[NekoWarp] 🇳🇱 NL-CF-WARP-9"
   port: 3854
   private-key: KEeuUuY+SnmMzlogzyOVH+50jUtjlcro3HyafPHIKHk=
@@ -316,18 +293,99 @@ proxies:
   server: 162.159.195.176
   type: wireguard
   udp: true
-- name: '[Mibei77-RSS] RU俄罗斯(mibei77.com 米贝节点分享)_3'
-  type: trojan
-  server: 176.124.223.27
+- name: '[Mibei77-RSS] CA加拿大(mibei77.com 米贝节点分享)-2'
+  type: vless
+  server: 172.64.152.19
   port: 443
-  password: '521314'
-  sni: hhtj.hhllfly.kdns.fr
-  skip-cert-verify: true
+  udp: true
+  uuid: 4e4f1f70-5e56-4a76-bb9d-db087f4690c4
+  encryption: none
   tls: true
+  servername: jp3.yohototo.top
+  client-fingerprint: unsafe
+  network: ws
   ws-opts:
-    path: "/pyip=Telegram-WangCai2🇨🇳"
+    path: /tyxyws
     headers:
-      Host: hhtj.hhllfly.kdns.fr
+      Host: jp3.yohototo.top
+- name: '[Mibei77-RSS] SG新加坡(mibei77.com 米贝节点分享)-2'
+  type: vless
+  server: 134.255.211.36
+  port: 443
+  udp: true
+  uuid: c5f59ef3-9540-49fa-bd1e-c6c2f79df49a
+  encryption: none
+  flow: xtls-rprx-vision
+  tls: true
+  servername: sg-sin.probe.geomyip.com
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: KcI3PoYu2yF7whv-e0C7JnRyUoUiUDu6tOlUBPYYbCk
+    short-id: 2e96bf6afa823abb
+  network: tcp
+- name: '[Mibei77-RSS] SG新加坡(mibei77.com 米贝节点分享)-3'
+  type: vless
+  server: 43.163.112.174
+  port: 443
+  udp: true
+  uuid: 0dedd47d-47b9-4ed1-9c9f-cbeecad57a68
+  encryption: none
+  flow: xtls-rprx-vision
+  tls: true
+  servername: www.cloudflare.com
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: mXQudYHNu0pebcdk1_qn-UgcmwhjaV7y9UrYu3HX7Rg
+    short-id: 0123456789abcdef
+  network: tcp
+- name: '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-9'
+  type: ss
+  server: 202.50.253.36
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-10'
+  type: ss
+  server: 202.50.253.90
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-11'
+  type: ss
+  server: 202.50.253.54
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-12'
+  type: ss
+  server: 202.50.253.45
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-13'
+  type: ss
+  server: 202.50.253.99
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-14'
+  type: ss
+  server: 202.50.253.18
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-15'
+  type: ss
+  server: 202.50.253.72
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
   udp: true
 - name: "[Yoyapai-RSS] 🇺🇸US美国丨yoyapai.com"
   type: vless
@@ -344,56 +402,7 @@ proxies:
     public-key: kBTMVLCNE0jjwuJF6H5-65l5Pe0QToS0Hg-9Tmaa7Sk
     short-id: 1a2b3c4d
   network: tcp
-- name: "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com"
-  type: ss
-  server: 202.50.253.54
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com-2"
-  type: ss
-  server: 202.50.253.63
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com"
-  type: ss
-  server: 202.50.253.72
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com-3"
-  type: ss
-  server: 202.50.253.45
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: '[Yoyapai-RSS] ❓未知丨yoyapai.com-3'
-  type: ss
-  server: 202.50.253.36
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: '[Yoyapai-RSS] ❓未知丨yoyapai.com-4'
-  type: ss
-  server: 202.50.253.18
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: '[Yoyapai-RSS] ❓未知丨yoyapai.com-5'
-  type: ss
-  server: 202.50.253.81
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-6"
+- name: "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-5"
   type: vless
   server: 169.40.42.229
   port: 443
@@ -423,55 +432,65 @@ proxies:
     public-key: GCCZ1ZZjB_nj7yxqFi22bIIWWr_G6rnWUzDcssN_40o
     short-id: b28db60d77c50b4f
   network: tcp
-- type: vless
-  name: "[免费节点1] 🇺🇸_美国 (57)"
-  server: 199.232.78.159
-  port: 443
-  uuid: 72881b3f-76f7-4cae-912d-e95e602a5ca4
+- name: "[Yoyapai-RSS] 🇭🇰HK香港-6"
+  type: vmess
+  server: dog-us.kunlun01dns.com
+  port: 21011
+  uuid: 9464ca40-dd75-3742-a628-d931a9f413b2
+  alterId: 0
+  cipher: auto
+  network: tcp
+  tls: false
   udp: true
-  tls: true
-  servername: cdn.akamai.steamstatic.com
-  sni: cdn.akamai.steamstatic.com
-  skip-cert-verify: true
-  client-fingerprint: chrome
-  network: ws
-  ws-opts:
-    path: /
-    headers:
-      Host: copy_az_channel_NUFiLTER_8i.global.ssl.fastly.net.
+- name: "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-21"
+  type: vless
+  server: 45.129.242.56
+  port: 443
+  udp: true
+  uuid: ebdfaf99-41d8-4e48-8196-d54510ffb556
   encryption: none
-- type: vless
-  name: '[免费节点1] 电报群：t.me/vvkj11'
-  server: 134.255.211.36
-  port: 443
-  uuid: c5f59ef3-9540-49fa-bd1e-c6c2f79df49a
   flow: xtls-rprx-vision
-  udp: true
-  tls: true
-  servername: sg-sin.probe.geomyip.com
-  sni: sg-sin.probe.geomyip.com
-  skip-cert-verify: true
-  client-fingerprint: chrome
-  reality-opts:
-    public-key: KcI3PoYu2yF7whv-e0C7JnRyUoUiUDu6tOlUBPYYbCk
-    short-id: 2e96bf6afa823abb
-  encryption: none
-- type: vless
-  name: "[免费节点1] 🇸🇬_新加坡 (2)"
-  server: 43.163.112.174
-  port: 443
-  uuid: 0dedd47d-47b9-4ed1-9c9f-cbeecad57a68
-  flow: xtls-rprx-vision
-  udp: true
   tls: true
   servername: www.cloudflare.com
-  sni: www.cloudflare.com
-  skip-cert-verify: true
   client-fingerprint: chrome
   reality-opts:
-    public-key: mXQudYHNu0pebcdk1_qn-UgcmwhjaV7y9UrYu3HX7Rg
-    short-id: 0123456789abcdef
-  encryption: none
+    public-key: YURKlEQ3rap4KOXXGsVFZyYev2oDU2gCEbNTXPdKWRY
+    short-id: abcdef
+  network: tcp
+- type: vmess
+  name: "[免费节点1] 🇺🇸_美国 (58)"
+  server: 129.146.77.248
+  port: 39495
+  uuid: f836c736-87fc-4fde-aabc-00857ecdff3e
+  cipher: auto
+  alterId: 0
+  udp: true
+  tls: false
+  servername: 129.146.77.248
+  sni: 129.146.77.248
+  skip-cert-verify: true
+  network: ws
+  ws-opts:
+    path: /cctv13.m3u8
+    headers:
+      Host: 129.146.77.248
+- type: vmess
+  name: "[免费节点1] 🇰🇷_韩国 (2)"
+  server: 132.145.80.230
+  port: 80
+  uuid: 5155860e-d07d-46c3-9128-3afbd84626c7
+  cipher: auto
+  alterId: 0
+  udp: true
+  tls: false
+  servername: 132.145.80.230
+  sni: 132.145.80.230
+  skip-cert-verify: true
+  network: ws
+  ws-opts:
+    path: /cctv13.m3u8
+    headers:
+      Host: 132.145.80.230
 - type: trojan
   name: "[免费节点1] 🇺🇸_美国"
   server: 216.106.186.82
@@ -509,22 +528,6 @@ proxies:
   sni: cdn.unlockyourfuturefindyourperfectcareer.com
   skip-cert-verify: true
   client-fingerprint: chrome
-- type: vless
-  name: "[免费节点1] 🇺🇸_美国 (4)"
-  server: 23.95.115.116
-  port: 2053
-  uuid: 2739258b-a278-4bed-bc5d-f88830824dce
-  flow: xtls-rprx-vision
-  udp: true
-  tls: true
-  servername: www.cloudflare.com
-  sni: www.cloudflare.com
-  skip-cert-verify: true
-  client-fingerprint: chrome
-  reality-opts:
-    public-key: plwyjJZIVDt1OtwDAxfcLjDsR7dseVCe9Ia3HceIKEg
-    short-id: a1b2c3d4
-  encryption: none
 - type: trojan
   name: "[免费节点1] 🇺🇸_美国 (5)"
   server: 66.163.114.126
@@ -588,6 +591,17 @@ proxies:
   client-fingerprint: chrome
   encryption: none
 - type: trojan
+  name: "[免费节点1] 🇺🇸_美国 (8)"
+  server: 66.163.122.26
+  port: 443
+  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
+  udp: true
+  tls: true
+  servername: blog.searchnationwidecareerchangehelperandguidancetoday.com
+  sni: blog.searchnationwidecareerchangehelperandguidancetoday.com
+  skip-cert-verify: true
+  client-fingerprint: chrome
+- type: trojan
   name: "[免费节点1] 🇺🇸_美国 (9)"
   server: 66.163.112.171
   port: 443
@@ -635,33 +649,6 @@ proxies:
   sni: api.explorecreativejobsandenhanceyourcareerportfolio.com
   skip-cert-verify: true
   client-fingerprint: chrome
-- type: trojan
-  name: "[免费节点1] 🇺🇸_美国 (15)"
-  server: 216.152.155.23
-  port: 443
-  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
-  udp: true
-  tls: true
-  servername: courses.nextjobopportunityandclaimyouridealrole.com
-  sni: courses.nextjobopportunityandclaimyouridealrole.com
-  skip-cert-verify: true
-  client-fingerprint: chrome
-- type: vless
-  name: "[免费节点1] 🇺🇸_美国 (16)"
-  server: 15.204.97.219
-  port: 23576
-  uuid: 48ff2b70-e180-582f-8866-d9a2edeed5f5
-  flow: xtls-rprx-vision
-  udp: true
-  tls: true
-  servername: fuck.rkn
-  sni: fuck.rkn
-  skip-cert-verify: true
-  client-fingerprint: chrome
-  reality-opts:
-    public-key: 1y5h2FGWKXTJ9xLPCqPo6Mw7RxoZzh6fGkEQKNxpZ3s
-    short-id: '01'
-  encryption: none
 - type: vless
   name: "[免费节点1] 🇺🇸_美国 (17)"
   server: 15.204.97.206
@@ -721,21 +708,17 @@ proxies:
   sni: learn.explorecreativejobsandenhanceyourcareerportfolio.com
   skip-cert-verify: true
   client-fingerprint: chrome
-- type: vless
-  name: "[免费节点1] 🇬🇧_英国"
-  server: 51.89.194.151
-  port: 2053
-  uuid: 8e790f25-1d71-4601-9fb0-d503931dcfca
+- type: trojan
+  name: "[免费节点1] 🇺🇸_美国 (20)"
+  server: 66.163.122.81
+  port: 443
+  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
   udp: true
   tls: true
-  servername: www.apple.com
-  sni: www.apple.com
+  servername: courses.searchnationwidecareerchangehelperandguidancetoday.com
+  sni: courses.searchnationwidecareerchangehelperandguidancetoday.com
   skip-cert-verify: true
   client-fingerprint: chrome
-  reality-opts:
-    public-key: xPEBx4wUmwAAv4ikUALNBf5wH6TRhyeQ0Q2pcNELsV0
-    short-id: d051f678212f9d54
-  encryption: none
 - type: vless
   name: "[免费节点1] 🇸🇬_新加坡 (3)"
   server: 46.137.202.178
@@ -753,6 +736,17 @@ proxies:
     short-id: e692a8250d2e2fd0
   encryption: none
 - type: trojan
+  name: "[免费节点1] 🇺🇸_美国 (21)"
+  server: resources.findlocaljobnetworkandbuildcommunityconnections.com
+  port: 443
+  password: f0eb8c92ce8946aaba856569cff1a16b
+  udp: true
+  tls: true
+  servername: resources.findlocaljobnetworkandbuildcommunityconnections.com
+  sni: resources.findlocaljobnetworkandbuildcommunityconnections.com
+  skip-cert-verify: true
+  client-fingerprint: chrome
+- type: trojan
   name: "[免费节点1] 🇺🇸_美国 (22)"
   server: 169.197.140.245
   port: 443
@@ -761,17 +755,6 @@ proxies:
   tls: true
   servername: www.discoverfreshgraduatejobsstartyourprofessionaljourney.com
   sni: www.discoverfreshgraduatejobsstartyourprofessionaljourney.com
-  skip-cert-verify: true
-  client-fingerprint: chrome
-- type: trojan
-  name: "[免费节点1] 🇺🇸_美国 (24)"
-  server: 167.88.61.193
-  port: 443
-  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
-  udp: true
-  tls: true
-  servername: browseseniorrolesandenhanceyourcareertoday.com
-  sni: browseseniorrolesandenhanceyourcareertoday.com
   skip-cert-verify: true
   client-fingerprint: chrome
 - type: vmess
@@ -795,6 +778,22 @@ proxies:
   sni: www.healthcarejobshubenhancemedicalprofessionalskillstoday.com
   skip-cert-verify: true
   client-fingerprint: chrome
+- type: vless
+  name: "[免费节点1] 🇳🇱_荷兰 (9)"
+  server: 51.158.206.12
+  port: 23576
+  uuid: 48ff2b70-e180-582f-8866-d9a2edeed5f5
+  flow: xtls-rprx-vision
+  udp: true
+  tls: true
+  servername: fuck.rkn
+  sni: fuck.rkn
+  skip-cert-verify: true
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: 1y5h2FGWKXTJ9xLPCqPo6Mw7RxoZzh6fGkEQKNxpZ3s
+    short-id: '01'
+  encryption: none
 - type: trojan
   name: "[免费节点1] 🇺🇸_美国 (27)"
   server: 216.152.155.59
@@ -817,17 +816,16 @@ proxies:
   sni: www.iloverussia2026.com
   skip-cert-verify: true
   client-fingerprint: chrome
-- type: trojan
-  name: "[免费节点1] 🇺🇸_美国 (30)"
-  server: 167.88.61.20
-  port: 443
-  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
+- type: vmess
+  name: "[免费节点1] 🇺🇸_美国 (31)"
+  server: 38.110.1.246
+  port: 18000
+  uuid: f8c8dc3d-0d37-46b0-8b34-a7232882fcfe
+  cipher: auto
+  alterId: 0
   udp: true
-  tls: true
-  servername: api.browseseniorrolesandenhanceyourcareertoday.com
-  sni: api.browseseniorrolesandenhanceyourcareertoday.com
+  tls: false
   skip-cert-verify: true
-  client-fingerprint: chrome
 - type: vless
   name: "[免费节点1] 🇸🇬_新加坡 (5)"
   server: 3.0.111.82
@@ -882,6 +880,16 @@ proxies:
   sni: www.nextjobopportunityandclaimyouridealrole.com
   skip-cert-verify: true
   client-fingerprint: chrome
+- type: vmess
+  name: "[免费节点1] 🇨🇦_加拿大 (5)"
+  server: 134.195.196.211
+  port: 18000
+  uuid: f8c8dc3d-0d37-46b0-8b34-a7232882fcfe
+  cipher: auto
+  alterId: 0
+  udp: true
+  tls: false
+  skip-cert-verify: true
 - type: vless
   name: "[免费节点1] 🇺🇸_美国 (34)"
   server: 15.204.97.198
@@ -909,36 +917,9 @@ proxies:
   sni: resources.unlockyourfuturefindyourperfectcareer.com
   skip-cert-verify: true
   client-fingerprint: chrome
-- type: trojan
-  name: "[免费节点1] 🇺🇸_美国 (36)"
-  server: 216.152.155.176
-  port: 443
-  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
-  udp: true
-  tls: true
-  servername: blog.nextjobopportunityandclaimyouridealrole.com
-  sni: blog.nextjobopportunityandclaimyouridealrole.com
-  skip-cert-verify: true
-  client-fingerprint: chrome
 - type: vless
   name: "[免费节点1] 🇺🇸_美国 (37)"
   server: 15.204.97.216
-  port: 23576
-  uuid: 48ff2b70-e180-582f-8866-d9a2edeed5f5
-  flow: xtls-rprx-vision
-  udp: true
-  tls: true
-  servername: fuck.rkn
-  sni: fuck.rkn
-  skip-cert-verify: true
-  client-fingerprint: chrome
-  reality-opts:
-    public-key: 1y5h2FGWKXTJ9xLPCqPo6Mw7RxoZzh6fGkEQKNxpZ3s
-    short-id: '01'
-  encryption: none
-- type: vless
-  name: "[免费节点1] 🇳🇱_荷兰 (12)"
-  server: 51.158.206.25
   port: 23576
   uuid: 48ff2b70-e180-582f-8866-d9a2edeed5f5
   flow: xtls-rprx-vision
@@ -985,17 +966,21 @@ proxies:
   sni: learn.nextjobopportunityandclaimyouridealrole.com
   skip-cert-verify: true
   client-fingerprint: chrome
-- type: trojan
-  name: "[免费节点1] 🇩🇪_德国 (11)"
-  server: 193.108.119.96
+- type: vless
+  name: "[免费节点1] 🇺🇸_美国 (40)"
+  server: 85.155.179.206
   port: 443
-  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
+  uuid: 86a83d11-d751-4b60-aa4e-1dca5cff7028
   udp: true
   tls: true
-  servername: learn.iloverussia2026.com
-  sni: learn.iloverussia2026.com
+  servername: us3.shtil.io
+  sni: us3.shtil.io
   skip-cert-verify: true
+  alpn:
+  - h2
+  - http/1.1
   client-fingerprint: chrome
+  encryption: none
 - type: trojan
   name: "[免费节点1] 🇺🇸_美国 (41)"
   server: 66.163.112.147
@@ -1007,6 +992,22 @@ proxies:
   sni: courses.unlockyourfuturefindyourperfectcareer.com
   skip-cert-verify: true
   client-fingerprint: chrome
+- type: vless
+  name: "[免费节点1] 🇩🇪_德国 (12)"
+  server: 77.90.2.130
+  port: 43086
+  uuid: d782aa4c-9284-4a60-a9d9-f61412f8a2a4
+  flow: xtls-rprx-vision
+  udp: true
+  tls: true
+  servername: apple.com
+  sni: apple.com
+  skip-cert-verify: true
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: SRKTZm_KYvsD9ONd5VU54ABZxudjR65r5Uhxc-1lLko
+    short-id: 1c601fed
+  encryption: none
 - type: vless
   name: "[免费节点1] 🇩🇪_德国 (13)"
   server: 169.40.42.231
@@ -1051,6 +1052,17 @@ proxies:
     short-id: '01'
   encryption: none
 - type: trojan
+  name: "[免费节点1] 🇺🇸_美国 (47)"
+  server: 66.163.122.7
+  port: 443
+  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
+  udp: true
+  tls: true
+  servername: www.searchnationwidecareerchangehelperandguidancetoday.com
+  sni: www.searchnationwidecareerchangehelperandguidancetoday.com
+  skip-cert-verify: true
+  client-fingerprint: chrome
+- type: trojan
   name: "[免费节点1] 🇺🇸_美国 (48)"
   server: 216.106.186.66
   port: 443
@@ -1061,22 +1073,38 @@ proxies:
   sni: www.findlocaljobnetworkandbuildcommunityconnections.com
   skip-cert-verify: true
   client-fingerprint: chrome
-- type: vmess
-  name: "[免费节点1] 🇺🇸_美国 (49)"
-  server: 84.17.41.2
-  port: 18000
-  uuid: f8c8dc3d-0d37-46b0-8b34-a7232882fcfe
-  cipher: auto
-  alterId: 0
-  udp: true
-  tls: false
-  skip-cert-verify: true
-- name: "[免费节点2] 🧿100@oneclickvpnkeys"
-  password: 203d1d64-3313-11ed-bb74-f23c9164ca5d
+- type: trojan
+  name: "[免费节点1] 🇺🇸_美国 (50)"
+  server: 66.163.114.132
   port: 443
-  server: fbe34f09-tmm5c0-trpvht-1ey07.los.hyhuawei.com
+  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
+  udp: true
+  tls: true
+  servername: courses.findconnectwithemployersandbuildprofessionalnetwork.com
+  sni: courses.findconnectwithemployersandbuildprofessionalnetwork.com
   skip-cert-verify: true
-  sni: fbe34f09-tmm5c0-trpvht-1ey07.los.hyhuawei.com
+  client-fingerprint: chrome
+- type: vless
+  name: "[免费节点1] 🇩🇪_德国 (16)"
+  server: 9.247.23.209
+  port: 443
+  uuid: b9bfa54d-bc44-4592-a6d6-89a9665d286f
+  flow: xtls-rprx-vision
+  udp: true
+  tls: true
+  servername: mother-earth.fyi
+  sni: mother-earth.fyi
+  skip-cert-verify: true
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc
+  encryption: none
+- name: "[免费节点2] 🧿94@oneclickvpnkeys"
+  password: 3be8cba8-b721-11ec-8b04-f23c91cfbbc9
+  port: 443
+  server: b8c1a181-tmm5c0-twuk0i-1hzyr.los.hyhuawei.com
+  skip-cert-verify: true
+  sni: b8c1a181-tmm5c0-twuk0i-1hzyr.los.hyhuawei.com
   tls: false
   type: hysteria2
 - name: "[免费节点2] 🇺🇸206889 | ⚡️Telegram = t.me/L..."
@@ -1110,12 +1138,12 @@ proxies:
   sni: crt.onecloudstream.com
   tls: false
   type: hysteria2
-- name: "[免费节点2] 🧿97@oneclickvpnkeys"
-  password: 8e0f8ef2-5fe3-11ec-a8bf-f23c91cfbbc9
+- name: "[免费节点2] 🧿98@oneclickvpnkeys"
+  password: 8fa4bea0-8703-11ef-83cc-f23c913c8d2b
   port: 443
-  server: 807fc395-tmm5c0-u5ip77-duku.los.hyhuawei.com
+  server: 0b28dbb8-tmm5c0-tn3jhp-1qthu.los.hyhuawei.com
   skip-cert-verify: true
-  sni: 807fc395-tmm5c0-u5ip77-duku.los.hyhuawei.com
+  sni: 0b28dbb8-tmm5c0-tn3jhp-1qthu.los.hyhuawei.com
   tls: false
   type: hysteria2
 - name: "[免费节点2] 🧿99@oneclickvpnkeys"
@@ -1136,44 +1164,6 @@ proxies:
   sni: nas.aizhzo.com
   tls: false
   type: hysteria2
-- name: "[免费节点2] 🍪13@oneclickvpnkeys"
-  password: f4b80b26-b6d4-49a6-a460-f50efb7a457c
-  port: 443
-  server: 45.91.237.78
-  sni: node.aweom.su
-  tls: false
-  type: hysteria2
-- name: '[免费节点2] @confiig_hub #1'
-  obfs: salamander
-  obfs-password: rG07s3COMIEvdnQipRyWzx_H_2xygNC3
-  password: p7Q76LzlnS4hIzr1W3staBOnUe_WwSkR
-  port: 443
-  server: 130.49.161.70
-  skip-cert-verify: false
-  sni: hy2.aspidnet.xyz
-  tls: false
-  type: hysteria2
-- name: "[免费节点2] 🇫🇷[www.v2nodes.com] vless-FR-1... #2"
-  network: ws
-  port: 14430
-  server: 138.124.70.41
-  tls: false
-  type: vless
-  uuid: 6cc745e3-4eb9-46c8-a4a1-85dee7b87edc
-  ws-opts:
-    headers:
-      Host: 138.124.70.41
-    path: /vless
-  encryption: none
-- name: "[免费节点2] 🇬🇧[www.v2nodes.com] vless-GB-1... #3"
-  network: tcp
-  port: 8443
-  server: node-uk.connectsuite.org
-  servername: node-uk.connectsuite.org
-  tls: true
-  type: vless
-  uuid: c08f0056-7a6d-4931-813b-aaa3cdd00aed
-  encryption: none
 - name: "[免费节点2] 🇮🇳[www.v2nodes.com] vless-IN-1... #1"
   network: ws
   port: 14430
@@ -1201,21 +1191,15 @@ proxies:
       Host: jp3.yohototo.top
     path: /tyxyws
   encryption: none
-- client-fingerprint: unsafe
-  encryption: none
-  name: "[免费节点2] 🇲🇾[www.v2nodes.com] vless-MY-1..."
-  network: ws
-  port: 443
-  server: 8.35.211.242
-  servername: vpn.cintaku.qzz.io
-  skip-cert-verify: false
-  tls: true
+- encryption: none
+  name: "[免费节点2] 🇯🇵[www.v2nodes.com] vless-JP-1... #4"
+  network: tcp
+  port: 47878
+  server: 152.69.195.67
+  servername: 152.69.195.67
+  tls: false
   type: vless
-  uuid: fc7d2cfe-f5ef-40c8-a848-a0bdc11f6349
-  ws-opts:
-    headers:
-      Host: vpn.cintaku.qzz.io
-    path: /vlessws
+  uuid: eb8613e3-8393-4cff-a3ad-6501fd4adc63
 - client-fingerprint: chrome
   name: "[免费节点2] 🇸🇬[www.v2nodes.com] vless-SG-1..."
   port: 56984
@@ -1272,10 +1256,34 @@ proxies:
   server: 51.222.136.236
   type: ss
 - cipher: aes-256-gcm
+  name: "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1546... #1"
+  password: g5MeD6Ft3CWlJId
+  port: 5003
+  server: 51.222.155.32
+  type: ss
+- cipher: aes-256-gcm
+  name: "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1545..."
+  password: cdBIDV42DCwnfIN
+  port: 8119
+  server: 51.79.64.198
+  type: ss
+- cipher: aes-256-gcm
+  name: "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1545... #1"
+  password: kDWvXYZoTBcGkC4
+  port: 8882
+  server: 51.79.49.116
+  type: ss
+- cipher: aes-256-gcm
   name: "[免费节点2] 🇬🇧[www.v2nodes.com] ss-GB-1602..."
   password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
   port: 19999
   server: 185.176.206.9
+  type: ss
+- cipher: aes-256-gcm
+  name: "[免费节点2] 🇮🇹[www.v2nodes.com] ss-IT-1597..."
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  port: 19999
+  server: 185.164.175.81
   type: ss
 - cipher: aes-256-gcm
   name: "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-1544..."
@@ -1300,6 +1308,12 @@ proxies:
   password: shadowsocks
   port: 443
   server: 149.22.87.241
+  type: ss
+- cipher: aes-256-gcm
+  name: "[免费节点2] 🇰🇷[www.v2nodes.com] ss-KR-1185..."
+  password: KixLvKzwjekG00rm
+  port: 8000
+  server: 141.164.45.187
   type: ss
 - cipher: aes-256-gcm
   name: "[免费节点2] 🏳[www.v2nodes.com] ss- #5"
@@ -1342,12 +1356,6 @@ proxies:
   port: 443
   server: 193.108.119.29
   sni: blog.iloverussia2026.com
-  type: trojan
-- name: "[免费节点2] 🇵🇱[www.v2nodes.com] trojan-PL-..."
-  password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
-  port: 443
-  server: 70.34.252.255
-  sni: browseexecutivejobopeningsandenhanceleadershipcareer.com
   type: trojan
 - name: "[免费节点2] 🇸🇬[www.v2nodes.com] trojan-SG-..."
   password: 0ab6c98dae3b48e8b9c4a776b6c9c19a
@@ -1419,19 +1427,32 @@ proxies:
   type: http
 - alterId: 0
   cipher: auto
-  name: "[免费节点2] 🇭🇰 香港 | HKG #3"
+  name: "[免费节点2] 🇭🇰 香港 | HKG #1"
   network: ws
-  port: 443
-  server: vipccc.cc
-  servername: vipccc.cc
+  port: 36703
+  server: 47.244.120.197
   skip-cert-verify: true
-  tls: true
+  tls: false
   type: vmess
-  uuid: 5bead32f-a987-4f57-b1a8-6698778facda
+  udp: true
+  uuid: 45b83519-9c4f-4052-a11b-02e017b636d4
+  ws-opts:
+    path: /arki
+- alterId: 0
+  cipher: auto
+  name: "[免费节点2] 🇭🇰 香港 | HKG #2"
+  network: ws
+  port: 23026
+  server: 47.244.120.197
+  skip-cert-verify: true
+  tls: false
+  type: vmess
+  udp: true
+  uuid: b9de1bc9-baa7-41ac-86f7-ccd59695cb21
   ws-opts:
     headers:
-      Host: vipccc.cc
-    path: /ray_proxy
+      Host: 47.244.120.197
+    path: /arki
 - client-fingerprint: unsafe
   name: "[免费节点2] 🇯🇵 日本 | JPN #2"
   network: ws
@@ -1447,24 +1468,9 @@ proxies:
       Host: jp3.yohototo.top
     path: /tyxyws
   encryption: none
-- client-fingerprint: random
-  name: "[免费节点2] 🇸🇬 新加坡 | SGP #3"
-  network: ws
-  port: 443
-  server: ap-south.862400.xyz
-  servername: ap-south.862400.xyz
-  tls: true
-  type: vless
-  udp: true
-  uuid: ea81763f-e534-4700-aa28-9ac98156771b
-  ws-opts:
-    headers:
-      Host: ap-south.862400.xyz
-    path: /announcement
-  encryption: none
-- name: '[免费节点2] IE_speednode_0013'
-  port: 443
-  server: 34.249.214.108
+- name: '[免费节点2] US_speednode_0039'
+  port: 8443
+  server: 44.248.167.117
   skip-cert-verify: true
   tls: true
   type: http
@@ -1497,59 +1503,20 @@ proxies:
   alpn:
   - h3
   udp: true
-- name: '[免费节点5] SSR-美国-NF解锁自制剧-ChatGPT-TikTok-YouTube-107.151.182.253:8080'
-  type: ssr
-  server: 107.151.182.253
-  port: 8080
-  password: 14fFPrbezE3HDZzsMOr6
-  cipher: rc4-md5
-  protocol: origin
-  obfs: plain
-- name: '[免费节点6] 英国 004'
-  type: vless
-  network: xhttp
-  server: swo2.nexfile.net
-  port: 4443
-  uuid: a35c508f-4d5d-4531-842e-6e9d43c762c0
-  servername: swo2.nexfile.net
-  tls: true
-  udp: true
-  client-fingerprint: chrome
-  xhttp-opts:
-    host: swo2.nexfile.net
-    mode: auto
-    path: /api/v1/sync/
-  encryption: none
-- name: '[免费节点6] 美国 039'
+- name: '[免费节点6] 美国 025'
   type: vless
   network: ws
-  server: 104.21.236.63
+  server: 172.67.156.147
   port: 443
-  uuid: b8d8a5b0-867f-4491-b4e4-30edc04bb10e
-  servername: u.srilankangrill.online
+  uuid: 4e4f1f70-5e56-4a76-bb9d-db087f4690c4
+  servername: jp3.yohototo.top
+  skip-cert-verify: false
   tls: true
-  udp: true
-  client-fingerprint: chrome
+  encryption: none
   ws-opts:
     headers:
-      Host: u.srilankangrill.online
-    path: /
-  encryption: none
-- name: '[免费节点6] 美国 042'
-  type: vless
-  network: ws
-  server: 104.24.0.184
-  port: 443
-  uuid: b8d8a5b0-867f-4491-b4e4-30edc04bb10e
-  servername: u.srilankangrill.online
-  tls: true
-  udp: true
-  client-fingerprint: chrome
-  ws-opts:
-    headers:
-      Host: u.srilankangrill.online
-    path: /
-  encryption: none
+      Host: jp3.yohototo.top
+    path: /tyxyws
 - name: '[免费节点6]  035'
   type: trojan
   network: tcp
@@ -1652,20 +1619,20 @@ proxies:
   tls: true
   udp: true
   encryption: none
-- name: '[免费节点6] 比利时 003'
+- name: '[免费节点6] 法国 006'
   type: vless
   network: ws
-  server: OV-Germany1.09vpn.com
+  server: sc-thenetherlands1.09vpn.com
   port: 80
-  uuid: 7d74eae4-8a06-4306-a923-ad686f30bf26
+  uuid: 40cc9b52-25b8-4cd5-8b45-715ae26e6baf
   skip-cert-verify: false
+  tls: false
   udp: true
   encryption: none
-  xudp: true
   packet-encoding: xudp
   ws-opts:
     headers:
-      Host: OV-Germany1.09vpn.com
+      Host: sc-thenetherlands1.09vpn.com
     path: /vless/
 - name: '[免费节点6] 法国 017'
   type: vmess
@@ -1698,6 +1665,19 @@ proxies:
   skip-cert-verify: true
   alterId: 0
   cipher: auto
+- name: '[免费节点6] 比利时 030'
+  type: vmess
+  network: ws
+  server: 57.129.132.223
+  port: 80
+  uuid: a25cbf11-2908-4a1b-a3a8-9a571777dca3
+  skip-cert-verify: true
+  alterId: 0
+  cipher: auto
+  ws-opts:
+    headers:
+      Host: google.com
+    path: /vmess/
 - name: '[免费节点6] 欧洲 004'
   type: vmess
   network: tcp
@@ -1731,39 +1711,6 @@ proxies:
   tls: true
   alterId: 0
   cipher: auto
-- name: '[免费节点6] 美国 981'
-  type: vless
-  network: ws
-  server: 104.16.111.102
-  port: 443
-  uuid: 4e4f1f70-5e56-4a76-bb9d-db087f4690c4
-  servername: jp3.yohototo.top
-  skip-cert-verify: false
-  tls: true
-  udp: true
-  tfo: false
-  client-fingerprint: unsafe
-  ws-opts:
-    headers:
-      Host: jp3.yohototo.top
-    path: /tyxyws
-  encryption: none
-- name: '[免费节点6] 美国 1002'
-  type: vless
-  network: ws
-  server: 104.17.70.206
-  port: 8443
-  uuid: 5f704d93-7e7f-45b5-81f5-08db4a946220
-  servername: free.sahanwickramasinghe.com
-  skip-cert-verify: false
-  tls: true
-  udp: true
-  tfo: false
-  ws-opts:
-    headers:
-      Host: free.sahanwickramasinghe.com
-    path: /
-  encryption: none
 - name: '[免费节点6] 瑞士 008'
   type: vless
   network: tcp
@@ -1790,22 +1737,219 @@ proxies:
   tfo: false
   client-fingerprint: chrome
   encryption: none
-- name: '[免费节点6] 美国 1194'
+- name: "[免费节点7] 🇩🇪 德国 | DEU 3"
+  server: static.162.97.119.168.clients.your-server.de
+  port: 8443
   type: vless
-  network: ws
-  server: 104.21.91.49
-  port: 443
-  uuid: fc7d2cfe-f5ef-40c8-a848-a0bdc11f6349
-  servername: vpn.cintaku.qzz.io
-  skip-cert-verify: false
+  uuid: fb0876a9-bd89-4bb0-9539-8e7927b36d79
   tls: true
+  alpn:
+  - h2
+  - http/1.1
+  flow: xtls-rprx-vision
+  servername: static.167.125.29.2.clients.your-server.de
+  client-fingerprint: chrome
+  network: tcp
   udp: true
-  tfo: false
-  ws-opts:
-    headers:
-      Host: vpn.cintaku.qzz.io
-    path: /vlessws
   encryption: none
+- name: "[免费节点7] 🇩🇪 德国 | DEU 8"
+  server: 193.160.208.240
+  port: 443
+  type: vless
+  uuid: 4777d90d-265b-4927-a0d1-63f36ed1421c
+  tls: true
+  servername: 193.160.208.240
+  client-fingerprint: firefox
+  network: xhttp
+  xhttp-opts:
+    path: /assets/twru01/
+    mode: auto
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇩🇪 德国 | DEU 9"
+  server: 193.160.208.240
+  port: 443
+  type: vless
+  uuid: c04522c4-3d53-4eab-b5b5-25385d5f11b1
+  tls: true
+  alpn:
+  - h2
+  - http/1.1
+  servername: 193.160.208.240
+  client-fingerprint: ios
+  network: xhttp
+  xhttp-opts:
+    path: /assets/twru01/
+    mode: packet-up
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇩🇪 德国 | DEU 10"
+  server: static.216.7.245.188.clients.your-server.de
+  port: 8443
+  type: vless
+  uuid: fb0876a9-bd89-4bb0-9539-8e7927b36d79
+  tls: true
+  alpn:
+  - h2
+  - http/1.1
+  flow: xtls-rprx-vision
+  servername: static.216.7.245.188.clients.your-server.de
+  client-fingerprint: chrome
+  network: tcp
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇫🇷 法国 | FRA"
+  server: fr2.japancase.site
+  port: 443
+  type: vless
+  uuid: db80088c-32a1-4cb8-a907-0f3cb7844152
+  tls: true
+  flow: xtls-rprx-vision
+  reality-opts:
+    public-key: WVSxXflVqhlA-ZkZud3hP_fiN05CZhJWFjfN0liqIFM
+    short-id: fc19a7aa77517cf8
+  servername: fr2.japancase.site
+  client-fingerprint: qq
+  network: tcp
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇭🇰 香港 | HKG 3"
+  server: 47.244.120.197
+  port: 44867
+  type: vmess
+  uuid: 845e6b08-2919-4290-ade0-5dc7dcea59ca
+  alterId: 0
+  cipher: auto
+  tls: false
+  alpn:
+  - ''
+  skip-cert-verify: true
+  network: ws
+  ws-opts:
+    path: /arki
+  udp: true
+- name: "[免费节点7] 🇮🇳 印度 | IND"
+  server: in1.japancase.site
+  port: 443
+  type: vless
+  uuid: db80088c-32a1-4cb8-a907-0f3cb7844152
+  tls: true
+  flow: xtls-rprx-vision
+  reality-opts:
+    public-key: lDBwW08dYwPP-7dVxYQ_clzfFwsDHLlclz9K2cEV6DM
+    short-id: df7b054cfc29800c
+  servername: in1.japancase.site
+  client-fingerprint: ios
+  network: tcp
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇳🇱 荷兰 | NLD 2"
+  server: 201.34.142.108
+  port: 443
+  type: vless
+  uuid: 4777d90d-265b-4927-a0d1-63f36ed1421c
+  tls: true
+  servername: 201.34.142.108
+  client-fingerprint: firefox
+  network: xhttp
+  xhttp-opts:
+    path: /assets/nlrelay01/
+    mode: auto
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇸🇪 瑞典 | SWE"
+  server: 138.124.86.230
+  port: 48115
+  type: vless
+  uuid: b2fe1fa4-6a79-4938-a3f4-63b54ae7f16b
+  tls: true
+  servername: 138-124-86-230.sslip.io
+  client-fingerprint: firefox
+  network: grpc
+  grpc-opts:
+    grpc-mode: gun
+    grpc-service-name: 138-124-86-230-sslip-io
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇺🇸 美国 | USA"
+  server: 104.160.44.254
+  port: 443
+  type: vless
+  uuid: 0a3432cd-74b8-413a-896d-f51492b030bc
+  tls: true
+  flow: xtls-rprx-vision
+  reality-opts:
+    public-key: BlSccfT5tvDIOS7v9VaPd0ulUNhUdvlMjGiNzDNDUHE
+    short-id: 051f20c2344a2dfd
+  servername: portal.citygrainla.com
+  client-fingerprint: firefox
+  network: tcp
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇺🇸 美国 | USA 4"
+  server: 107.172.214.195
+  port: 443
+  type: vless
+  uuid: 2af77824-f83d-4f50-9dd0-560bb6e7cd45
+  tls: true
+  flow: xtls-rprx-vision
+  reality-opts:
+    public-key: jK8yu9AMtNQ4J_uKE1inAzJr6V5J4GNK3sAN6nZBbUo
+  servername: academy.nvidia.com
+  client-fingerprint: firefox
+  network: tcp
+  udp: true
+  encryption: none
+- name: "[免费节点7] 🇺🇸 美国 | USA 5"
+  server: 207.246.112.227
+  port: 1080
+  type: ss
+  cipher: chacha20-ietf-poly1305
+  password: 9AUVPZfOeSHmVCMyLvIvrl1wVLvZf7Jv
+  udp: true
+- name: "[免费节点7] 🇺🇸 美国 | USA 10"
+  server: help1.digikala-aparat-zula.com
+  port: 443
+  type: vless
+  uuid: 20e565e1-3858-40bf-94e8-4ec9624fc985
+  tls: true
+  servername: wallweb8.pages.dev
+  client-fingerprint: chrome
+  network: ws
+  ws-opts:
+    path: /
+    headers:
+      Host: wallweb8.pages.dev
+  udp: true
+  encryption: none
+- name: "[免费节点8] 🇺🇸US-193.151.160.9-0080"
+  type: ss
+  server: 193.151.160.9
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: "[免费节点8] 🇺🇸US-193.151.163.18-0081"
+  type: ss
+  server: 193.151.163.18
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: "[免费节点8] 🇺🇸US-193.151.160.18-0086"
+  type: ss
+  server: 193.151.160.18
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: "[免费节点8] 🇺🇸US-37.19.198.243-0142"
+  type: ss
+  server: 37.19.198.243
+  port: 443
+  cipher: aes-128-gcm
+  password: shadowsocks
+  udp: true
 - name: "[免费节点8] 🇺🇸US-169.197.140.218-0084"
   type: trojan
   server: 169.197.140.218
@@ -1816,6 +1960,34 @@ proxies:
   servername: learn.discoverfreshgraduatejobsstartyourprofessionaljourney.com
   sni: learn.discoverfreshgraduatejobsstartyourprofessionaljourney.com
   network: tcp
+- name: "[免费节点8] 🇺🇸US-185.230.230.18-0091"
+  type: ss
+  server: 185.230.230.18
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: "[免费节点8] 🇺🇸US-37.19.198.244-0137"
+  type: ss
+  server: 37.19.198.244
+  port: 443
+  cipher: aes-128-gcm
+  password: shadowsocks
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.202-0094"
+  type: ss
+  server: 82.38.31.202
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: k1dBOmOB4oqi7Ump37a1bQ
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.192-0120"
+  type: ss
+  server: 82.38.31.192
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: k1dBOmOB4oqi7Ump37a1bQ
+  udp: true
 - name: "[免费节点8] 🇺🇸US-66.163.112.13-0178"
   type: trojan
   server: 66.163.112.13
@@ -1826,6 +1998,23 @@ proxies:
   servername: blog.unlockyourfuturefindyourperfectcareer.com
   sni: blog.unlockyourfuturefindyourperfectcareer.com
   network: tcp
+- name: "[免费节点8] 🇺🇸US-216.106.186.32-0150"
+  type: trojan
+  server: blog.findlocaljobnetworkandbuildcommunityconnections.com
+  port: 443
+  udp: true
+  password: dba20dcb635e430fa4d3bfc303a149d2
+  tls: true
+  servername: blog.findlocaljobnetworkandbuildcommunityconnections.com
+  sni: blog.findlocaljobnetworkandbuildcommunityconnections.com
+  network: tcp
+- name: "[免费节点8] 🇬🇧GB-82.38.31.203-0132"
+  type: ss
+  server: 82.38.31.203
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: k1dBOmOB4oqi7Ump37a1bQ
+  udp: true
 - name: "[免费节点8] 🇺🇸US-66.163.112.121-0196"
   type: trojan
   server: 66.163.112.121
@@ -1836,6 +2025,27 @@ proxies:
   servername: www.unlockyourfuturefindyourperfectcareer.com
   sni: www.unlockyourfuturefindyourperfectcareer.com
   network: tcp
+- name: "[免费节点8] 🇬🇧GB-82.38.31.206-0119"
+  type: ss
+  server: 82.38.31.206
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: k1dBOmOB4oqi7Ump37a1bQ
+  udp: true
+- name: "[免费节点8] 🇺🇸US-45.86.51.18-0079"
+  type: ss
+  server: 45.86.51.18
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: "[免费节点8] 🇺🇸US-138.199.42.68-0240"
+  type: ss
+  server: 138.199.42.68
+  port: 8080
+  cipher: rc4-md5
+  password: 14fFPrbezE3HDZzsMOr6
+  udp: true
 - name: "[免费节点8] 🇺🇸US-170.101.101.53-0124"
   type: trojan
   server: 170.101.101.53
@@ -1846,6 +2056,13 @@ proxies:
   servername: www.explorecreativejobsandenhanceyourcareerportfolio.com
   sni: www.explorecreativejobsandenhanceyourcareerportfolio.com
   network: tcp
+- name: "[免费节点8] 🇬🇧GB-82.38.31.205-0125"
+  type: ss
+  server: 82.38.31.205
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: k1dBOmOB4oqi7Ump37a1bQ
+  udp: true
 - name: "[免费节点8] 🇺🇸US-216.152.155.158-0121"
   type: trojan
   server: 216.152.155.158
@@ -1856,6 +2073,13 @@ proxies:
   servername: resources.nextjobopportunityandclaimyouridealrole.com
   sni: resources.nextjobopportunityandclaimyouridealrole.com
   network: tcp
+- name: "[免费节点8] 🇺🇸US-37.19.198.160-0134"
+  type: ss
+  server: 37.19.198.160
+  port: 443
+  cipher: aes-128-gcm
+  password: shadowsocks
+  udp: true
 - name: "[免费节点8] 🇺🇸US-216.152.156.65-0098"
   type: trojan
   server: 216.152.156.65
@@ -1866,6 +2090,76 @@ proxies:
   servername: learn.healthcarejobshubenhancemedicalprofessionalskillstoday.com
   sni: learn.healthcarejobshubenhancemedicalprofessionalskillstoday.com
   network: tcp
+- name: "[免费节点8] 🇺🇸US-173.244.56.6-0078"
+  type: ss
+  server: 173.244.56.6
+  port: 443
+  cipher: aes-128-gcm
+  password: shadowsocks
+  udp: true
+- name: "[免费节点8] 🇺🇸US-95.215.201.18-0151"
+  type: ss
+  server: 95.215.201.18
+  port: 19999
+  cipher: aes-256-gcm
+  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.34-0173"
+  type: ss
+  server: 82.38.31.34
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.47-0180"
+  type: ss
+  server: 82.38.31.47
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.66-0175"
+  type: ss
+  server: 82.38.31.66
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.42-0191"
+  type: ss
+  server: 82.38.31.42
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.61-0176"
+  type: ss
+  server: 82.38.31.61
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.155-0181"
+  type: ss
+  server: 82.38.31.155
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-178.83.185.156-0172"
+  type: ss
+  server: 178.83.185.156
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.46-0189"
+  type: ss
+  server: 82.38.31.46
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
 - name: "[免费节点8] 🇺🇸US-66.163.114.166-0162"
   type: trojan
   server: 66.163.114.166
@@ -1876,270 +2170,146 @@ proxies:
   servername: blog.findconnectwithemployersandbuildprofessionalnetwork.com
   sni: blog.findconnectwithemployersandbuildprofessionalnetwork.com
   network: tcp
-- name: "[免费节点8] 🇺🇸US-193.151.160.9-0080 | 237.19MB"
-  server: 193.151.160.9
-  port: 19999
+- name: "[免费节点8] 🇬🇧GB-82.38.31.162-0185"
   type: ss
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-- name: "[免费节点8] 🇺🇸US-193.151.163.18-0081 | 234.547MB"
-  server: 193.151.163.18
-  port: 19999
-  type: ss
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-- name: "[免费节点8] 🇺🇸US-193.151.160.18-0086 | 188.362MB"
-  server: 193.151.160.18
-  port: 19999
-  type: ss
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-- name: "[免费节点8] 🇺🇸US-37.19.198.243-0142 | 140.557MB"
-  server: 37.19.198.243
-  port: 443
-  type: ss
-  cipher: aes-128-gcm
-  password: shadowsocks
-- name: "[免费节点8] 🇺🇸US-185.230.230.18-0091 | 113.982MB"
-  server: 185.230.230.18
-  port: 19999
-  type: ss
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-- name: "[免费节点8] 🇩🇪DE-185.176.204.18-0092 | 106.927MB"
-  server: 185.176.204.18
-  port: 19999
-  type: ss
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-- name: "[免费节点8] 🇺🇸US-37.19.198.244-0137 | 106.386MB"
-  server: 37.19.198.244
-  port: 443
-  type: ss
-  cipher: aes-128-gcm
-  password: shadowsocks
-- name: "[免费节点8] 🇬🇧GB-82.38.31.217-0117 | 105.61MB"
-  server: 82.38.31.217
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: k1dBOmOB4oqi7Ump37a1bQ
-- name: "[免费节点8] 🇬🇧GB-82.38.31.187-0139 | 98.258MB"
-  server: 82.38.31.187
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: k1dBOmOB4oqi7Ump37a1bQ
-- name: "[免费节点8] 🇬🇧GB-82.38.31.207-0123 | 91.14MB"
-  server: 82.38.31.207
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: k1dBOmOB4oqi7Ump37a1bQ
-- name: "[免费节点8] 🇺🇸US-45.86.51.18-0079 | 89.797MB"
-  server: 45.86.51.18
-  port: 19999
-  type: ss
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-- name: "[免费节点8] 🇺🇸US-138.199.42.68-0240 | 89.797MB"
-  server: 138.199.42.68
-  port: 8080
-  type: ss
-  cipher: rc4-md5
-  password: 14fFPrbezE3HDZzsMOr6
-- name: "[免费节点8] 🇳🇱NL-109.201.152.181-0157 | 87.522MB"
-  server: 109.201.152.181
-  port: 443
-  type: ss
-  cipher: aes-128-cfb
-  password: shadowsocks
-- name: "[免费节点8] 🇬🇧GB-82.38.31.179-0136 | 75.015MB"
-  server: 82.38.31.179
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: k1dBOmOB4oqi7Ump37a1bQ
-- name: "[免费节点8] 🇳🇱NL-193.29.139.147-0135 | 70.643MB"
-  server: 193.29.139.147
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: k1dBOmOB4oqi7Ump37a1bQ
-- name: "[免费节点8] 🇺🇸US-37.19.198.160-0134 | 64.538MB"
-  server: 37.19.198.160
-  port: 443
-  type: ss
-  cipher: aes-128-gcm
-  password: shadowsocks
-- name: "[免费节点8] 🇺🇸US-173.244.56.6-0078 | 57.258MB"
-  server: 173.244.56.6
-  port: 443
-  type: ss
-  cipher: aes-128-gcm
-  password: shadowsocks
-- name: "[免费节点8] 🇺🇸US-173.244.56.9-0077 | 51.341MB"
-  server: 173.244.56.9
-  port: 443
-  type: ss
-  cipher: aes-128-gcm
-  password: shadowsocks
-- name: "[免费节点8] 🇺🇸US-95.215.201.18-0151 | 45.832MB"
-  server: 95.215.201.18
-  port: 19999
-  type: ss
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-- name: "[免费节点8] 🇬🇧GB-82.38.31.34-0173 | 28.272MB"
-  server: 82.38.31.34
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: oZIoA69Q8yhcQV8ka3Pa3A
-- name: "[免费节点8] 🇬🇧GB-82.38.31.66-0175 | 27.392MB"
-  server: 82.38.31.66
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: oZIoA69Q8yhcQV8ka3Pa3A
-- name: "[免费节点8] 🇬🇧GB-82.38.31.35-0186 | 26.022MB"
-  server: 82.38.31.35
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: oZIoA69Q8yhcQV8ka3Pa3A
-- name: "[免费节点8] 🇬🇧GB-82.38.31.162-0185 | 22.706MB"
   server: 82.38.31.162
   port: 443
-  type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
-- name: "[免费节点8] 🇸🇬SG-68.183.227.4-0182 | 22.053MB"
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.48-0188"
+  type: ss
+  server: 82.38.31.48
+  port: 8080
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: "[免费节点8] 🇸🇬SG-68.183.227.4-0182"
+  type: ss
   server: 68.183.227.4
   port: 8080
-  type: ss
   cipher: rc4-md5
   password: 14fFPrbezE3HDZzsMOr6
-- name: "[免费节点8] 🇬🇧GB-82.38.31.159-0177 | 21.827MB"
-  server: 82.38.31.159
-  port: 443
+  udp: true
+- name: "[免费节点8] 🇨🇦CA-149.22.95.183-0149"
   type: ss
-  cipher: chacha20-ietf-poly1305
-  password: oZIoA69Q8yhcQV8ka3Pa3A
-- name: "[免费节点8] 🇬🇧GB-82.38.31.62-0192 | 21.623MB"
-  server: 82.38.31.62
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: oZIoA69Q8yhcQV8ka3Pa3A
-- name: "[免费节点8] 🇨🇦CA-149.22.95.183-0149 | 15.467MB"
   server: 149.22.95.183
   port: 443
-  type: ss
   cipher: aes-128-gcm
   password: shadowsocks
-- name: "[免费节点8] 🇬🇧GB-82.38.31.170-0215 | 13.888MB"
-  server: 82.38.31.170
-  port: 443
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-82.38.31.171-0214"
   type: ss
-  cipher: chacha20-ietf-poly1305
-  password: oZIoA69Q8yhcQV8ka3Pa3A
-- name: "[免费节点8] 🇬🇧GB-82.38.31.171-0214 | 10.762MB"
   server: 82.38.31.171
   port: 8080
-  type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
-- name: "[免费节点8] 🇬🇧GB-82.38.31.218-0219 | 9.097MB"
-  server: 82.38.31.218
-  port: 8080
+  udp: true
+- name: "[免费节点8] 🇺🇸US-15.204.247.206-5816"
   type: ss
-  cipher: chacha20-ietf-poly1305
-  password: k1dBOmOB4oqi7Ump37a1bQ
-- name: "[免费节点8] 🇺🇸US-15.204.247.206-5816 | 8.344MB"
   server: 15.204.247.206
   port: 4444
-  type: ss
   cipher: aes-256-gcm
   password: pKEW8JPByTVTLtM
-- name: "[免费节点8] 🇺🇸US-156.146.38.169-0147 | 4.484MB"
+  udp: true
+- name: "[免费节点8] 🇺🇸US-156.146.38.169-0147"
+  type: ss
   server: 156.146.38.169
   port: 443
-  type: ss
   cipher: aes-128-gcm
   password: shadowsocks
-- name: "[免费节点8] 🇺🇸US-156.146.38.168-0206 | 4.059MB"
+  udp: true
+- name: "[免费节点8] 🇺🇸US-156.146.38.168-0206"
+  type: ss
   server: 156.146.38.168
   port: 443
-  type: ss
   cipher: aes-128-gcm
   password: shadowsocks
-- name: "[免费节点8] 🇺🇸US-156.146.38.167-0207 | 3.963MB"
+  udp: true
+- name: "[免费节点8] 🇺🇸US-156.146.38.167-0207"
+  type: ss
   server: 156.146.38.167
   port: 443
-  type: ss
   cipher: aes-128-gcm
   password: shadowsocks
-- name: "[免费节点8] 🇺🇸US-156.146.38.170-0168 | 3.861MB"
+  udp: true
+- name: "[免费节点8] 🇺🇸US-156.146.38.170-0168"
+  type: ss
   server: 156.146.38.170
   port: 443
-  type: ss
   cipher: aes-128-gcm
   password: shadowsocks
-- name: "[免费节点8] 🇰🇷KR-218.237.185.234-0230 | 3.247MB"
+  udp: true
+- name: "[免费节点8] 🇰🇷KR-218.237.185.234-0230"
+  type: ss
   server: p141.panda001.net
   port: 4652
-  type: ss
   cipher: aes-256-cfb
   password: qwerREWQ@@
-- name: "[免费节点8] 🇰🇷KR-211.178.105.134-0226 | 0.203MB"
+  udp: true
+- name: "[免费节点8] 🇰🇷KR-211.178.105.134-0226"
+  type: ss
   server: 211.178.105.134
   port: 6123
-  type: ss
   cipher: aes-256-cfb
   password: qwerREWQ@@
-- name: "[免费节点8] 🇯🇵JP-84.247.155.196-0225 | 0.176MB"
+  udp: true
+- name: "[免费节点8] 🇯🇵JP-84.247.155.196-0225"
+  type: ss
   server: 84.247.155.196
   port: 443
-  type: ss
   cipher: aes-256-gcm
   password: 3eOFeNssde7PYYMv
-- name: "[免费节点8] 🇬🇧GB-141.98.101.181-0220 | 0.107MB"
-  server: 141.98.101.181
-  port: 443
+  udp: true
+- name: "[免费节点8] 🇺🇸US-198.98.53.130-0229"
   type: ss
-  cipher: aes-128-gcm
-  password: shadowsocks
-- name: "[免费节点8] 🇺🇸US-198.98.53.130-0229 | 0.06MB"
   server: 198.98.53.130
   port: 443
-  type: ss
   cipher: chacha20-ietf-poly1305
   password: eDfN7SODQceIOmIAbtJJtK
-- name: "[免费节点8] 🇬🇧GB-104.239.12.81-0228 | 0.037MB"
+  udp: true
+- name: "[免费节点8] 🇬🇧GB-104.239.12.81-0228"
+  type: ss
   server: 104.239.12.81
   port: 43385
-  type: ss
   cipher: chacha20-ietf-poly1305
   password: AwW1fV6oDDQKh8r2znmptv59tPgt4eHVTgFaTqgKS2jiSdikJ7GyGCBYehDaK38S8yMgHFdbJqcTmRJSfYS5CFw345bNhFZa
-- name: "[免费节点8] 🇨🇦CA-137.184.174.93-0156 | 0.0MB"
+  udp: true
+- name: "[免费节点8] 🇨🇦CA-137.184.174.93-0156"
+  type: ss
   server: 137.184.174.93
   port: 8080
-  type: ss
   cipher: rc4-md5
   password: 14fFPrbezE3HDZzsMOr6
-- name: "[免费节点8] 🇭🇰HK-156.245.232.239-0257"
+  udp: true
+- name: "[免费节点8] 🇭🇰HK-156.245.232.239-0236"
+  type: vmess
   server: 156.245.232.239
   port: 35043
-  type: vmess
   uuid: b15e481d-17e4-41a8-84c2-23d4f0514d9a
   alterId: 0
   cipher: auto
-  tls: false
-  skip-cert-verify: false
   network: ws
+  tls: false
+  udp: true
   ws-opts:
     path: /
+    headers:
+      Host: 156.245.232.239
+- name: "[免费节点8] 🇺🇸US-216.105.168.18-5819"
+  type: ss
+  server: 216.105.168.18
+  port: 443
+  cipher: chacha20-ietf-poly1305
+  password: hCCWOcIsK5wrFz4OX70rWf
+  udp: true
+- name: '[免费节点10] sg|9317|puddincat07@Telegram'
+  password: '8888'
+  port: 1080
+  server: 47.236.168.243
+  skip-cert-verify: true
+  type: socks5
+  username: '8888'
 - type: hysteria2
   name: "[免费节点10] 🇺🇸_US_美国->🇵🇱_PL_波兰_IPV4"
   server: pl2.nexfile.net
@@ -2149,19 +2319,6 @@ proxies:
   servername: pl2.nexfile.net
   sni: pl2.nexfile.net
   skip-cert-verify: true
-- name: '[免费节点10] us|81b9|puddincat07@Telegram'
-  password: None
-  port: 38182
-  server: 69.55.49.177
-  type: socks5
-  udp: true
-- name: '[免费节点10] sg|9317|puddincat07@Telegram'
-  password: '8888'
-  port: 1080
-  server: 47.236.168.243
-  skip-cert-verify: true
-  type: socks5
-  username: '8888'
 - name: '[免费节点10] VN 6 → tg@nicevpn123'
   server: 103.9.77.6
   port: 443
@@ -2219,6 +2376,21 @@ proxies:
   cipher: aes-256-gcm
   password: NTiHBg64fsY8u8DbGrtypD9gPGSL386p
   udp: true
+- name: '[免费节点11] 未知41 433.8KB/s'
+  type: vmess
+  server: chatgpt.com
+  port: 8443
+  uuid: 60441548-b68e-43b2-8191-e3b884be4b3c
+  alterId: 0
+  cipher: auto
+  network: ws
+  tls: true
+  udp: true
+  servername: v2ray1.dozapp.xyz
+  ws-opts:
+    path: /lMnsZUN4/
+    headers:
+      Host: v2ray1.dozapp.xyz
 - name: "[免费节点11] 🇺🇸 美国 11"
   type: vmess
   server: 185.209.179.23
@@ -2234,6 +2406,20 @@ proxies:
     path: /Telegram=@AmyraxVPN
     headers:
       Host: rich-claw.nyc.boxd.sh
+- name: '[免费节点11] 未知92 436.1KB/s'
+  type: vmess
+  server: 38.107.234.57
+  port: 80
+  uuid: 567f4be5-12ab-42e1-b8d9-db6fd1fdd31c
+  alterId: 0
+  cipher: auto
+  network: ws
+  tls: false
+  udp: true
+  ws-opts:
+    path: /vmess/
+    headers:
+      Host: 38.107.234.57
 - name: "[免费节点11] 🇷🇺 俄罗斯 丹麦 01"
   type: vless
   server: 5.42.99.64
@@ -2435,50 +2621,33 @@ proxies:
     path: /ws-44ab084c89eb9e13001b46ed20db0f87
     headers:
       Host: cf-6d3b14a8.quietheirloom.com
-- name: '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-5'
+- name: '[Pawdroid-SR-APK] 瑞典+V2CROSS.COM'
   type: ss
-  server: 38.128.66.32
+  server: 167.88.62.203
   port: 19999
   cipher: aes-256-gcm
   password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
   udp: true
-- name: '[Pawdroid-SR-APK] 北美地区+V2CROSS.COM-3'
+- name: '[Pawdroid-SR-APK] 加拿大+V2CROSS.COM'
   type: ss
-  server: 169.197.140.247
+  server: 167.17.67.171
   port: 19999
   cipher: aes-256-gcm
   password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
   udp: true
-- name: '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-7'
+- name: '[Pawdroid-SR-APK] 瑞典+V2CROSS.COM-4'
   type: ss
-  server: 38.91.100.39
+  server: 167.88.62.56
   port: 19999
   cipher: aes-256-gcm
   password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
   udp: true
-- name: '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-9'
+- name: '[Pawdroid-SR-APK] 美国+惠普HP'
   type: ss
-  server: 38.91.107.57
-  port: 19999
+  server: 15.204.233.41
+  port: 8882
   cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-11'
-  type: ss
-  server: 38.91.107.188
-  port: 19999
-  cipher: aes-256-gcm
-  password: ZRpgaBeGxtENIXgvhpkZBKz9GnWRS2dYcx9O+a2iwN4=
-  udp: true
-- name: '[Pawdroid-SR-APK] 韩国 首尔Oracle云计算数据中心'
-  type: vmess
-  server: 140.238.2.250
-  port: 443
-  uuid: 41a7089a-040b-4538-8b8d-010902405bde
-  alterId: 0
-  cipher: auto
-  network: tcp
-  tls: false
+  password: kDWvXYZoTBcGkC4
   udp: true
 - name: '[Pawdroid-SR-APK] 香港 阿里云'
   type: vmess
@@ -2495,6 +2664,16 @@ proxies:
     path: /ws-vmess
     headers:
       Host: rib9jxayoqjgn2kw.v.3dns.vip
+- name: '[Pawdroid-SR-APK] 韩国 首尔Oracle云计算数据中心'
+  type: vmess
+  server: 140.238.2.250
+  port: 443
+  uuid: 41a7089a-040b-4538-8b8d-010902405bde
+  alterId: 0
+  cipher: auto
+  network: tcp
+  tls: false
+  udp: true
 - name: '[Pawdroid-SR-APK] 英国+V2CROSS.COM-18'
   type: vless
   server: 31.76.91.98
@@ -2510,21 +2689,6 @@ proxies:
     public-key: ejx56dFtS4LK_Th6HSLFFdm7v7zqRpv8KfjrWAw4Sjg
     short-id: bd6f67b6b2152b45
   network: tcp
-- name: '[Pawdroid-SR-APK] 日本+东京OneProvider'
-  type: vless
-  server: 103.75.118.228
-  port: 11452
-  udp: true
-  uuid: 814bd064-544d-4255-a070-5705c03f6da9
-  encryption: none
-  flow: xtls-rprx-vision
-  tls: true
-  servername: www.apple.com
-  client-fingerprint: chrome
-  reality-opts:
-    public-key: k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0
-    short-id: 48050fab
-  network: tcp
 - name: '[Pawdroid-SR-APK] 香港+UCloud'
   type: vless
   server: 165.154.63.139
@@ -2536,11 +2700,25 @@ proxies:
   tls: true
   servername: www.amazon.com
   client-fingerprint: chrome
-  skip-cert-verify: true
   reality-opts:
     public-key: AE81BrwMc8-kwGEIA1LhzaL03er0Qwt2V-fFy76F5jQ
     short-id: ca4aedd4
-  network: tcp
+  network: raw
+- name: '[Pawdroid-SR-APK] 日本+东京Amazon数据中心'
+  type: vless
+  server: 3.114.220.22
+  port: 18007
+  udp: true
+  uuid: 814bd064-544d-4255-a070-5705c03f6da9
+  encryption: none
+  flow: xtls-rprx-vision
+  tls: true
+  servername: www.apple.com
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0
+    short-id: 48050fab
+  network: raw
 - name: '[Pawdroid-SR-APK] 香港+环球全域电讯'
   type: vless
   server: 210.0.244.157
@@ -2582,35 +2760,20 @@ proxies:
     public-key: k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0
     short-id: 48050fab
   network: tcp
-- name: '[Pawdroid-SR-APK] 乌克兰+V2CROSS.COM-8'
+- name: '[Pawdroid-SR-APK] 日本+东京Amazon数据中心-2'
   type: vless
-  server: 195.123.235.183
-  port: 443
+  server: 3.114.220.22
+  port: 10583
   udp: true
-  uuid: c14ec728-3eca-4750-87fc-fd1e6aeb81d5
-  encryption: none
-  flow: xtls-rprx-vision
-  tls: true
-  servername: gateway.icloud.com
-  client-fingerprint: chrome
-  reality-opts:
-    public-key: H3R3BUAl7thrIZsznTbb-eRREIjQOH2f3WO0oTN7OGY
-    short-id: a0e2a6074c6456b0
-  network: tcp
-- name: '[Pawdroid-SR-APK] 俄罗斯+V2CROSS.COM-2'
-  type: vless
-  server: 185.95.231.156
-  port: 443
-  udp: true
-  uuid: 1f8cf47a-b66a-4916-979f-26edfcf44eea
+  uuid: 814bd064-544d-4255-a070-5705c03f6da9
   encryption: none
   flow: xtls-rprx-vision
   tls: true
   servername: www.apple.com
   client-fingerprint: chrome
   reality-opts:
-    public-key: 8eXftARun6KH38UZhuqIfPR1VF2DLS9RMBZEnF5k6To
-    short-id: a3a578ab
+    public-key: k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0
+    short-id: 48050fab
   network: tcp
 - name: '[Pawdroid-SR-APK] 香港+特别行政区'
   type: vless
@@ -2626,6 +2789,55 @@ proxies:
   reality-opts:
     public-key: H56cOJhw0xw76lDEpt7IuJJmVGemK6_CK34KtHwDMX8
   network: tcp
+- name: '[Pawdroid-SR-APK] +阿里云-2'
+  type: hysteria2
+  server: 8.211.175.236
+  port: 8443
+  udp: true
+  password: u63SxILNwtrQZ7Y1ZrFaZfsA
+  tls: true
+  servername: 8.211.175.236
+  skip-cert-verify: true
+  network: tcp
+- name: '[Pawdroid-SR-APK] 日本+东京Choopa数据中心'
+  type: hysteria2
+  server: vp3.yysyy.online
+  port: 443
+  udp: true
+  password: 96ab5cd282733fd4c312a61f972f330a
+  tls: true
+  servername: vp3.yysyy.online
+  network: tcp
+- name: '[Pawdroid-SR-APK] 亚太地区+V2CROSS.COM'
+  type: hysteria2
+  server: 103.115.109.49
+  port: 443
+  udp: true
+  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
+  tls: true
+  servername: https%3A
+  skip-cert-verify: true
+  network: tcp
+- name: '[Pawdroid-SR-APK] 日本+V2CROSS.COM'
+  type: hysteria2
+  server: vpn-tw-002.fastervpn.world
+  port: 443
+  udp: true
+  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
+  tls: true
+  servername: vpn-tw-002.fastervpn.world%5cu0026insecure%3d1%5cu0026allowinsecure%3d1
+  skip-cert-verify: true
+  network: tcp
+- name: '[Pawdroid-SR-APK] 日本+V2CROSS.COM-2'
+  type: hysteria2
+  server: 160.187.100.109
+  port: 443
+  udp: true
+  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
+  tls: true
+  servername: 160.187.100.109
+  skip-cert-verify: true
+  network: tcp
 - name: '[Pawdroid-SR-APK] 日本东京+Oracle+Cloud'
   type: hysteria2
   server: 138.3.208.26
@@ -2636,57 +2848,76 @@ proxies:
   servername: 138.3.208.26
   skip-cert-verify: true
   network: tcp
-- name: '[Pawdroid-SR-APK] 日本+V2CROSS.COM'
-  type: hysteria2
-  server: 160.187.100.109
-  port: 443
-  udp: true
-  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
-  tls: true
-  servername: vpn-tw-002.fastervpn.world
-  skip-cert-verify: true
-  network: tcp
-- name: '[Pawdroid-SR-APK] 亚太地区+V2CROSS.COM'
-  type: hysteria2
-  server: 103.115.109.49
-  port: 443
-  udp: true
-  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
-  tls: true
-  servername: "https://t.me/wangcai2🇨🇳"
-  skip-cert-verify: true
-  network: tcp
-- name: '[Pawdroid-SR-APK] 日本+V2CROSS.COM-2'
-  type: hysteria2
-  server: vpn-tw-002.fastervpn.world
-  port: 443
-  udp: true
-  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
-  tls: true
-  servername: whatsapp.com
-  skip-cert-verify: true
-  network: tcp
 - name: '[Pawdroid-SR-APK] 香港+特别行政区-2'
+  type: hysteria2
+  server: vpn-hk-004.fastervpn.world
+  port: 443
+  udp: true
+  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
+  tls: true
+  servername: vpn-hk-004.fastervpn.world
+  skip-cert-verify: true
+  network: tcp
+- name: '[Pawdroid-SR-APK] 香港+特别行政区-3'
+  type: hysteria2
+  server: 202.146.222.174
+  port: 443
+  udp: true
+  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
+  tls: true
+  servername: 202.146.222.174
+  skip-cert-verify: true
+  network: tcp
+- name: '[Pawdroid-SR-APK] 香港+特别行政区-4'
   type: hysteria2
   server: 202.146.222.89
   port: 443
   udp: true
   password: H7mP2xY9kJ4nQ8wR5tF6vB3z
   tls: true
-  servername: 'https://t.me/clashv8'
+  servername: "https://t.me/clashv8🇨🇳"
   skip-cert-verify: true
   network: tcp
-- name: '[Pawdroid-SR-APK] 香港+特别行政区-3'
+- name: '[Pawdroid-SR-APK] 香港+特别行政区-5'
   type: hysteria2
   server: 202.146.222.29
   port: 443
   udp: true
   password: H7mP2xY9kJ4nQ8wR5tF6vB3z
   tls: true
-  servername: css.rbxcdn.com
+  servername: t.me
   skip-cert-verify: true
   network: tcp
 - name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司'
+  type: hysteria2
+  server: b503b615-tm96o0-tne5x4-1rfon.hk3.hyhuawei.com
+  port: 443
+  udp: true
+  password: aed1cc24-351d-11ef-ba52-f23c9164ca5d
+  tls: true
+  servername: b503b615-tm96o0-tne5x4-1rfon.hk3.hyhuawei.com
+  skip-cert-verify: true
+  network: tcp
+- name: '[Pawdroid-SR-APK] 美国+V2CROSS.COM-22'
+  type: hysteria2
+  server: 152.70.237.123
+  port: 2053
+  udp: true
+  password: maintell
+  tls: true
+  servername: bing.com
+  skip-cert-verify: true
+  network: tcp
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-3'
+  type: hysteria2
+  server: 9969bb96-tmm5c0-twuk0i-1hzyr.hk3.hyhuawei.com
+  port: 443
+  udp: true
+  password: 3be8cba8-b721-11ec-8b04-f23c91cfbbc9
+  tls: true
+  servername: 9969bb96-tmm5c0-twuk0i-1hzyr.hk3.hyhuawei.com
+  network: tcp
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-4'
   type: hysteria2
   server: aecfea9b-tmm5c0-tpw4i4-1pckg.nw4.hyhuawei.com
   port: 443
@@ -2695,62 +2926,42 @@ proxies:
   tls: true
   servername: aecfea9b-tmm5c0-tpw4i4-1pckg.nw4.hyhuawei.com
   network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-2'
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-5'
   type: hysteria2
-  server: bd452e87-tmm5c0-tv7dx2-py5w.hk3.hyhuawei.com
+  server: e49952e3-tmm5c0-tv7zgh-1ijh5.hk3.hyhuawei.com
   port: 443
   udp: true
-  password: ae5338ae-9a70-58c9-3d47-7d54a5675715
+  password: f7d95364-607b-11ee-93af-f23c91369f2d
   tls: true
-  servername: bd452e87-tmm5c0-tv7dx2-py5w.hk3.hyhuawei.com
+  servername: e49952e3-tmm5c0-tv7zgh-1ijh5.hk3.hyhuawei.com
   network: tcp
-- name: '[Pawdroid-SR-APK] 香港+特别行政区-4'
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-6'
   type: hysteria2
-  server: 202.146.222.174
+  server: 633b0024-tmm5c0-ttx5yr-1j0y6.hk3.hyhuawei.com
   port: 443
   udp: true
-  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
+  password: 1cce7df2-251c-11ee-9409-f23c9164ca5d
   tls: true
-  servername: "https://t.me/WangCai2🇨🇳"
+  servername: 633b0024-tmm5c0-ttx5yr-1j0y6.hk3.hyhuawei.com
+  network: tcp
+- name: '[Pawdroid-SR-APK] 美国+V2CROSS.COM-24'
+  type: hysteria2
+  server: 152.69.231.175
+  port: 50160
+  udp: true
+  password: 1beb216e3f60aea9555dae60d219a5ca
+  tls: true
+  servername: 152.69.231.175
   skip-cert-verify: true
   network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-3'
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-7'
   type: hysteria2
-  server: e0064cf5-tmm5c0-to0mym-z93q.hk3.hyhuawei.com
+  server: baf80640-tmm5c0-to0mym-z93q.nw4.hyhuawei.com
   port: 443
   udp: true
   password: 40639730-e027-11ea-87ad-f23c913c8d2b
   tls: true
-  servername: e0064cf5-tmm5c0-to0mym-z93q.hk3.hyhuawei.com
-  skip-cert-verify: true
-  network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-4'
-  type: hysteria2
-  server: e6b91583-tm96o0-tnhquc-1j0a4.hk3.hyhuawei.com
-  port: 443
-  udp: true
-  password: 4eedcde6-d16a-11ef-973a-f23c913c8d2b
-  tls: true
-  servername: e6b91583-tm96o0-tnhquc-1j0a4.hk3.hyhuawei.com
-  skip-cert-verify: true
-  network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-5'
-  type: hysteria2
-  server: fc05feb7-tmm5c0-tpv2b9-1o8ak.hk3.hyhuawei.com
-  port: 443
-  udp: true
-  password: 8bb68d04-6973-11ee-b518-f23c9164ca5d
-  tls: true
-  servername: fc05feb7-tmm5c0-tpv2b9-1o8ak.hk3.hyhuawei.com
-  network: tcp
-- name: '[Pawdroid-SR-APK] 美国+3COM公司企业网'
-  type: hysteria2
-  server: 152.67.200.82
-  port: 50160
-  udp: true
-  password: 3d7634af8cb2c6cb4bac1c0efad8b43d
-  tls: true
-  servername: css.rbxcdn.com
+  servername: baf80640-tmm5c0-to0mym-z93q.nw4.hyhuawei.com
   skip-cert-verify: true
   network: tcp
 - name: '[Pawdroid-SR-APK] 荷兰+V2CROSS.COM-7'
@@ -2763,63 +2974,36 @@ proxies:
   servername: www.bing.com
   skip-cert-verify: true
   network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-6'
-  type: hysteria2
-  server: b503b615-tm96o0-tne5x4-1rfon.hk3.hyhuawei.com
-  port: 443
-  udp: true
-  password: aed1cc24-351d-11ef-ba52-f23c9164ca5d
-  tls: true
-  servername: b503b615-tm96o0-tne5x4-1rfon.hk3.hyhuawei.com
-  skip-cert-verify: true
-  network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-7'
-  type: hysteria2
-  server: e49952e3-tmm5c0-tv7zgh-1ijh5.hk3.hyhuawei.com
-  port: 443
-  udp: true
-  password: f7d95364-607b-11ee-93af-f23c91369f2d
-  tls: true
-  servername: e49952e3-tmm5c0-tv7zgh-1ijh5.hk3.hyhuawei.com
-  network: tcp
 - name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-8'
   type: hysteria2
-  server: 9969bb96-tmm5c0-twuk0i-1hzyr.hk3.hyhuawei.com
+  server: e6b91583-tm96o0-tnhquc-1j0a4.hk3.hyhuawei.com
   port: 443
   udp: true
-  password: 3be8cba8-b721-11ec-8b04-f23c91cfbbc9
+  password: 4eedcde6-d16a-11ef-973a-f23c913c8d2b
   tls: true
-  servername: 9969bb96-tmm5c0-twuk0i-1hzyr.hk3.hyhuawei.com
+  servername: e6b91583-tm96o0-tnhquc-1j0a4.hk3.hyhuawei.com
+  skip-cert-verify: true
   network: tcp
-- name: '[Pawdroid-SR-APK] 美国+V2CROSS.COM-24'
+- name: '[Pawdroid-SR-APK] 美国+3COM公司企业网'
   type: hysteria2
-  server: 152.70.237.123
-  port: 2053
+  server: 152.67.200.82
+  port: 50160
   udp: true
-  password: maintell
+  password: 3d7634af8cb2c6cb4bac1c0efad8b43d
   tls: true
-  servername: bing.com
+  servername: whatsapp.com
   skip-cert-verify: true
   network: tcp
 - name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-9'
   type: hysteria2
-  server: 39c981a4-tmm5c0-u093mf-1mina.hk3.hyhuawei.com
+  server: fc05feb7-tmm5c0-tpv2b9-1o8ak.hk3.hyhuawei.com
   port: 443
   udp: true
-  password: 367e233c-2f54-11ee-9ae1-f23c9164ca5d
+  password: 8bb68d04-6973-11ee-b518-f23c9164ca5d
   tls: true
-  servername: 39c981a4-tmm5c0-u093mf-1mina.hk3.hyhuawei.com
+  servername: fc05feb7-tmm5c0-tpv2b9-1o8ak.hk3.hyhuawei.com
   network: tcp
 - name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-10'
-  type: hysteria2
-  server: 633b0024-tmm5c0-ttx5yr-1j0y6.hk3.hyhuawei.com
-  port: 443
-  udp: true
-  password: 1cce7df2-251c-11ee-9409-f23c9164ca5d
-  tls: true
-  servername: 633b0024-tmm5c0-ttx5yr-1j0y6.hk3.hyhuawei.com
-  network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-11'
   type: hysteria2
   server: 24f1571a-tmm5c0-tug19l-1go3q.hk3.hyhuawei.com
   port: 443
@@ -2828,34 +3012,7 @@ proxies:
   tls: true
   servername: 24f1571a-tmm5c0-tug19l-1go3q.hk3.hyhuawei.com
   network: tcp
-- name: '[Pawdroid-SR-APK] 日本+东京Choopa数据中心-2'
-  type: hysteria2
-  server: vp3.yysyy.online
-  port: 443
-  udp: true
-  password: 96ab5cd282733fd4c312a61f972f330a
-  tls: true
-  servername: vp3.yysyy.online
-  network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-12'
-  type: hysteria2
-  server: aac08668-tmm5c0-tw661e-1isea.hk3.hyhuawei.com
-  port: 443
-  udp: true
-  password: d6abdbda-fe9d-11ec-bb74-f23c9164ca5d
-  tls: true
-  servername: aac08668-tmm5c0-tw661e-1isea.hk3.hyhuawei.com
-  network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-13'
-  type: hysteria2
-  server: d0f180c2-tmm5c0-tphvvu-gacy.nw4.hyhuawei.com
-  port: 443
-  udp: true
-  password: 20f87b02-0eaa-11eb-8684-f23c913c8d2b
-  tls: true
-  servername: d0f180c2-tmm5c0-tphvvu-gacy.nw4.hyhuawei.com
-  network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-14'
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-11'
   type: hysteria2
   server: a91af2af-tmm5c0-twnp5a-ahsb.hk3.hyhuawei.com
   port: 443
@@ -2864,27 +3021,43 @@ proxies:
   tls: true
   servername: a91af2af-tmm5c0-twnp5a-ahsb.hk3.hyhuawei.com
   network: tcp
-- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-15'
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-12'
   type: hysteria2
-  server: baf80640-tmm5c0-to0mym-z93q.nw4.hyhuawei.com
+  server: 39c981a4-tmm5c0-u093mf-1mina.hk3.hyhuawei.com
   port: 443
   udp: true
-  password: 40639730-e027-11ea-87ad-f23c913c8d2b
+  password: 367e233c-2f54-11ee-9ae1-f23c9164ca5d
   tls: true
-  servername: baf80640-tmm5c0-to0mym-z93q.nw4.hyhuawei.com
-  skip-cert-verify: true
+  servername: 39c981a4-tmm5c0-u093mf-1mina.hk3.hyhuawei.com
   network: tcp
-- name: '[Pawdroid-SR-APK] +阿里云-2'
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-13'
   type: hysteria2
-  server: 8.211.175.236
-  port: 8443
+  server: aac08668-tmm5c0-tw661e-1isea.hk3.hyhuawei.com
+  port: 443
   udp: true
-  password: u63SxILNwtrQZ7Y1ZrFaZfsA
+  password: d6abdbda-fe9d-11ec-bb74-f23c9164ca5d
   tls: true
-  servername: bing.com
-  skip-cert-verify: true
+  servername: aac08668-tmm5c0-tw661e-1isea.hk3.hyhuawei.com
   network: tcp
-- name: '[Pawdroid-SR-APK] 伊朗+V2CROSS.COM-6'
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-14'
+  type: hysteria2
+  server: bd452e87-tmm5c0-tv7dx2-py5w.hk3.hyhuawei.com
+  port: 443
+  udp: true
+  password: ae5338ae-9a70-58c9-3d47-7d54a5675715
+  tls: true
+  servername: bd452e87-tmm5c0-tv7dx2-py5w.hk3.hyhuawei.com
+  network: tcp
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-15'
+  type: hysteria2
+  server: d0f180c2-tmm5c0-tphvvu-gacy.nw4.hyhuawei.com
+  port: 443
+  udp: true
+  password: 20f87b02-0eaa-11eb-8684-f23c913c8d2b
+  tls: true
+  servername: d0f180c2-tmm5c0-tphvvu-gacy.nw4.hyhuawei.com
+  network: tcp
+- name: '[Pawdroid-SR-APK] 伊朗+V2CROSS.COM-5'
   type: hysteria2
   server: 31.57.248.176
   port: 50160
@@ -2894,23 +3067,31 @@ proxies:
   servername: www.bing.com
   skip-cert-verify: true
   network: tcp
-- name: '[Pawdroid-SR-APK] 美国+V2CROSS.COM-34'
+- name: '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-16'
   type: hysteria2
-  server: 152.69.231.175
-  port: 50160
+  server: e0064cf5-tmm5c0-to0mym-z93q.hk3.hyhuawei.com
+  port: 443
   udp: true
-  password: 1beb216e3f60aea9555dae60d219a5ca
+  password: 40639730-e027-11ea-87ad-f23c913c8d2b
   tls: true
-  servername: 152.69.231.175
+  servername: e0064cf5-tmm5c0-to0mym-z93q.hk3.hyhuawei.com
   skip-cert-verify: true
   network: tcp
-- name: '[Pawdroid-SS-APK] United+States-9'
-  type: ss
-  server: 15.204.247.175
-  port: 8008
-  cipher: aes-256-gcm
-  password: XKFKl2rULjIp74
+- name: '[Pawdroid-SR-APK] 日本+东京OneProvider'
+  type: vless
+  server: 103.75.118.228
+  port: 11452
   udp: true
+  uuid: 814bd064-544d-4255-a070-5705c03f6da9
+  encryption: none
+  flow: xtls-rprx-vision
+  tls: true
+  servername: www.apple.com
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0
+    short-id: 48050fab
+  network: tcp
 - name: '[Pawdroid-SS-APK] United+Kingdom-3'
   type: ss
   server: 82.38.31.189
@@ -2928,7 +3109,7 @@ proxies:
   network: tcp
   tls: false
   udp: true
-- name: '[Pawdroid-SS-APK] United+States-123'
+- name: '[Pawdroid-SS-APK] United+States-122'
   type: vless
   server: 206.206.78.36
   port: 443
@@ -2943,28 +3124,20 @@ proxies:
     public-key: UOLfRKeEoVxkp-APTF2OlvFkKSoiR2mWzUuhSWxcVmQ
     short-id: 133a3f10a1581047
   network: raw
-- name: '[Pawdroid-SS-APK] France-11'
+- name: '[Pawdroid-SS-APK] United+States-201'
   type: vless
-  server: 57.129.132.223
-  port: 80
-  udp: true
-  uuid: 9e20b04d-5a81-4e16-b421-01e502f0aac6
-  encryption: none
-  servername: google.com
-  network: ws
-  ws-opts:
-    path: /vless/
-    headers:
-      Host: google.com
-- name: '[Pawdroid-SS-APK] United+States-279'
-  type: hysteria2
-  server: vpn-us-004.fastervpn.world
+  server: 144.31.125.60
   port: 443
   udp: true
-  password: H7mP2xY9kJ4nQ8wR5tF6vB3z
+  uuid: 9015f0bc-2053-4ca1-9b9b-a018b97b32d2
+  encryption: none
+  flow: xtls-rprx-vision
   tls: true
-  servername: vpn-us-004.fastervpn.world
-  skip-cert-verify: true
+  servername: www.intel.com
+  client-fingerprint: chrome
+  reality-opts:
+    public-key: SVgtyuD9khylgHuB0treGekxVSHPOS-wPZTNHUf6zj8
+    short-id: 85c86a9863
   network: tcp
 - name: '[1VPN-CRX] free-singapore-https-1'
   type: http
@@ -3001,13 +3174,6 @@ proxies:
   username: a2epfq5ugq0u
   password: ptkx3fqg6v7n
   tls: true
-- name: '[1VPN-CRX] free-los-angeles-https-2'
-  type: http
-  server: free-los-angeles-https-2.cloudtimecdn.com
-  port: 443
-  username: a2epfq5ugq0u
-  password: ptkx3fqg6v7n
-  tls: true
 - name: '[1VPN-CRX] free-los-angeles-https-3'
   type: http
   server: free-los-angeles-https-3.cloudflaracdn.com
@@ -3029,64 +3195,6 @@ proxies:
   username: a2epfq5ugq0u
   password: ptkx3fqg6v7n
   tls: true
-- name: '[1VPN-CRX] free-los-angeles-https-6'
-  type: http
-  server: free-los-angeles-https-6.cloudflingcdn.com
-  port: 443
-  username: a2epfq5ugq0u
-  password: ptkx3fqg6v7n
-  tls: true
-- name: "[Clashfree] 🇺🇸 US VLESS-25 | free-nodes"
-  server: www.codex2api.com
-  port: 443
-  type: vless
-  uuid: 30e52776-55ac-3cb4-8d36-e2910f07e2c3
-  tls: true
-  alpn:
-  - h2
-  - http/1.1
-  tfo: false
-  skip-cert-verify: false
-  servername: af06d20es1291.fuhuovps.xyz
-  network: xhttp
-  xhttp-opts:
-    path: 5c1250cffd3d0f0f13345c30a7bf5f9e
-    host: af06d20es1291.fuhuovps.xyz
-  encryption: none
-- name: "[Clashfree] 🇷🇺 RU VLESS-27 | free-nodes"
-  server: cf-cname.xingpingcn.top
-  port: 443
-  type: vless
-  uuid: 30e52776-55ac-3cb4-8d36-e2910f07e2c3
-  tls: true
-  alpn:
-  - h2
-  - http/1.1
-  tfo: false
-  skip-cert-verify: false
-  servername: f0c5bfd6s394.fuhuovps.xyz
-  network: xhttp
-  xhttp-opts:
-    path: f00757d3fec0e7aca102e554fb32f21e
-    host: f0c5bfd6s394.fuhuovps.xyz
-  encryption: none
-- name: "[Clashfree] 🇷🇺 RU VLESS-29 | free-nodes"
-  server: cf.090227.xyz
-  port: 443
-  type: vless
-  uuid: 30e52776-55ac-3cb4-8d36-e2910f07e2c3
-  tls: true
-  alpn:
-  - h2
-  - http/1.1
-  tfo: false
-  skip-cert-verify: false
-  servername: f0c5bfd6s394.fuhuovps.xyz
-  network: xhttp
-  xhttp-opts:
-    path: f00757d3fec0e7aca102e554fb32f21e
-    host: f0c5bfd6s394.fuhuovps.xyz
-  encryption: none
 - type: vless
   name: '[Free-clash-v2ray] TW台湾(mibei77.com 米贝节点分享) (5)'
   server: 5.253.28.240
@@ -3120,14 +3228,6 @@ proxies:
     path: /vless
   servername: 45.138.100.248
   encryption: none
-- name: "[Free-clash-v2ray] 🇺🇸US_207|938KB/s|R002-260618 [027035464f91]"
-  port: 8443
-  server: 18.206.28.143
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  udp: true
 - name: "[Free-clash-v2ray] 🇯🇵JP_52|88KB/s|A004-260618 [0768fff72f1e]"
   client-fingerprint: chrome
   network: ws
@@ -3147,16 +3247,23 @@ proxies:
   packet-encoding: xudp
   servername: jp3.yohototo.top
   encryption: none
-- name: "[Free-clash-v2ray] 🇺🇸US_616|826KB/s|K001-260618 [0c64150eb2bc]"
-  password: None
-  port: 9443
-  server: 198.44.135.19
-  skip-cert-verify: true
-  sub_tag: K001-260618
-  tls: true
-  type: http
-  username: ''
+- name: "[Free-clash-v2ray] 🇺🇸US_248|1015KB/s|A004-260618 [0af5e841f1b9]"
+  network: ws
+  port: 30016
+  server: 69.48.201.136
+  sub_tag: A004-260618
+  type: vless
   udp: true
+  uuid: 03dc60cb-a8d4-4226-93fe-0e6cbf77fe5a
+  ws-opts:
+    headers:
+      Host: uspanel.unixzone.us
+      User-Agent: 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.67 Safari/537.36'
+    path: /usserver
+  xudp: true
+  packet-encoding: xudp
+  servername: uspanel.unixzone.us
+  encryption: none
 - name: "[Free-clash-v2ray] 🇺🇸US_217|847KB/s|A004-260618 [0e40b52615aa]"
   cipher: rc4-md5
   password: 14fFPrbezE3HDZzsMOr6
@@ -3176,6 +3283,14 @@ proxies:
   type: trojan
   udp: true
   network: tcp
+- name: "[Free-clash-v2ray] 🇺🇸US_192|971KB/s|M003-260806 [112d3ee5d9f2]"
+  cipher: rc4-md5
+  password: 14fFPrbezE3HDZzsMOr6
+  port: 8080
+  server: 107.155.57.51
+  sub_tag: M003-260806
+  type: ss
+  udp: true
 - name: "[Free-clash-v2ray] 🇭🇰HK_31|90KB/s|R002-260618 [132af03e1e90]"
   port: 443
   server: fan.240104.xyz
@@ -3185,16 +3300,6 @@ proxies:
   type: http
   udp: true
   sni: fan.240104.xyz
-- name: "[Free-clash-v2ray] 🇨🇦CA_42|759KB/s|K001-260618 [1608e47a1256]"
-  password: None
-  port: 9443
-  server: 198.44.157.27
-  skip-cert-verify: true
-  sub_tag: K001-260618
-  tls: true
-  type: http
-  username: ''
-  udp: true
 - name: "[Free-clash-v2ray] 🇨🇦CA_2|1.3MB/s|A004-260618 [1a7592edd210]"
   cipher: rc4-md5
   password: 14fFPrbezE3HDZzsMOr6
@@ -3202,6 +3307,14 @@ proxies:
   server: 138.197.141.58
   sub_tag: A004-260618
   type: ss
+  udp: true
+- name: "[Free-clash-v2ray] 🇺🇸US_214|511KB/s|R002-260618 [1c8a4d9b327b]"
+  port: 443
+  server: 12.221.146.147
+  skip-cert-verify: true
+  sub_tag: R002-260618
+  tls: true
+  type: http
   udp: true
 - name: "[Free-clash-v2ray] 🇹🇼TW_38|606KB/s|R002-260618 [1f6779b8209f]"
   alpn:
@@ -3225,29 +3338,42 @@ proxies:
   sub_tag: A004-260618
   type: ss
   udp: true
-- name: "[Free-clash-v2ray] 🇯🇵JP_43|87KB/s|A004-260618 [2e127fbd6f20]"
-  client-fingerprint: chrome
-  network: ws
-  port: 443
-  server: 104.21.0.87
-  sub_tag: A004-260618
-  tls: true
-  type: vless
+- name: '[Free-clash-v2ray] ❓Other_16|612KB/s|M002-260618 [2410558a7722]'
+  cipher: aes-256-gcm
+  password: Y6R9pAtvxxzmGC
+  port: 8888
+  server: 141.164.45.187
+  sub_tag: M002-260618
+  type: ss
   udp: true
-  uuid: 4e4f1f70-5e56-4a76-bb9d-db087f4690c4
-  ws-opts:
-    headers:
-      Host: jp3.yohototo.top
-      User-Agent: 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36'
-    path: /tyxyws
-  xudp: true
-  packet-encoding: xudp
-  servername: jp3.yohototo.top
-  encryption: none
+- name: "[Free-clash-v2ray] 🇺🇸US_200|923KB/s|A004-260618 [26dae539cbdd]"
+  cipher: rc4-md5
+  password: 14fFPrbezE3HDZzsMOr6
+  port: 8080
+  server: 107.155.57.11
+  sub_tag: A004-260618
+  type: ss
+  udp: true
+- name: "[Free-clash-v2ray] 🇺🇸US_240|968KB/s|M003-260806 [2d3c6b97d127]"
+  cipher: rc4-md5
+  password: 14fFPrbezE3HDZzsMOr6
+  port: 8080
+  server: 79.110.53.169
+  sub_tag: M003-260806
+  type: ss
+  udp: true
 - name: "[Free-clash-v2ray] 🇯🇵JP_17|71KB/s|R002-260618 [3184e83a7534]"
   port: 443
   server: fan.571589.xyz
   sni: fan.571589.xyz
+  sub_tag: R002-260618
+  tls: true
+  type: http
+  udp: true
+- name: "[Free-clash-v2ray] 🇲🇾MY_1|474KB/s|R002-260618 [3253eda3c7bd]"
+  port: 9443
+  server: 152.233.3.14
+  skip-cert-verify: true
   sub_tag: R002-260618
   tls: true
   type: http
@@ -3332,33 +3458,14 @@ proxies:
   packet-encoding: xudp
   servername: jp3.yohototo.top
   encryption: none
-- name: "[Free-clash-v2ray] 🇨🇦CA_27|1.1MB/s|R002-260618 [52d842dc27e9]"
+- name: "[Free-clash-v2ray] 🇨🇦CA_17|902KB/s|R002-260618 [521d0072ceff]"
   port: 443
-  server: 4.172.245.121
+  server: 206.223.183.21
   skip-cert-verify: true
   sub_tag: R002-260618
   tls: true
   type: http
   udp: true
-- name: "[Free-clash-v2ray] 🇯🇵JP_57|76KB/s|A004-260618 [57b373271529]"
-  client-fingerprint: firefox
-  network: ws
-  port: 443
-  server: 43.170.8.95
-  sub_tag: A004-260618
-  tls: true
-  type: vless
-  udp: true
-  uuid: 4e4f1f70-5e56-4a76-bb9d-db087f4690c4
-  ws-opts:
-    headers:
-      Host: jp3.yohototo.top
-      User-Agent: 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36'
-    path: /tyxyws
-  xudp: true
-  packet-encoding: xudp
-  servername: jp3.yohototo.top
-  encryption: none
 - name: "[Free-clash-v2ray] 🇯🇵JP_51|89KB/s|M002-260618 [5a1a563fbcc8]"
   client-fingerprint: chrome
   encryption: none
@@ -3378,9 +3485,17 @@ proxies:
   xudp: true
   packet-encoding: xudp
   servername: jp3.yohototo.top
-- name: "[Free-clash-v2ray] 🇨🇦CA_23|557KB/s|R002-260618 [6516682823ea]"
+- name: "[Free-clash-v2ray] 🇺🇸US_193|940KB/s|M003-260806 [6364b2c615d5]"
+  cipher: rc4-md5
+  password: 14fFPrbezE3HDZzsMOr6
+  port: 8080
+  server: 23.251.121.242
+  sub_tag: M003-260806
+  type: ss
+  udp: true
+- name: "[Free-clash-v2ray] 🇨🇦CA_25|458KB/s|R002-260618 [636932f7d02c]"
   port: 9443
-  server: 198.44.157.19
+  server: 149.88.98.81
   skip-cert-verify: true
   sub_tag: R002-260618
   tls: true
@@ -3414,6 +3529,15 @@ proxies:
   sub_tag: C002-260622
   type: trojan
   udp: true
+- name: "[Free-clash-v2ray] 🇺🇸US_480|998KB/s|P002-260618 [69335dd6b551]"
+  password: None
+  port: 443
+  server: 23.133.176.14
+  skip-cert-verify: true
+  sub_tag: P002-260618
+  tls: true
+  type: http
+  udp: true
 - name: "[Free-clash-v2ray] 🇯🇵JP_45|285KB/s|P002-260618 [6c3b615333c9]"
   password: None
   port: 343
@@ -3432,35 +3556,14 @@ proxies:
   type: socks5
   username: ''
   udp: true
-- name: "[Free-clash-v2ray] 🇺🇸US_644|857KB/s|K001-260618 [730a1034003e]"
-  password: None
-  port: 8443
-  server: 44.217.145.28
-  skip-cert-verify: true
-  sub_tag: K001-260618
-  tls: true
-  type: http
-  username: ''
-  udp: true
-- name: "[Free-clash-v2ray] 🇯🇵JP_53|88KB/s|A004-260618 [7accfd3a932f]"
-  client-fingerprint: chrome
-  network: ws
-  port: 443
-  server: 104.21.33.59
+- name: "[Free-clash-v2ray] 🇺🇸US_292|925KB/s|A004-260618 [836b9e2c1c7b]"
+  cipher: rc4-md5
+  password: 14fFPrbezE3HDZzsMOr6
+  port: 8080
+  server: 107.151.182.253
   sub_tag: A004-260618
-  tls: true
-  type: vless
+  type: ss
   udp: true
-  uuid: 4e4f1f70-5e56-4a76-bb9d-db087f4690c4
-  ws-opts:
-    headers:
-      Host: jp3.yohototo.top
-      User-Agent: 'Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36'
-    path: /tyxyws
-  xudp: true
-  packet-encoding: xudp
-  servername: jp3.yohototo.top
-  encryption: none
 - name: "[Free-clash-v2ray] 🇯🇵JP_55|173KB/s|A004-260618 [888c5fcea3ed]"
   client-fingerprint: chrome
   network: ws
@@ -3491,6 +3594,15 @@ proxies:
   sub_tag: A004-260618
   type: trojan
   udp: true
+- name: "[Free-clash-v2ray] 🇹🇼TW_32|152KB/s [909a8d192827]"
+  password: exaxgqkKkd0TAMrCxeonWg==
+  port: 1443
+  server: twmoon1-cdn-route.couldflare-cdn.com
+  tls: true
+  type: http
+  udp: true
+  username: mrwdfNTD8M79LCukCieldrqZWqs=
+  sni: twmoon1-cdn-route.couldflare-cdn.com
 - name: "[Free-clash-v2ray] 🇺🇸US_298|907KB/s|R002-260618 [91230e8f8348]"
   port: 9443
   server: 154.47.25.78
@@ -3515,14 +3627,6 @@ proxies:
   tls: true
   type: http
   udp: true
-- name: "[Free-clash-v2ray] 🇺🇸US_202|646KB/s|R002-260618 [ac35802c1c34]"
-  port: 8443
-  server: 44.217.145.28
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  udp: true
 - name: "[Free-clash-v2ray] 🇯🇵JP_37|121KB/s|R002-260618 [b0517b7f1944]"
   port: 443
   server: fan.587475.xyz
@@ -3531,31 +3635,13 @@ proxies:
   type: http
   udp: true
   sni: fan.587475.xyz
-- name: "[Free-clash-v2ray] 🇺🇸US_600|871KB/s|P002-260618 [b1c3758ec6b5]"
-  password: None
-  port: 8443
-  server: 18.206.28.143
-  skip-cert-verify: true
-  sub_tag: P002-260618
-  tls: true
-  type: http
-  udp: true
-- name: "[Free-clash-v2ray] 🇺🇸US_201|989KB/s|R002-260618 [c0c88000d4a2]"
-  port: 443
-  server: 162.217.114.50
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  udp: true
-- name: "[Free-clash-v2ray] 🇺🇸US_244|695KB/s|R002-260618 [d83e92341d3f]"
-  password: None
-  port: 443
-  server: 149.88.21.129
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
+- name: "[Free-clash-v2ray] 🇺🇸US_356|895KB/s|A004-260618 [d92318afee09]"
+  cipher: rc4-md5
+  password: 14fFPrbezE3HDZzsMOr6
+  port: 8080
+  server: 79.110.54.250
+  sub_tag: A004-260618
+  type: ss
   udp: true
 - name: "[Free-clash-v2ray] 🇰🇷KR_22|376KB/s|P002-260618 [dc6d3fbc43d2]"
   alpn:
@@ -3576,22 +3662,6 @@ proxies:
       Host: seoul02.zgjok.com
     path: /
   servername: seoul02.zgjok.com
-- name: "[Free-clash-v2ray] 🇨🇦CA_34|949KB/s|R002-260618 [e0b6eacb1061]"
-  port: 443
-  server: 206.223.183.16
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  udp: true
-- name: "[Free-clash-v2ray] 🇺🇸US_408|571KB/s|R002-260618 [f1932fd78ef6]"
-  port: 9443
-  server: 198.44.138.27
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  udp: true
 - name: "[Free-clash-v2ray] 🇨🇦CA_68|1.1MB/s|P002-260618 [f5d4b977517a]"
   password: 'null'
   port: 443
@@ -3601,6 +3671,14 @@ proxies:
   tls: true
   type: http
   username: 'null'
+  udp: true
+- name: "[Free-clash-v2ray] 🇺🇸US_255|929KB/s|R002-260618 [f6ef7c53e70b]"
+  port: 443
+  server: 23.133.176.14
+  skip-cert-verify: true
+  sub_tag: R002-260618
+  tls: true
+  type: http
   udp: true
 - name: "[Free-clash-v2ray] 🇺🇸US_330|746KB/s|R002-260618 [fbfa57386da4]"
   port: 443
@@ -3648,6 +3726,12 @@ proxies:
   udp-relay-mode: native
   alpn:
   - h3
+- name: "[V2rayclashfree-RSS] 🇰🇷KR²_1|0.7MB/s|GPT|X|History 01"
+  port: 1090
+  server: 121.169.46.116
+  tls: false
+  type: socks5
+  username: T2clM0QlM0Q6
 - cipher: aes-256-cfb
   name: "[V2rayclashfree-RSS] 🇵🇱PL_2|2.7MB/s|A004-260618 01"
   password: U6qnYRhfyDmn8sgn
@@ -3687,12 +3771,6 @@ proxies:
   skip-cert-verify: true
   sub_tag: R002-260618
   tls: true
-  type: http
-  udp: true
-- name: "[V2rayclashfree-RSS] 🇻🇪VE_1|581KB/s|R002-260618 01"
-  port: 8282
-  server: 186.167.53.178
-  sub_tag: R002-260618
   type: http
   udp: true
 - name: "[V2rayclashfree-RSS] 🇺🇸US_56|129KB/s|R002-260618 01"
@@ -3790,12 +3868,6 @@ proxies:
   sub_tag: A004-260618
   type: ss
   udp: true
-- name: '[V2rayclashfree-RSS] ❓Other_5|524KB/s|R002-260618 01'
-  port: 9090
-  server: 104.248.151.93
-  sub_tag: R002-260618
-  type: http
-  udp: true
 - name: "[V2rayclashfree-RSS] 🇸🇬SG_42|735KB/s|R002-260618 01"
   port: 9090
   server: 167.99.74.174
@@ -3810,28 +3882,12 @@ proxies:
   tls: true
   type: http
   udp: true
-- name: "[V2rayclashfree-RSS] 🇫🇷FR_1552|97KB/s|R002-260618 01"
-  password: 'null'
-  port: 443
-  server: fan.132031.xyz
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  username: 'null'
-  udp: true
-  sni: fan.132031.xyz
 - name: "[V2rayclashfree-RSS] 🇭🇷HR_2|390KB/s|R002-260618 01"
   port: 443
   server: 154.47.29.161
   skip-cert-verify: true
   sub_tag: R002-260618
   tls: true
-  type: http
-  udp: true
-- name: "[V2rayclashfree-RSS] 🇨🇦CA_42|160KB/s|R002-260618 01"
-  port: 3118
-  server: 184.75.221.82
-  sub_tag: R002-260618
   type: http
   udp: true
 - name: '[V2rayclashfree-RSS] ❓Other_10|380KB/s|R002-260618 01'
@@ -3842,6 +3898,14 @@ proxies:
   type: socks5
   udp: true
   username: VDJjbE0wUWxNMFE2Og
+- name: "[V2rayclashfree-RSS] 🇺🇸US_472|692KB/s|R002-260618 01"
+  port: 443
+  server: 129.153.93.183
+  skip-cert-verify: true
+  sub_tag: R002-260618
+  tls: true
+  type: http
+  udp: true
 - name: "[V2rayclashfree-RSS] 🇺🇸US_473|270KB/s|R002-260618 01"
   port: 443
   server: 137.175.22.72
@@ -3939,25 +4003,9 @@ proxies:
   tls: true
   type: http
   udp: true
-- name: "[V2rayclashfree-RSS] 🇺🇸US_512|135KB/s|R002-260618 01"
-  port: 443
-  server: 137.175.22.29
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  udp: true
 - name: "[V2rayclashfree-RSS] 🇺🇸US_515|333KB/s|R002-260618 01"
   port: 443
   server: 68.235.56.59
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  udp: true
-- name: "[V2rayclashfree-RSS] 🇺🇸US_529|354KB/s|R002-260618 01"
-  port: 443
-  server: 137.175.22.84
   skip-cert-verify: true
   sub_tag: R002-260618
   tls: true
@@ -3971,6 +4019,25 @@ proxies:
   tls: true
   type: http
   udp: true
+- client-fingerprint: chrome
+  name: "[V2rayclashfree-RSS] 🇯🇵JP_81|72KB/s|A004-260618 01"
+  network: ws
+  port: 443
+  server: 104.16.10.9
+  sub_tag: A004-260618
+  tls: true
+  type: vless
+  udp: true
+  uuid: 4e4f1f70-5e56-4a76-bb9d-db087f4690c4
+  ws-opts:
+    headers:
+      Host: jp3.yohototo.top
+      User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36'
+    path: /tyxyws
+  xudp: true
+  packet-encoding: xudp
+  servername: jp3.yohototo.top
+  encryption: none
 - client-fingerprint: chrome
   name: "[V2rayclashfree-RSS] 🇯🇵JP_82|68KB/s|A004-260618 01"
   network: ws
@@ -3990,14 +4057,6 @@ proxies:
   packet-encoding: xudp
   servername: jp3.yohototo.top
   encryption: none
-- name: "[V2rayclashfree-RSS] 🇺🇸US_549|229KB/s|R002-260618 01"
-  port: 443
-  server: 137.175.22.116
-  skip-cert-verify: true
-  sub_tag: R002-260618
-  tls: true
-  type: http
-  udp: true
 - name: '[V2rayclashfree-RSS] 香港 68'
   type: hysteria2
   server: f675b7ac-tmeqo0-0-1imi4.hk3.hyhuawei.com
@@ -4007,21 +4066,6 @@ proxies:
   tls: true
   servername: f675b7ac-tmeqo0-0-1imi4.hk3.hyhuawei.com
   skip-cert-verify: true
-  network: tcp
-- name: "[V2rayclashfree-RSS] 🇫🇮FI_2|348KB/s|M002-260618 01"
-  type: vless
-  server: staging.lastilhame.monster
-  port: 443
-  udp: true
-  uuid: 2ba7f500-017b-4891-87a0-e4e62a4ad52d
-  encryption: none
-  flow: xtls-rprx-vision
-  tls: true
-  servername: www.microsoft.com
-  client-fingerprint: chrome
-  reality-opts:
-    public-key: FjcEZNQ8t5E4R04_11T6ghsOutdqwKKrelkuadakoQg
-    short-id: 9409f73c2fd7
   network: tcp
 - name: "[V2rayclashfree-RSS] 🇫🇷FR_978|3.8MB/s|V003-260618 01"
   type: vless
@@ -4083,17 +4127,17 @@ proxy-groups:
   type: url-test
   proxies:
   - '[大FQ运动] end-gfw-kr64-VLESS'
+  - '[大FQ运动] end-gfw-kr64-HY2'
   - '[大FQ运动] end-gfw-kr64-SS'
   - '[大FQ运动] end-gfw-sg89-VLESS'
   - '[大FQ运动] end-gfw-sg89-HY2'
   - '[大FQ运动] end-gfw-sg89-SS'
-  - '[Pawdroid] 美国+CloudFlare节点'
-  - '[Pawdroid] 新西兰+V2CROSS.COM-2'
   - '[Pawdroid] 新加坡+V2CROSS.COM'
+  - '[Pawdroid] 美国+CloudFlare节点'
   - '[Pawdroid] 美国+V2CROSS.COM'
-  - '[Pawdroid] 美国+Xerox'
+  - '[Pawdroid] 新西兰+V2CROSS.COM-2'
+  - '[Pawdroid] 美国+V2CROSS.COM-2'
   - "[FreeV2-Base64] 🇺🇸 US-LN"
-  - "[FreeV2-Base64] 🇸🇬 SG-LN"
   - "[Freesocks] 🌐 via CDN 1"
   - "[Freesocks] 🌐 via CDN 2"
   - "[Freesocks] 🌐 via CDN 1-2"
@@ -4105,85 +4149,84 @@ proxy-groups:
   - "[NekoWarp] 🇳🇱 NL-CF-WARP-5"
   - "[NekoWarp] 🇺🇸 US-CF-WARP-6"
   - "[NekoWarp] 🇺🇸 US-CF-WARP-7"
-  - "[NekoWarp] 🇳🇱 NL-CF-WARP-8"
   - "[NekoWarp] 🇳🇱 NL-CF-WARP-9"
   - "[NekoWarp] 🇺🇸 US-CF-WARP-10"
-  - '[Mibei77-RSS] RU俄罗斯(mibei77.com 米贝节点分享)_3'
+  - '[Mibei77-RSS] CA加拿大(mibei77.com 米贝节点分享)-2'
+  - '[Mibei77-RSS] SG新加坡(mibei77.com 米贝节点分享)-2'
+  - '[Mibei77-RSS] SG新加坡(mibei77.com 米贝节点分享)-3'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-9'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-10'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-11'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-12'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-13'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-14'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-15'
   - "[Yoyapai-RSS] 🇺🇸US美国丨yoyapai.com"
-  - "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com"
-  - "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com-2"
-  - "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com"
-  - "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com-3"
-  - '[Yoyapai-RSS] ❓未知丨yoyapai.com-3'
-  - '[Yoyapai-RSS] ❓未知丨yoyapai.com-4'
-  - '[Yoyapai-RSS] ❓未知丨yoyapai.com-5'
-  - "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-6"
+  - "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-5"
   - "[Yoyapai-RSS] 🇱🇻LV拉脱维亚丨yoyapai.com"
-  - "[免费节点1] 🇺🇸_美国 (57)"
-  - '[免费节点1] 电报群：t.me/vvkj11'
-  - "[免费节点1] 🇸🇬_新加坡 (2)"
+  - "[Yoyapai-RSS] 🇭🇰HK香港-6"
+  - "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-21"
+  - "[免费节点1] 🇺🇸_美国 (58)"
+  - "[免费节点1] 🇰🇷_韩国 (2)"
   - "[免费节点1] 🇺🇸_美国"
   - "[免费节点1] 🇹🇼_台湾"
   - "[免费节点1] 🇺🇸_美国 (3)"
-  - "[免费节点1] 🇺🇸_美国 (4)"
   - "[免费节点1] 🇺🇸_美国 (5)"
   - "[免费节点1] 🇺🇸_美国 (6)"
   - "[免费节点1] 🇩🇪_德国 (3)"
   - "[免费节点1] 🇺🇸_美国 (7)"
   - "[免费节点1] 🇳🇱_荷兰"
+  - "[免费节点1] 🇺🇸_美国 (8)"
   - "[免费节点1] 🇺🇸_美国 (9)"
   - "[免费节点1] 🇺🇸_美国 (10)"
   - "[免费节点1] 🇺🇸_美国 (12)"
   - "[免费节点1] 🇺🇸_美国 (13)"
-  - "[免费节点1] 🇺🇸_美国 (15)"
-  - "[免费节点1] 🇺🇸_美国 (16)"
   - "[免费节点1] 🇺🇸_美国 (17)"
   - "[免费节点1] 🇩🇪_德国 (5)"
   - "[免费节点1] 🇳🇱_荷兰 (5)"
   - "[免费节点1] 🇺🇸_美国 (19)"
-  - "[免费节点1] 🇬🇧_英国"
+  - "[免费节点1] 🇺🇸_美国 (20)"
   - "[免费节点1] 🇸🇬_新加坡 (3)"
+  - "[免费节点1] 🇺🇸_美国 (21)"
   - "[免费节点1] 🇺🇸_美国 (22)"
-  - "[免费节点1] 🇺🇸_美国 (24)"
   - "[免费节点1] 🇸🇬_新加坡 (4)"
   - "[免费节点1] 🇺🇸_美国 (25)"
+  - "[免费节点1] 🇳🇱_荷兰 (9)"
   - "[免费节点1] 🇺🇸_美国 (27)"
   - "[免费节点1] 🇩🇪_德国 (6)"
-  - "[免费节点1] 🇺🇸_美国 (30)"
+  - "[免费节点1] 🇺🇸_美国 (31)"
   - "[免费节点1] 🇸🇬_新加坡 (5)"
   - "[免费节点1] 🇺🇸_美国 (32)"
   - "[免费节点1] 🇨🇦_加拿大 (4)"
   - "[免费节点1] 🇺🇸_美国 (33)"
+  - "[免费节点1] 🇨🇦_加拿大 (5)"
   - "[免费节点1] 🇺🇸_美国 (34)"
   - "[免费节点1] 🇺🇸_美国 (35)"
-  - "[免费节点1] 🇺🇸_美国 (36)"
   - "[免费节点1] 🇺🇸_美国 (37)"
-  - "[免费节点1] 🇳🇱_荷兰 (12)"
   - "[免费节点1] 🇩🇪_德国 (9)"
   - "[免费节点1] 🇺🇸_美国 (38)"
   - "[免费节点1] 🇺🇸_美国 (39)"
-  - "[免费节点1] 🇩🇪_德国 (11)"
+  - "[免费节点1] 🇺🇸_美国 (40)"
   - "[免费节点1] 🇺🇸_美国 (41)"
+  - "[免费节点1] 🇩🇪_德国 (12)"
   - "[免费节点1] 🇩🇪_德国 (13)"
   - "[免费节点1] 🇺🇸_美国 (42)"
   - "[免费节点1] 🇺🇸_美国 (46)"
+  - "[免费节点1] 🇺🇸_美国 (47)"
   - "[免费节点1] 🇺🇸_美国 (48)"
-  - "[免费节点1] 🇺🇸_美国 (49)"
-  - "[免费节点2] 🧿100@oneclickvpnkeys"
+  - "[免费节点1] 🇺🇸_美国 (50)"
+  - "[免费节点1] 🇩🇪_德国 (16)"
+  - "[免费节点2] 🧿94@oneclickvpnkeys"
   - "[免费节点2] 🇺🇸206889 | ⚡️Telegram = t.me/L..."
   - "[免费节点2] 🧿95@oneclickvpnkeys"
   - "[免费节点2] 🧿96@oneclickvpnkeys"
   - '[免费节点2] ⏳1@oneclickvpnkeys'
-  - "[免费节点2] 🧿97@oneclickvpnkeys"
+  - "[免费节点2] 🧿98@oneclickvpnkeys"
   - "[免费节点2] 🧿99@oneclickvpnkeys"
   - "[免费节点2] Channel id: @ConfigV2RayNG 🇭🇰"
-  - "[免费节点2] 🍪13@oneclickvpnkeys"
-  - '[免费节点2] @confiig_hub #1'
-  - "[免费节点2] 🇫🇷[www.v2nodes.com] vless-FR-1... #2"
-  - "[免费节点2] 🇬🇧[www.v2nodes.com] vless-GB-1... #3"
   - "[免费节点2] 🇮🇳[www.v2nodes.com] vless-IN-1... #1"
   - "[免费节点2] 🇯🇵[www.v2nodes.com] vless-JP-1... #2"
-  - "[免费节点2] 🇲🇾[www.v2nodes.com] vless-MY-1..."
+  - "[免费节点2] 🇯🇵[www.v2nodes.com] vless-JP-1... #4"
   - "[免费节点2] 🇸🇬[www.v2nodes.com] vless-SG-1..."
   - "[免费节点2] 🏳[www.v2nodes.com] vless- #38"
   - "[免费节点2] 🇻🇳[www.v2nodes.com] vless-VN-1..."
@@ -4191,11 +4234,16 @@ proxy-groups:
   - "[免费节点2] 🇦🇹[www.v2nodes.com] ss-AT-1595..."
   - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1558..."
   - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1557..."
+  - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1546... #1"
+  - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1545..."
+  - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1545... #1"
   - "[免费节点2] 🇬🇧[www.v2nodes.com] ss-GB-1602..."
+  - "[免费节点2] 🇮🇹[www.v2nodes.com] ss-IT-1597..."
   - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-1544..."
   - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-5141..."
   - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-1291..."
   - "[免费节点2] 🏳[www.v2nodes.com] ss- #4"
+  - "[免费节点2] 🇰🇷[www.v2nodes.com] ss-KR-1185..."
   - "[免费节点2] 🏳[www.v2nodes.com] ss- #5"
   - "[免费节点2] 🇳🇱[www.v2nodes.com] ss-NL-1614..."
   - "[免费节点2] 🇵🇱[www.v2nodes.com] ss-PL-1273..."
@@ -4203,7 +4251,6 @@ proxy-groups:
   - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614..."
   - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614... #1"
   - "[免费节点2] 🇩🇪[www.v2nodes.com] trojan-DE-... #1"
-  - "[免费节点2] 🇵🇱[www.v2nodes.com] trojan-PL-..."
   - "[免费节点2] 🇸🇬[www.v2nodes.com] trojan-SG-..."
   - '[免费节点2] US_speednode_0040'
   - "[免费节点2] 🇭🇰HK_1|1.7MB/s"
@@ -4214,16 +4261,13 @@ proxy-groups:
   - "[免费节点2] 🇺🇸US_4|1.0MB/s"
   - "[免费节点2] 🇺🇸US_5|1.6MB/s"
   - "[免费节点2] 🇺🇸US_6|1.4MB/s"
-  - "[免费节点2] 🇭🇰 香港 | HKG #3"
+  - "[免费节点2] 🇭🇰 香港 | HKG #1"
+  - "[免费节点2] 🇭🇰 香港 | HKG #2"
   - "[免费节点2] 🇯🇵 日本 | JPN #2"
-  - "[免费节点2] 🇸🇬 新加坡 | SGP #3"
-  - '[免费节点2] IE_speednode_0013'
+  - '[免费节点2] US_speednode_0039'
   - "[免费节点2] 🇺🇸 美国 | USA 2"
   - "[免费节点3] 🇺🇸 美国 | USA 7"
-  - '[免费节点5] SSR-美国-NF解锁自制剧-ChatGPT-TikTok-YouTube-107.151.182.253:8080'
-  - '[免费节点6] 英国 004'
-  - '[免费节点6] 美国 039'
-  - '[免费节点6] 美国 042'
+  - '[免费节点6] 美国 025'
   - '[免费节点6]  035'
   - '[免费节点6] 美国 299'
   - '[免费节点6] 美国 308'
@@ -4234,71 +4278,81 @@ proxy-groups:
   - '[免费节点6] 德国 010'
   - '[免费节点6] 美国 349'
   - '[免费节点6] 乌克兰 004'
-  - '[免费节点6] 比利时 003'
+  - '[免费节点6] 法国 006'
   - '[免费节点6] 法国 017'
   - '[免费节点6] 澳大利亚 025'
   - '[免费节点6] 德国 036'
+  - '[免费节点6] 比利时 030'
   - '[免费节点6] 欧洲 004'
   - '[免费节点6] 日本 064'
   - '[免费节点6] 美国 835'
-  - '[免费节点6] 美国 981'
-  - '[免费节点6] 美国 1002'
   - '[免费节点6] 瑞士 008'
   - '[免费节点6] 美国 1179'
-  - '[免费节点6] 美国 1194'
+  - "[免费节点7] 🇩🇪 德国 | DEU 3"
+  - "[免费节点7] 🇩🇪 德国 | DEU 8"
+  - "[免费节点7] 🇩🇪 德国 | DEU 9"
+  - "[免费节点7] 🇩🇪 德国 | DEU 10"
+  - "[免费节点7] 🇫🇷 法国 | FRA"
+  - "[免费节点7] 🇭🇰 香港 | HKG 3"
+  - "[免费节点7] 🇮🇳 印度 | IND"
+  - "[免费节点7] 🇳🇱 荷兰 | NLD 2"
+  - "[免费节点7] 🇸🇪 瑞典 | SWE"
+  - "[免费节点7] 🇺🇸 美国 | USA"
+  - "[免费节点7] 🇺🇸 美国 | USA 4"
+  - "[免费节点7] 🇺🇸 美国 | USA 5"
+  - "[免费节点7] 🇺🇸 美国 | USA 10"
+  - "[免费节点8] 🇺🇸US-193.151.160.9-0080"
+  - "[免费节点8] 🇺🇸US-193.151.163.18-0081"
+  - "[免费节点8] 🇺🇸US-193.151.160.18-0086"
+  - "[免费节点8] 🇺🇸US-37.19.198.243-0142"
   - "[免费节点8] 🇺🇸US-169.197.140.218-0084"
+  - "[免费节点8] 🇺🇸US-185.230.230.18-0091"
+  - "[免费节点8] 🇺🇸US-37.19.198.244-0137"
+  - "[免费节点8] 🇬🇧GB-82.38.31.202-0094"
+  - "[免费节点8] 🇬🇧GB-82.38.31.192-0120"
   - "[免费节点8] 🇺🇸US-66.163.112.13-0178"
+  - "[免费节点8] 🇺🇸US-216.106.186.32-0150"
+  - "[免费节点8] 🇬🇧GB-82.38.31.203-0132"
   - "[免费节点8] 🇺🇸US-66.163.112.121-0196"
+  - "[免费节点8] 🇬🇧GB-82.38.31.206-0119"
+  - "[免费节点8] 🇺🇸US-45.86.51.18-0079"
+  - "[免费节点8] 🇺🇸US-138.199.42.68-0240"
   - "[免费节点8] 🇺🇸US-170.101.101.53-0124"
+  - "[免费节点8] 🇬🇧GB-82.38.31.205-0125"
   - "[免费节点8] 🇺🇸US-216.152.155.158-0121"
+  - "[免费节点8] 🇺🇸US-37.19.198.160-0134"
   - "[免费节点8] 🇺🇸US-216.152.156.65-0098"
+  - "[免费节点8] 🇺🇸US-173.244.56.6-0078"
+  - "[免费节点8] 🇺🇸US-95.215.201.18-0151"
+  - "[免费节点8] 🇬🇧GB-82.38.31.34-0173"
+  - "[免费节点8] 🇬🇧GB-82.38.31.47-0180"
+  - "[免费节点8] 🇬🇧GB-82.38.31.66-0175"
+  - "[免费节点8] 🇬🇧GB-82.38.31.42-0191"
+  - "[免费节点8] 🇬🇧GB-82.38.31.61-0176"
+  - "[免费节点8] 🇬🇧GB-82.38.31.155-0181"
+  - "[免费节点8] 🇬🇧GB-178.83.185.156-0172"
+  - "[免费节点8] 🇬🇧GB-82.38.31.46-0189"
   - "[免费节点8] 🇺🇸US-66.163.114.166-0162"
-  - "[免费节点8] 🇺🇸US-193.151.160.9-0080 | 237.19MB"
-  - "[免费节点8] 🇺🇸US-193.151.163.18-0081 | 234.547MB"
-  - "[免费节点8] 🇺🇸US-193.151.160.18-0086 | 188.362MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.243-0142 | 140.557MB"
-  - "[免费节点8] 🇺🇸US-185.230.230.18-0091 | 113.982MB"
-  - "[免费节点8] 🇩🇪DE-185.176.204.18-0092 | 106.927MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.244-0137 | 106.386MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.217-0117 | 105.61MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.187-0139 | 98.258MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.207-0123 | 91.14MB"
-  - "[免费节点8] 🇺🇸US-45.86.51.18-0079 | 89.797MB"
-  - "[免费节点8] 🇺🇸US-138.199.42.68-0240 | 89.797MB"
-  - "[免费节点8] 🇳🇱NL-109.201.152.181-0157 | 87.522MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.179-0136 | 75.015MB"
-  - "[免费节点8] 🇳🇱NL-193.29.139.147-0135 | 70.643MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.160-0134 | 64.538MB"
-  - "[免费节点8] 🇺🇸US-173.244.56.6-0078 | 57.258MB"
-  - "[免费节点8] 🇺🇸US-173.244.56.9-0077 | 51.341MB"
-  - "[免费节点8] 🇺🇸US-95.215.201.18-0151 | 45.832MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.34-0173 | 28.272MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.66-0175 | 27.392MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.35-0186 | 26.022MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.162-0185 | 22.706MB"
-  - "[免费节点8] 🇸🇬SG-68.183.227.4-0182 | 22.053MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.159-0177 | 21.827MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.62-0192 | 21.623MB"
-  - "[免费节点8] 🇨🇦CA-149.22.95.183-0149 | 15.467MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.170-0215 | 13.888MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.171-0214 | 10.762MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.218-0219 | 9.097MB"
-  - "[免费节点8] 🇺🇸US-15.204.247.206-5816 | 8.344MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.169-0147 | 4.484MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.168-0206 | 4.059MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.167-0207 | 3.963MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.170-0168 | 3.861MB"
-  - "[免费节点8] 🇰🇷KR-218.237.185.234-0230 | 3.247MB"
-  - "[免费节点8] 🇰🇷KR-211.178.105.134-0226 | 0.203MB"
-  - "[免费节点8] 🇯🇵JP-84.247.155.196-0225 | 0.176MB"
-  - "[免费节点8] 🇬🇧GB-141.98.101.181-0220 | 0.107MB"
-  - "[免费节点8] 🇺🇸US-198.98.53.130-0229 | 0.06MB"
-  - "[免费节点8] 🇬🇧GB-104.239.12.81-0228 | 0.037MB"
-  - "[免费节点8] 🇨🇦CA-137.184.174.93-0156 | 0.0MB"
-  - "[免费节点8] 🇭🇰HK-156.245.232.239-0257"
-  - "[免费节点10] 🇺🇸_US_美国->🇵🇱_PL_波兰_IPV4"
-  - '[免费节点10] us|81b9|puddincat07@Telegram'
+  - "[免费节点8] 🇬🇧GB-82.38.31.162-0185"
+  - "[免费节点8] 🇬🇧GB-82.38.31.48-0188"
+  - "[免费节点8] 🇸🇬SG-68.183.227.4-0182"
+  - "[免费节点8] 🇨🇦CA-149.22.95.183-0149"
+  - "[免费节点8] 🇬🇧GB-82.38.31.171-0214"
+  - "[免费节点8] 🇺🇸US-15.204.247.206-5816"
+  - "[免费节点8] 🇺🇸US-156.146.38.169-0147"
+  - "[免费节点8] 🇺🇸US-156.146.38.168-0206"
+  - "[免费节点8] 🇺🇸US-156.146.38.167-0207"
+  - "[免费节点8] 🇺🇸US-156.146.38.170-0168"
+  - "[免费节点8] 🇰🇷KR-218.237.185.234-0230"
+  - "[免费节点8] 🇰🇷KR-211.178.105.134-0226"
+  - "[免费节点8] 🇯🇵JP-84.247.155.196-0225"
+  - "[免费节点8] 🇺🇸US-198.98.53.130-0229"
+  - "[免费节点8] 🇬🇧GB-104.239.12.81-0228"
+  - "[免费节点8] 🇨🇦CA-137.184.174.93-0156"
+  - "[免费节点8] 🇭🇰HK-156.245.232.239-0236"
+  - "[免费节点8] 🇺🇸US-216.105.168.18-5819"
   - '[免费节点10] sg|9317|puddincat07@Telegram'
+  - "[免费节点10] 🇺🇸_US_美国->🇵🇱_PL_波兰_IPV4"
   - '[免费节点10] VN 6 → tg@nicevpn123'
   - "[免费节点10] 🇬🇧 GB 23 → tg@nicevpn123"
   - "[免费节点10] 🇭🇰 HK 10 → tg@nicevpn123"
@@ -4307,7 +4361,9 @@ proxy-groups:
   - "[免费节点10] 🇸🇬 SG 27 → tg@nicevpn123"
   - "[免费节点10] 🇺🇸 US 1052 → tg@nicevpn123"
   - "[免费节点11] 🇫🇷 法国 05"
+  - '[免费节点11] 未知41 433.8KB/s'
   - "[免费节点11] 🇺🇸 美国 11"
+  - '[免费节点11] 未知92 436.1KB/s'
   - "[免费节点11] 🇷🇺 俄罗斯 丹麦 01"
   - '[ChromeGO-Toolkit] Alvin9999-newpac'
   - '[ChromeGO-ShiteThings] visa.com'
@@ -4322,84 +4378,80 @@ proxy-groups:
   - '[Pawdroid-SR-APK] Premium-JP-CF-03⁣⁠⁣⁠⁣'
   - '[Pawdroid-SR-APK] Premium-JP-CF-04⁣⁠⁣⁠⁣'
   - '[Pawdroid-SR-APK] Premium-JP-CF-05⁣⁠⁣⁠⁣'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-5'
-  - '[Pawdroid-SR-APK] 北美地区+V2CROSS.COM-3'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-7'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-9'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-11'
-  - '[Pawdroid-SR-APK] 韩国 首尔Oracle云计算数据中心'
+  - '[Pawdroid-SR-APK] 瑞典+V2CROSS.COM'
+  - '[Pawdroid-SR-APK] 加拿大+V2CROSS.COM'
+  - '[Pawdroid-SR-APK] 瑞典+V2CROSS.COM-4'
+  - '[Pawdroid-SR-APK] 美国+惠普HP'
   - '[Pawdroid-SR-APK] 香港 阿里云'
+  - '[Pawdroid-SR-APK] 韩国 首尔Oracle云计算数据中心'
   - '[Pawdroid-SR-APK] 英国+V2CROSS.COM-18'
-  - '[Pawdroid-SR-APK] 日本+东京OneProvider'
   - '[Pawdroid-SR-APK] 香港+UCloud'
+  - '[Pawdroid-SR-APK] 日本+东京Amazon数据中心'
   - '[Pawdroid-SR-APK] 香港+环球全域电讯'
   - '[Pawdroid-SR-APK] 香港+环球全域电讯-2'
   - '[Pawdroid-SR-APK] 美国+Amazon+EC2服务器'
-  - '[Pawdroid-SR-APK] 乌克兰+V2CROSS.COM-8'
-  - '[Pawdroid-SR-APK] 俄罗斯+V2CROSS.COM-2'
+  - '[Pawdroid-SR-APK] 日本+东京Amazon数据中心-2'
   - '[Pawdroid-SR-APK] 香港+特别行政区'
-  - '[Pawdroid-SR-APK] 日本东京+Oracle+Cloud'
-  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM'
+  - '[Pawdroid-SR-APK] +阿里云-2'
+  - '[Pawdroid-SR-APK] 日本+东京Choopa数据中心'
   - '[Pawdroid-SR-APK] 亚太地区+V2CROSS.COM'
+  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM'
   - '[Pawdroid-SR-APK] 日本+V2CROSS.COM-2'
+  - '[Pawdroid-SR-APK] 日本东京+Oracle+Cloud'
   - '[Pawdroid-SR-APK] 香港+特别行政区-2'
   - '[Pawdroid-SR-APK] 香港+特别行政区-3'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-2'
   - '[Pawdroid-SR-APK] 香港+特别行政区-4'
+  - '[Pawdroid-SR-APK] 香港+特别行政区-5'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司'
+  - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-22'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-3'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-4'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-5'
-  - '[Pawdroid-SR-APK] 美国+3COM公司企业网'
-  - '[Pawdroid-SR-APK] 荷兰+V2CROSS.COM-7'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-6'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-7'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-8'
   - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-24'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-7'
+  - '[Pawdroid-SR-APK] 荷兰+V2CROSS.COM-7'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-8'
+  - '[Pawdroid-SR-APK] 美国+3COM公司企业网'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-9'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-10'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-11'
-  - '[Pawdroid-SR-APK] 日本+东京Choopa数据中心-2'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-12'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-13'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-14'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-15'
-  - '[Pawdroid-SR-APK] +阿里云-2'
-  - '[Pawdroid-SR-APK] 伊朗+V2CROSS.COM-6'
-  - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-34'
-  - '[Pawdroid-SS-APK] United+States-9'
+  - '[Pawdroid-SR-APK] 伊朗+V2CROSS.COM-5'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-16'
+  - '[Pawdroid-SR-APK] 日本+东京OneProvider'
   - '[Pawdroid-SS-APK] United+Kingdom-3'
   - '[Pawdroid-SS-APK] Malaysia'
-  - '[Pawdroid-SS-APK] United+States-123'
-  - '[Pawdroid-SS-APK] France-11'
-  - '[Pawdroid-SS-APK] United+States-279'
+  - '[Pawdroid-SS-APK] United+States-122'
+  - '[Pawdroid-SS-APK] United+States-201'
   - '[1VPN-CRX] free-singapore-https-1'
   - '[1VPN-CRX] free-singapore-https-2'
   - '[1VPN-CRX] free-singapore-https-3'
   - '[1VPN-CRX] free-singapore-https-4'
   - '[1VPN-CRX] free-los-angeles-https-1'
-  - '[1VPN-CRX] free-los-angeles-https-2'
   - '[1VPN-CRX] free-los-angeles-https-3'
   - '[1VPN-CRX] free-los-angeles-https-4'
   - '[1VPN-CRX] free-los-angeles-https-5'
-  - '[1VPN-CRX] free-los-angeles-https-6'
-  - "[Clashfree] 🇺🇸 US VLESS-25 | free-nodes"
-  - "[Clashfree] 🇷🇺 RU VLESS-27 | free-nodes"
-  - "[Clashfree] 🇷🇺 RU VLESS-29 | free-nodes"
   - '[Free-clash-v2ray] TW台湾(mibei77.com 米贝节点分享) (5)'
   - "[Free-clash-v2ray] 🇺🇸US_336|747KB/s|P002-260618 [023c91470b90]"
-  - "[Free-clash-v2ray] 🇺🇸US_207|938KB/s|R002-260618 [027035464f91]"
   - "[Free-clash-v2ray] 🇯🇵JP_52|88KB/s|A004-260618 [0768fff72f1e]"
-  - "[Free-clash-v2ray] 🇺🇸US_616|826KB/s|K001-260618 [0c64150eb2bc]"
+  - "[Free-clash-v2ray] 🇺🇸US_248|1015KB/s|A004-260618 [0af5e841f1b9]"
   - "[Free-clash-v2ray] 🇺🇸US_217|847KB/s|A004-260618 [0e40b52615aa]"
   - "[Free-clash-v2ray] 🇺🇸US_560|1.5MB/s|M003-260806 [0f851a6a1744]"
+  - "[Free-clash-v2ray] 🇺🇸US_192|971KB/s|M003-260806 [112d3ee5d9f2]"
   - "[Free-clash-v2ray] 🇭🇰HK_31|90KB/s|R002-260618 [132af03e1e90]"
-  - "[Free-clash-v2ray] 🇨🇦CA_42|759KB/s|K001-260618 [1608e47a1256]"
   - "[Free-clash-v2ray] 🇨🇦CA_2|1.3MB/s|A004-260618 [1a7592edd210]"
+  - "[Free-clash-v2ray] 🇺🇸US_214|511KB/s|R002-260618 [1c8a4d9b327b]"
   - "[Free-clash-v2ray] 🇹🇼TW_38|606KB/s|R002-260618 [1f6779b8209f]"
   - "[Free-clash-v2ray] 🇺🇸US_357|1.7MB/s|A004-260618 [1feecb3b9b0d]"
-  - "[Free-clash-v2ray] 🇯🇵JP_43|87KB/s|A004-260618 [2e127fbd6f20]"
+  - '[Free-clash-v2ray] ❓Other_16|612KB/s|M002-260618 [2410558a7722]'
+  - "[Free-clash-v2ray] 🇺🇸US_200|923KB/s|A004-260618 [26dae539cbdd]"
+  - "[Free-clash-v2ray] 🇺🇸US_240|968KB/s|M003-260806 [2d3c6b97d127]"
   - "[Free-clash-v2ray] 🇯🇵JP_17|71KB/s|R002-260618 [3184e83a7534]"
+  - "[Free-clash-v2ray] 🇲🇾MY_1|474KB/s|R002-260618 [3253eda3c7bd]"
   - "[Free-clash-v2ray] 🇫🇷FR_27|6.8MB/s|R002-260618 [39873ef4d996]"
   - "[Free-clash-v2ray] 🇺🇸US_431|469KB/s|K001-260618 [3eeb791263e2]"
   - "[Free-clash-v2ray] 🇺🇸US_334|1.7MB/s|A001-260618 [3f49a6a19591]"
@@ -4407,41 +4459,38 @@ proxy-groups:
   - "[Free-clash-v2ray] 🇭🇰HK_10|138KB/s|R002-260618 [4a009c7715e5]"
   - "[Free-clash-v2ray] 🇯🇵JP_7|85KB/s|K001-260618 [4a732b04dd53]"
   - "[Free-clash-v2ray] 🇯🇵JP_50|169KB/s|A004-260618 [4b23552130a4]"
-  - "[Free-clash-v2ray] 🇨🇦CA_27|1.1MB/s|R002-260618 [52d842dc27e9]"
-  - "[Free-clash-v2ray] 🇯🇵JP_57|76KB/s|A004-260618 [57b373271529]"
+  - "[Free-clash-v2ray] 🇨🇦CA_17|902KB/s|R002-260618 [521d0072ceff]"
   - "[Free-clash-v2ray] 🇯🇵JP_51|89KB/s|M002-260618 [5a1a563fbcc8]"
-  - "[Free-clash-v2ray] 🇨🇦CA_23|557KB/s|R002-260618 [6516682823ea]"
+  - "[Free-clash-v2ray] 🇺🇸US_193|940KB/s|M003-260806 [6364b2c615d5]"
+  - "[Free-clash-v2ray] 🇨🇦CA_25|458KB/s|R002-260618 [636932f7d02c]"
   - "[Free-clash-v2ray] 🇺🇸US_443|536KB/s|R002-260618 [67460e97ccf1]"
   - "[Free-clash-v2ray] 🇺🇸US_324|719KB/s|R002-260618 [67c5487a691e]"
   - "[Free-clash-v2ray] 🇰🇷KR_42|586KB/s|C002-260622 [6926f2806fe8]"
+  - "[Free-clash-v2ray] 🇺🇸US_480|998KB/s|P002-260618 [69335dd6b551]"
   - "[Free-clash-v2ray] 🇯🇵JP_45|285KB/s|P002-260618 [6c3b615333c9]"
   - '[Free-clash-v2ray] ❓Other_22|464KB/s|K001-260618 [6ed1613b7a47]'
-  - "[Free-clash-v2ray] 🇺🇸US_644|857KB/s|K001-260618 [730a1034003e]"
-  - "[Free-clash-v2ray] 🇯🇵JP_53|88KB/s|A004-260618 [7accfd3a932f]"
+  - "[Free-clash-v2ray] 🇺🇸US_292|925KB/s|A004-260618 [836b9e2c1c7b]"
   - "[Free-clash-v2ray] 🇯🇵JP_55|173KB/s|A004-260618 [888c5fcea3ed]"
   - "[Free-clash-v2ray] 🇰🇷KR_13|500KB/s|A004-260618 [906ca5cbd3af]"
+  - "[Free-clash-v2ray] 🇹🇼TW_32|152KB/s [909a8d192827]"
   - "[Free-clash-v2ray] 🇺🇸US_298|907KB/s|R002-260618 [91230e8f8348]"
   - "[Free-clash-v2ray] 🇭🇰HK_44|181KB/s|P002-260618 [a3de63191023]"
   - "[Free-clash-v2ray] 🇫🇷FR_29|4.4MB/s|R002-260618 [a676be7daa09]"
-  - "[Free-clash-v2ray] 🇺🇸US_202|646KB/s|R002-260618 [ac35802c1c34]"
   - "[Free-clash-v2ray] 🇯🇵JP_37|121KB/s|R002-260618 [b0517b7f1944]"
-  - "[Free-clash-v2ray] 🇺🇸US_600|871KB/s|P002-260618 [b1c3758ec6b5]"
-  - "[Free-clash-v2ray] 🇺🇸US_201|989KB/s|R002-260618 [c0c88000d4a2]"
-  - "[Free-clash-v2ray] 🇺🇸US_244|695KB/s|R002-260618 [d83e92341d3f]"
+  - "[Free-clash-v2ray] 🇺🇸US_356|895KB/s|A004-260618 [d92318afee09]"
   - "[Free-clash-v2ray] 🇰🇷KR_22|376KB/s|P002-260618 [dc6d3fbc43d2]"
-  - "[Free-clash-v2ray] 🇨🇦CA_34|949KB/s|R002-260618 [e0b6eacb1061]"
-  - "[Free-clash-v2ray] 🇺🇸US_408|571KB/s|R002-260618 [f1932fd78ef6]"
   - "[Free-clash-v2ray] 🇨🇦CA_68|1.1MB/s|P002-260618 [f5d4b977517a]"
+  - "[Free-clash-v2ray] 🇺🇸US_255|929KB/s|R002-260618 [f6ef7c53e70b]"
   - "[Free-clash-v2ray] 🇺🇸US_330|746KB/s|R002-260618 [fbfa57386da4]"
   - "[Free-clash-v2ray] 🇯🇵JP_54|585KB/s|A004-260618 [747c8e8097e3]"
   - "[Free-clash-v2ray] 🇯🇵JP_47|70KB/s|A004-260618 [89f91f96fa7a]"
   - "[Free-clash-v2ray] 🇯🇵JP_82|916KB/s|M002-260618 [b213961d39bd]"
+  - "[V2rayclashfree-RSS] 🇰🇷KR²_1|0.7MB/s|GPT|X|History 01"
   - "[V2rayclashfree-RSS] 🇵🇱PL_2|2.7MB/s|A004-260618 01"
   - "[V2rayclashfree-RSS] 🇬🇷GR_1|305KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_34|351KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇮🇹IT_2|2.6MB/s|A004-260618 01"
   - "[V2rayclashfree-RSS] 🇪🇸ES_4|531KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇻🇪VE_1|581KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_56|129KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇸🇪SE_1|1.3MB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_63|349KB/s|R002-260618 01"
@@ -4453,13 +4502,11 @@ proxy-groups:
   - "[V2rayclashfree-RSS] 🇬🇧GB_19|1.2MB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇫🇷FR_998|106KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇵🇱PL_21|818KB/s|A004-260618 01"
-  - '[V2rayclashfree-RSS] ❓Other_5|524KB/s|R002-260618 01'
   - "[V2rayclashfree-RSS] 🇸🇬SG_42|735KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇬🇧GB_32|495KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇫🇷FR_1552|97KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇭🇷HR_2|390KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇨🇦CA_42|160KB/s|R002-260618 01"
   - '[V2rayclashfree-RSS] ❓Other_10|380KB/s|R002-260618 01'
+  - "[V2rayclashfree-RSS] 🇺🇸US_472|692KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_473|270KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇨🇦CA_49|429KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇫🇷FR_2015|969KB/s|R002-260618 01"
@@ -4471,14 +4518,11 @@ proxy-groups:
   - "[V2rayclashfree-RSS] 🇬🇪GE_2|500KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇲🇾MY_1|632KB/s|A004-260618 01"
   - "[V2rayclashfree-RSS] 🇱🇺LU_1|730KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_512|135KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_515|333KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_529|354KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇧🇦BA_1|1.2MB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇯🇵JP_81|72KB/s|A004-260618 01"
   - "[V2rayclashfree-RSS] 🇯🇵JP_82|68KB/s|A004-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_549|229KB/s|R002-260618 01"
   - '[V2rayclashfree-RSS] 香港 68'
-  - "[V2rayclashfree-RSS] 🇫🇮FI_2|348KB/s|M002-260618 01"
   - "[V2rayclashfree-RSS] 🇫🇷FR_978|3.8MB/s|V003-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_390|923KB/s|S001-260618 01"
   - "[V2rayclashfree-RSS] 🇸🇬SG_90|1017KB/s|A004-260618 01"
@@ -4487,414 +4531,417 @@ proxy-groups:
 - name: MANUAL-SELECT
   type: select
   proxies:
-  - "[免费节点8] 🇺🇸US-15.204.247.206-5816 | 8.344MB"
-  - '[Pawdroid-SR-APK] 香港+特别行政区'
-  - "[免费节点2] 🏳[www.v2nodes.com] ss- #4"
   - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-5141..."
+  - "[免费节点2] 🏳[www.v2nodes.com] ss- #4"
   - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-1291..."
+  - "[免费节点2] 🇯🇵[www.v2nodes.com] vless-JP-1... #4"
   - "[Free-clash-v2ray] 🇯🇵JP_82|916KB/s|M002-260618 [b213961d39bd]"
-  - "[免费节点10] 🇭🇰 HK 9 → tg@nicevpn123"
-  - '[Pawdroid-SR-APK] 英国+V2CROSS.COM-18'
-  - '[Pawdroid-SR-APK] 日本+东京OneProvider'
-  - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-1544..."
-  - '[免费节点6] 日本 064'
-  - '[Pawdroid-SR-APK] +阿里云-2'
-  - "[免费节点10] 🇭🇰 HK 10 → tg@nicevpn123"
-  - "[Free-clash-v2ray] 🇯🇵JP_54|585KB/s|A004-260618 [747c8e8097e3]"
-  - '[Pawdroid-SR-APK] 日本东京+Oracle+Cloud'
-  - '[Pawdroid-SR-APK] 日本+东京Choopa数据中心-2'
-  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM-2'
-  - '[Free-clash-v2ray] ❓Other_22|464KB/s|K001-260618 [6ed1613b7a47]'
-  - "[Free-clash-v2ray] 🇯🇵JP_37|121KB/s|R002-260618 [b0517b7f1944]"
   - '[Pawdroid-SR-APK] 香港 阿里云'
-  - "[Free-clash-v2ray] 🇯🇵JP_47|70KB/s|A004-260618 [89f91f96fa7a]"
-  - "[Free-clash-v2ray] 🇯🇵JP_7|85KB/s|K001-260618 [4a732b04dd53]"
-  - "[免费节点2] 🇯🇵 日本 | JPN #2"
+  - "[免费节点10] 🇭🇰 HK 10 → tg@nicevpn123"
+  - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-1544..."
+  - "[免费节点8] 🇯🇵JP-84.247.155.196-0225"
+  - "[Free-clash-v2ray] 🇯🇵JP_54|585KB/s|A004-260618 [747c8e8097e3]"
+  - '[Pawdroid-SR-APK] 日本+东京OneProvider'
+  - '[Pawdroid-SR-APK] 英国+V2CROSS.COM-18'
+  - '[免费节点6] 日本 064'
+  - "[免费节点10] 🇭🇰 HK 9 → tg@nicevpn123"
+  - '[Pawdroid-SR-APK] 日本+东京Choopa数据中心'
+  - '[Pawdroid-SR-APK] 日本+东京Amazon数据中心-2'
+  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM'
   - "[Free-clash-v2ray] 🇯🇵JP_17|71KB/s|R002-260618 [3184e83a7534]"
-  - "[Free-clash-v2ray] 🇯🇵JP_43|87KB/s|A004-260618 [2e127fbd6f20]"
-  - "[Free-clash-v2ray] 🇯🇵JP_57|76KB/s|A004-260618 [57b373271529]"
-  - '[Pawdroid] 美国+V2CROSS.COM'
-  - "[Free-clash-v2ray] 🇯🇵JP_52|88KB/s|A004-260618 [0768fff72f1e]"
-  - "[免费节点8] 🇯🇵JP-84.247.155.196-0225 | 0.176MB"
-  - "[免费节点2] 🇯🇵[www.v2nodes.com] vless-JP-1... #2"
-  - "[Free-clash-v2ray] 🇯🇵JP_53|88KB/s|A004-260618 [7accfd3a932f]"
-  - '[Pawdroid-SR-APK] Premium-JP-CF-02⁣⁠⁣⁠⁣'
-  - '[Pawdroid-SR-APK] Premium-JP-CF-01⁣⁠⁣⁠⁣'
-  - '[Pawdroid-SR-APK] Premium-JP-CF-04⁣⁠⁣⁠⁣'
-  - "[V2rayclashfree-RSS] 🇯🇵JP_82|68KB/s|A004-260618 01"
-  - '[Pawdroid-SR-APK] Premium-JP-CF-05⁣⁠⁣⁠⁣'
-  - '[Pawdroid-SR-APK] Premium-JP-CF-03⁣⁠⁣⁠⁣'
+  - "[Free-clash-v2ray] 🇯🇵JP_7|85KB/s|K001-260618 [4a732b04dd53]"
+  - '[Pawdroid-SR-APK] 日本+东京Amazon数据中心'
   - "[Free-clash-v2ray] 🇯🇵JP_45|285KB/s|P002-260618 [6c3b615333c9]"
-  - '[Pawdroid-SR-APK] 香港+环球全域电讯'
+  - "[Free-clash-v2ray] 🇯🇵JP_37|121KB/s|R002-260618 [b0517b7f1944]"
+  - '[Free-clash-v2ray] ❓Other_22|464KB/s|K001-260618 [6ed1613b7a47]'
+  - "[Free-clash-v2ray] 🇯🇵JP_51|89KB/s|M002-260618 [5a1a563fbcc8]"
+  - "[Free-clash-v2ray] 🇯🇵JP_47|70KB/s|A004-260618 [89f91f96fa7a]"
+  - '[Pawdroid-SR-APK] 日本东京+Oracle+Cloud'
+  - "[免费节点7] 🇭🇰 香港 | HKG 3"
   - '[Pawdroid-SR-APK] 香港+环球全域电讯-2'
-  - "[Free-clash-v2ray] 🇯🇵JP_55|173KB/s|A004-260618 [888c5fcea3ed]"
+  - "[V2rayclashfree-RSS] 🇯🇵JP_81|72KB/s|A004-260618 01"
+  - '[Pawdroid-SR-APK] 香港+UCloud'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-13'
   - '[V2rayclashfree-RSS] 香港 68'
-  - '[Pawdroid-SR-APK] 伊朗+V2CROSS.COM-6'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-7'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-3'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-9'
-  - '[Pawdroid-SR-APK] 香港+特别行政区-2'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-12'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-5'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-14'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-4'
-  - '[Pawdroid-SR-APK] 香港+特别行政区-3'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-15'
   - '[Pawdroid-SR-APK] 香港+特别行政区-4'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-2'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-6'
+  - '[Pawdroid-SR-APK] +阿里云-2'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-14'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-8'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-11'
-  - '[Pawdroid-SR-APK] 香港+UCloud'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-16'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-10'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-13'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-6'
-  - "[Free-clash-v2ray] 🇯🇵JP_51|89KB/s|M002-260618 [5a1a563fbcc8]"
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-9'
+  - '[Pawdroid-SR-APK] 香港+特别行政区-3'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-5'
+  - '[Pawdroid] 美国+V2CROSS.COM-2'
   - "[Free-clash-v2ray] 🇯🇵JP_50|169KB/s|A004-260618 [4b23552130a4]"
+  - '[Pawdroid-SR-APK] 香港+特别行政区-5'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-7'
+  - '[Pawdroid-SR-APK] Premium-JP-CF-01⁣⁠⁣⁠⁣'
+  - '[Pawdroid-SR-APK] Premium-JP-CF-04⁣⁠⁣⁠⁣'
+  - '[Pawdroid-SR-APK] 香港+特别行政区-2'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-12'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-3'
+  - '[Pawdroid-SR-APK] Premium-JP-CF-03⁣⁠⁣⁠⁣'
+  - '[Pawdroid-SR-APK] Premium-JP-CF-02⁣⁠⁣⁠⁣'
+  - '[Pawdroid-SR-APK] Premium-JP-CF-05⁣⁠⁣⁠⁣'
+  - "[免费节点2] 🇯🇵 日本 | JPN #2"
+  - "[V2rayclashfree-RSS] 🇯🇵JP_82|68KB/s|A004-260618 01"
+  - "[Free-clash-v2ray] 🇯🇵JP_55|173KB/s|A004-260618 [888c5fcea3ed]"
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-4'
+  - '[Pawdroid-SR-APK] 香港+环球全域电讯'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-15'
   - '[免费节点6]  035'
+  - "[Free-clash-v2ray] 🇯🇵JP_52|88KB/s|A004-260618 [0768fff72f1e]"
+  - "[Yoyapai-RSS] 🇭🇰HK香港-6"
   - "[Free-clash-v2ray] 🇭🇰HK_44|181KB/s|P002-260618 [a3de63191023]"
   - "[Free-clash-v2ray] 🇭🇰HK_10|138KB/s|R002-260618 [4a009c7715e5]"
+  - "[免费节点2] 🇯🇵[www.v2nodes.com] vless-JP-1... #2"
   - "[Free-clash-v2ray] 🇭🇰HK_31|90KB/s|R002-260618 [132af03e1e90]"
-  - "[免费节点2] 🇭🇰 香港 | HKG #3"
+  - "[免费节点2] 🇭🇰 香港 | HKG #1"
+  - '[Pawdroid-SR-APK] 伊朗+V2CROSS.COM-5'
   - "[免费节点2] Channel id: @ConfigV2RayNG 🇭🇰"
-  - "[免费节点8] 🇭🇰HK-156.245.232.239-0257"
+  - "[免费节点8] 🇭🇰HK-156.245.232.239-0236"
+  - '[Pawdroid-SR-APK] 香港+特别行政区'
+  - "[免费节点2] 🇭🇰 香港 | HKG #2"
   - "[免费节点2] 🇭🇰HK_1|1.7MB/s"
+  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM-2'
   - '[Pawdroid-SR-APK] 亚太地区+V2CROSS.COM'
-  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM'
   - "[Free-clash-v2ray] 🇹🇼TW_38|606KB/s|R002-260618 [1f6779b8209f]"
+  - "[Free-clash-v2ray] 🇹🇼TW_32|152KB/s [909a8d192827]"
   - "[免费节点2] 🏳[www.v2nodes.com] vless- #38"
-  - "[免费节点8] 🇺🇸US-193.151.163.18-0081 | 234.547MB"
-  - "[免费节点1] 🇺🇸_美国 (12)"
-  - '[Free-clash-v2ray] TW台湾(mibei77.com 米贝节点分享) (5)'
   - "[免费节点1] 🇹🇼_台湾"
-  - "[免费节点8] 🇺🇸US-37.19.198.244-0137 | 106.386MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.160-0134 | 64.538MB"
-  - "[V2rayclashfree-RSS] 🇺🇸US_56|129KB/s|R002-260618 01"
-  - "[免费节点8] 🇺🇸US-198.98.53.130-0229 | 0.06MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.243-0142 | 140.557MB"
-  - "[Free-clash-v2ray] 🇫🇷FR_27|6.8MB/s|R002-260618 [39873ef4d996]"
-  - '[Pawdroid-SS-APK] United+States-9'
-  - "[免费节点8] 🇺🇸US-185.230.230.18-0091 | 113.982MB"
-  - "[免费节点8] 🇺🇸US-45.86.51.18-0079 | 89.797MB"
-  - "[Free-clash-v2ray] 🇺🇸US_616|826KB/s|K001-260618 [0c64150eb2bc]"
-  - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614..."
-  - "[Free-clash-v2ray] 🇺🇸US_357|1.7MB/s|A004-260618 [1feecb3b9b0d]"
+  - '[Free-clash-v2ray] TW台湾(mibei77.com 米贝节点分享) (5)'
+  - "[免费节点8] 🇺🇸US-138.199.42.68-0240"
+  - "[免费节点8] 🇺🇸US-156.146.38.170-0168"
+  - "[免费节点8] 🇺🇸US-156.146.38.169-0147"
+  - "[免费节点8] 🇺🇸US-156.146.38.167-0207"
+  - "[免费节点10] 🇺🇸 US 1052 → tg@nicevpn123"
+  - '[Pawdroid-SR-APK] 瑞典+V2CROSS.COM'
+  - "[免费节点8] 🇺🇸US-156.146.38.168-0206"
+  - '[Pawdroid-SR-APK] 瑞典+V2CROSS.COM-4'
+  - '[Pawdroid-SR-APK] 加拿大+V2CROSS.COM'
+  - '[Free-clash-v2ray] ❓Other_16|612KB/s|M002-260618 [2410558a7722]'
+  - '[大FQ运动] end-gfw-kr64-SS'
+  - '[免费节点6] 澳大利亚 025'
+  - '[免费节点6] 日本 056'
+  - "[免费节点8] 🇰🇷KR-211.178.105.134-0226"
+  - "[免费节点1] 🇰🇷_韩国 (2)"
+  - "[Free-clash-v2ray] 🇰🇷KR_42|586KB/s|C002-260622 [6926f2806fe8]"
+  - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-22'
+  - '[Pawdroid-SR-APK] 荷兰+V2CROSS.COM-7'
+  - '[Pawdroid-SR-APK] 美国+Amazon+EC2服务器'
+  - '[大FQ运动] end-gfw-kr64-HY2'
+  - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-24'
+  - '[大FQ运动] end-gfw-kr64-VLESS'
+  - '[Pawdroid-SR-APK] 美国+3COM公司企业网'
+  - '[Pawdroid-SR-APK] 美国+惠普HP'
+  - "[免费节点1] 🇺🇸_美国 (39)"
+  - "[Free-clash-v2ray] 🇰🇷KR_13|500KB/s|A004-260618 [906ca5cbd3af]"
+  - "[Free-clash-v2ray] 🇰🇷KR_22|376KB/s|P002-260618 [dc6d3fbc43d2]"
+  - "[免费节点2] 🇰🇷[www.v2nodes.com] ss-KR-1185..."
+  - "[V2rayclashfree-RSS] 🇰🇷KR²_1|0.7MB/s|GPT|X|History 01"
+  - '[V2rayclashfree-RSS] ❓Other_10|380KB/s|R002-260618 01'
+  - '[Pawdroid-SR-APK] 韩国 首尔Oracle云计算数据中心'
+  - "[免费节点8] 🇰🇷KR-218.237.185.234-0230"
+  - "[免费节点1] 🇺🇸_美国 (27)"
+  - "[Free-clash-v2ray] 🇨🇦CA_2|1.3MB/s|A004-260618 [1a7592edd210]"
+  - "[免费节点8] 🇨🇦CA-137.184.174.93-0156"
+  - "[免费节点8] 🇺🇸US-37.19.198.244-0137"
+  - "[免费节点2] 🇺🇸US_4|1.0MB/s"
+  - "[V2rayclashfree-RSS] 🇺🇸US_515|333KB/s|R002-260618 01"
+  - "[免费节点8] 🇺🇸US-37.19.198.243-0142"
+  - '[免费节点10] VN 6 → tg@nicevpn123'
   - "[Free-clash-v2ray] 🇺🇸US_334|1.7MB/s|A001-260618 [3f49a6a19591]"
+  - "[免费节点2] 🇻🇳[www.v2nodes.com] vless-VN-1..."
+  - "[免费节点2] 🇺🇸US_2|2.4MB/s"
+  - "[免费节点8] 🇺🇸US-15.204.247.206-5816"
+  - "[Free-clash-v2ray] 🇺🇸US_255|929KB/s|R002-260618 [f6ef7c53e70b]"
+  - "[免费节点2] 🇺🇸US_5|1.6MB/s"
+  - "[Free-clash-v2ray] 🇺🇸US_357|1.7MB/s|A004-260618 [1feecb3b9b0d]"
+  - "[Free-clash-v2ray] 🇺🇸US_480|998KB/s|P002-260618 [69335dd6b551]"
+  - "[免费节点8] 🇺🇸US-216.152.155.158-0121"
+  - "[免费节点8] 🇺🇸US-37.19.198.160-0134"
+  - "[免费节点1] 🇨🇦_加拿大 (5)"
+  - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614..."
+  - "[免费节点8] 🇺🇸US-193.151.160.18-0086"
+  - "[Free-clash-v2ray] 🇺🇸US_214|511KB/s|R002-260618 [1c8a4d9b327b]"
+  - "[免费节点1] 🇺🇸_美国 (33)"
+  - "[免费节点8] 🇺🇸US-45.86.51.18-0079"
   - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1557..."
+  - "[免费节点8] 🇺🇸US-216.105.168.18-5819"
+  - "[免费节点1] 🇺🇸_美国 (5)"
+  - "[Free-clash-v2ray] 🇺🇸US_356|895KB/s|A004-260618 [d92318afee09]"
+  - "[Free-clash-v2ray] 🇺🇸US_240|968KB/s|M003-260806 [2d3c6b97d127]"
+  - "[免费节点7] 🇺🇸 美国 | USA 5"
+  - "[免费节点8] 🇺🇸US-193.151.160.9-0080"
+  - "[免费节点1] 🇺🇸_美国 (19)"
+  - "[Free-clash-v2ray] 🇫🇷FR_27|6.8MB/s|R002-260618 [39873ef4d996]"
+  - "[Free-clash-v2ray] 🇺🇸US_292|925KB/s|A004-260618 [836b9e2c1c7b]"
+  - "[免费节点8] 🇺🇸US-193.151.163.18-0081"
+  - "[Free-clash-v2ray] 🇺🇸US_192|971KB/s|M003-260806 [112d3ee5d9f2]"
+  - "[Free-clash-v2ray] 🇺🇸US_217|847KB/s|A004-260618 [0e40b52615aa]"
+  - "[免费节点1] 🇺🇸_美国 (12)"
+  - "[Free-clash-v2ray] 🇺🇸US_200|923KB/s|A004-260618 [26dae539cbdd]"
+  - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614... #1"
+  - "[Free-clash-v2ray] 🇨🇦CA_25|458KB/s|R002-260618 [636932f7d02c]"
+  - "[Free-clash-v2ray] 🇺🇸US_193|940KB/s|M003-260806 [6364b2c615d5]"
+  - "[免费节点8] 🇺🇸US-185.230.230.18-0091"
+  - "[免费节点8] 🇺🇸US-95.215.201.18-0151"
+  - '[Pawdroid-SS-APK] Malaysia'
+  - "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-5"
+  - '[免费节点6] 美国 308'
+  - "[Free-clash-v2ray] 🇺🇸US_443|536KB/s|R002-260618 [67460e97ccf1]"
+  - '[免费节点6] 美国 299'
+  - "[Free-clash-v2ray] 🇺🇸US_248|1015KB/s|A004-260618 [0af5e841f1b9]"
+  - "[免费节点1] 🇺🇸_美国 (31)"
+  - "[Free-clash-v2ray] 🇺🇸US_336|747KB/s|P002-260618 [023c91470b90]"
+  - "[Free-clash-v2ray] 🇺🇸US_560|1.5MB/s|M003-260806 [0f851a6a1744]"
+  - "[Free-clash-v2ray] 🇺🇸US_298|907KB/s|R002-260618 [91230e8f8348]"
+  - "[免费节点1] 🇺🇸_美国 (50)"
+  - "[V2rayclashfree-RSS] 🇺🇸US_478|435KB/s|R002-260618 01"
+  - "[免费节点8] 🇺🇸US-173.244.56.6-0078"
+  - "[V2rayclashfree-RSS] 🇺🇸US_56|129KB/s|R002-260618 01"
+  - "[Free-clash-v2ray] 🇫🇷FR_29|4.4MB/s|R002-260618 [a676be7daa09]"
+  - "[NekoWarp] 🇺🇸 US-CF-WARP-10"
+  - "[免费节点1] 🇺🇸_美国 (42)"
+  - "[Free-clash-v2ray] 🇨🇦CA_31|506KB/s|R002-260618 [4621d4260e5d]"
+  - "[V2rayclashfree-RSS] 🇲🇾MY_1|632KB/s|A004-260618 01"
+  - "[免费节点2] 🇩🇪DE_3|1.6MB/s"
+  - "[Free-clash-v2ray] 🇨🇦CA_68|1.1MB/s|P002-260618 [f5d4b977517a]"
+  - "[免费节点8] 🇺🇸US-198.98.53.130-0229"
+  - '[免费节点2] US_speednode_0040'
+  - "[Free-clash-v2ray] 🇺🇸US_324|719KB/s|R002-260618 [67c5487a691e]"
+  - "[Free-clash-v2ray] 🇲🇾MY_1|474KB/s|R002-260618 [3253eda3c7bd]"
+  - "[免费节点8] 🇺🇸US-170.101.101.53-0124"
+  - "[Free-clash-v2ray] 🇨🇦CA_17|902KB/s|R002-260618 [521d0072ceff]"
+  - "[Free-clash-v2ray] 🇺🇸US_330|746KB/s|R002-260618 [fbfa57386da4]"
+  - "[免费节点1] 🇺🇸_美国 (6)"
   - "[Free-clash-v2ray] 🇺🇸US_431|469KB/s|K001-260618 [3eeb791263e2]"
   - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1558..."
-  - "[NekoWarp] 🇺🇸 US-CF-WARP-7"
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-7'
-  - "[NekoWarp] 🇺🇸 US-CF-WARP-10"
-  - "[免费节点8] 🇺🇸US-138.199.42.68-0240 | 89.797MB"
-  - "[Free-clash-v2ray] 🇫🇷FR_29|4.4MB/s|R002-260618 [a676be7daa09]"
-  - "[Free-clash-v2ray] 🇺🇸US_244|695KB/s|R002-260618 [d83e92341d3f]"
-  - '[免费节点6] 澳大利亚 025'
-  - "[免费节点8] 🇰🇷KR-211.178.105.134-0226 | 0.203MB"
-  - "[Free-clash-v2ray] 🇰🇷KR_42|586KB/s|C002-260622 [6926f2806fe8]"
-  - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-24'
-  - '[Pawdroid-SR-APK] 荷兰+V2CROSS.COM-7'
-  - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-34'
-  - "[免费节点8] 🇰🇷KR-218.237.185.234-0230 | 3.247MB"
-  - "[Free-clash-v2ray] 🇰🇷KR_13|500KB/s|A004-260618 [906ca5cbd3af]"
-  - '[V2rayclashfree-RSS] ❓Other_10|380KB/s|R002-260618 01'
-  - "[NekoWarp] 🇺🇸 US-CF-WARP-4"
-  - '[Pawdroid-SR-APK] 美国+Amazon+EC2服务器'
-  - '[Pawdroid-SR-APK] 美国+3COM公司企业网'
-  - '[Pawdroid-SR-APK] 乌克兰+V2CROSS.COM-8'
-  - "[Free-clash-v2ray] 🇰🇷KR_22|376KB/s|P002-260618 [dc6d3fbc43d2]"
-  - '[免费节点6] 日本 056'
   - "[V2rayclashfree-RSS] 🇺🇸US_215|342KB/s|R002-260618 01"
-  - "[免费节点2] 🇺🇸US_6|1.4MB/s"
-  - '[大FQ运动] end-gfw-kr64-SS'
-  - "[Free-clash-v2ray] 🇺🇸US_330|746KB/s|R002-260618 [fbfa57386da4]"
-  - "[免费节点8] 🇺🇸US-193.151.160.18-0086 | 188.362MB"
-  - '[Pawdroid-SR-APK] 韩国 首尔Oracle云计算数据中心'
-  - '[大FQ运动] end-gfw-kr64-VLESS'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-9'
-  - "[免费节点8] 🇺🇸US-193.151.160.9-0080 | 237.19MB"
-  - '[Pawdroid-SR-APK] 俄罗斯+V2CROSS.COM-2'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-11'
-  - '[Pawdroid-SR-APK] 北美地区+V2CROSS.COM-3'
-  - "[免费节点1] 🇩🇪_德国 (3)"
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-5'
-  - "[NekoWarp] 🇺🇸 US-CF-WARP-6"
-  - "[Free-clash-v2ray] 🇺🇸US_560|1.5MB/s|M003-260806 [0f851a6a1744]"
-  - "[Free-clash-v2ray] 🇺🇸US_324|719KB/s|R002-260618 [67c5487a691e]"
-  - "[免费节点8] 🇨🇦CA-137.184.174.93-0156 | 0.0MB"
-  - "[Free-clash-v2ray] 🇺🇸US_336|747KB/s|P002-260618 [023c91470b90]"
-  - "[免费节点1] 🇩🇪_德国 (5)"
-  - "[免费节点10] 🇺🇸 US 1052 → tg@nicevpn123"
-  - "[Free-clash-v2ray] 🇨🇦CA_2|1.3MB/s|A004-260618 [1a7592edd210]"
-  - "[Free-clash-v2ray] 🇺🇸US_201|989KB/s|R002-260618 [c0c88000d4a2]"
-  - "[Free-clash-v2ray] 🇺🇸US_408|571KB/s|R002-260618 [f1932fd78ef6]"
-  - "[V2rayclashfree-RSS] 🇨🇦CA_42|160KB/s|R002-260618 01"
-  - "[免费节点2] 🇻🇳[www.v2nodes.com] vless-VN-1..."
-  - '[免费节点10] VN 6 → tg@nicevpn123'
-  - "[免费节点8] 🇺🇸US-156.146.38.169-0147 | 4.484MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.167-0207 | 3.963MB"
-  - '[免费节点6] 美国 835'
-  - "[Free-clash-v2ray] 🇺🇸US_202|646KB/s|R002-260618 [ac35802c1c34]"
-  - "[免费节点8] 🇺🇸US-156.146.38.168-0206 | 4.059MB"
-  - "[Free-clash-v2ray] 🇺🇸US_644|857KB/s|K001-260618 [730a1034003e]"
-  - "[免费节点8] 🇺🇸US-156.146.38.170-0168 | 3.861MB"
-  - "[Free-clash-v2ray] 🇺🇸US_207|938KB/s|R002-260618 [027035464f91]"
-  - "[免费节点1] 🇺🇸_美国 (33)"
-  - "[免费节点1] 🇺🇸_美国 (38)"
-  - "[免费节点1] 🇺🇸_美国 (22)"
-  - "[免费节点1] 🇺🇸_美国 (36)"
-  - "[免费节点8] 🇺🇸US-169.197.140.218-0084"
-  - "[免费节点1] 🇺🇸_美国 (39)"
-  - "[免费节点1] 🇺🇸_美国 (15)"
-  - "[免费节点1] 🇺🇸_美国 (10)"
-  - "[免费节点11] 🇺🇸 美国 11"
-  - "[NekoWarp] 🇳🇱 NL-CF-WARP-5"
-  - "[免费节点2] 🇺🇸US_5|1.6MB/s"
-  - "[Free-clash-v2ray] 🇨🇦CA_23|557KB/s|R002-260618 [6516682823ea]"
-  - "[NekoWarp] 🇳🇱 NL-CF-WARP-9"
-  - "[免费节点8] 🇺🇸US-216.152.155.158-0121"
-  - "[Free-clash-v2ray] 🇨🇦CA_34|949KB/s|R002-260618 [e0b6eacb1061]"
-  - "[Free-clash-v2ray] 🇨🇦CA_68|1.1MB/s|P002-260618 [f5d4b977517a]"
-  - "[Free-clash-v2ray] 🇨🇦CA_27|1.1MB/s|R002-260618 [52d842dc27e9]"
-  - "[免费节点2] 🇺🇸US_4|1.0MB/s"
-  - "[免费节点2] 🇺🇸US_2|2.4MB/s"
-  - "[Free-clash-v2ray] 🇨🇦CA_42|759KB/s|K001-260618 [1608e47a1256]"
-  - "[免费节点8] 🇺🇸US-95.215.201.18-0151 | 45.832MB"
-  - "[V2rayclashfree-RSS] 🇨🇦CA_49|429KB/s|R002-260618 01"
-  - "[Free-clash-v2ray] 🇺🇸US_298|907KB/s|R002-260618 [91230e8f8348]"
-  - "[Free-clash-v2ray] 🇺🇸US_600|871KB/s|P002-260618 [b1c3758ec6b5]"
-  - "[免费节点1] 🇨🇦_加拿大 (4)"
-  - '[ChromeGO-ShiteThings] www.shopify.com'
-  - "[免费节点1] 🇺🇸_美国 (42)"
-  - "[Free-clash-v2ray] 🇺🇸US_443|536KB/s|R002-260618 [67460e97ccf1]"
-  - "[V2rayclashfree-RSS] 🇺🇸US_478|435KB/s|R002-260618 01"
-  - "[免费节点1] 🇺🇸_美国 (25)"
-  - '[免费节点6] 美国 299'
-  - "[免费节点2] 🇩🇪DE_3|1.6MB/s"
-  - "[Free-clash-v2ray] 🇨🇦CA_31|506KB/s|R002-260618 [4621d4260e5d]"
-  - "[V2rayclashfree-RSS] 🇺🇸US_515|333KB/s|R002-260618 01"
-  - "[免费节点1] 🇺🇸_美国 (13)"
-  - '[ChromeGO-ShiteThings] visa.com'
-  - "[NekoWarp] 🇳🇱 NL-CF-WARP-8"
-  - "[免费节点1] 🇺🇸_美国 (19)"
-  - "[免费节点8] 🇺🇸US-216.152.156.65-0098"
-  - '[免费节点5] SSR-美国-NF解锁自制剧-ChatGPT-TikTok-YouTube-107.151.182.253:8080'
-  - "[免费节点1] 🇺🇸_美国 (6)"
-  - "[Free-clash-v2ray] 🇺🇸US_217|847KB/s|A004-260618 [0e40b52615aa]"
-  - '[ChromeGO-ShiteThings] www.visa.com'
-  - "[V2rayclashfree-RSS] 🇲🇾MY_1|632KB/s|A004-260618 01"
-  - '[Pawdroid-SS-APK] Malaysia'
-  - '[ChromeGO-ShiteThings] store.ubi.com'
-  - '[Pawdroid-SS-APK] United+States-279'
-  - "[V2rayclashfree-RSS] 🇨🇦CA_51|451KB/s|R002-260618 01"
-  - "[免费节点1] 🇺🇸_美国 (7)"
-  - "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-6"
-  - "[免费节点2] 🇲🇾[www.v2nodes.com] vless-MY-1..."
-  - "[免费节点1] 🇺🇸_美国 (32)"
-  - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614... #1"
-  - "[免费节点1] 🇺🇸_美国 (49)"
-  - "[免费节点8] 🇺🇸US-170.101.101.53-0124"
-  - "[免费节点1] 🇺🇸_美国 (27)"
-  - "[免费节点8] 🇺🇸US-173.244.56.6-0078 | 57.258MB"
-  - "[免费节点2] 🇺🇸206889 | ⚡️Telegram = t.me/L..."
-  - "[免费节点8] 🇸🇬SG-68.183.227.4-0182 | 22.053MB"
-  - "[免费节点8] 🇺🇸US-173.244.56.9-0077 | 51.341MB"
-  - "[免费节点1] 🇸🇬_新加坡 (4)"
-  - '[免费节点6] 美国 313'
-  - '[免费节点6] 以色列 002'
-  - "[免费节点8] 🇨🇦CA-149.22.95.183-0149 | 15.467MB"
-  - "[免费节点2] 🇸🇬 新加坡 | SGP #3"
-  - "[免费节点2] 🇨🇦CA_1|1.5MB/s"
-  - '[免费节点2] US_speednode_0040'
-  - '[大FQ运动] end-gfw-sg89-SS'
-  - "[免费节点2] 🏳[www.v2nodes.com] ss- #5"
-  - "[免费节点1] 🇺🇸_美国 (41)"
-  - "[免费节点1] 🇺🇸_美国 (9)"
-  - "[免费节点1] 🇺🇸_美国 (35)"
-  - "[免费节点10] 🇸🇬 SG 27 → tg@nicevpn123"
-  - '[V2rayclashfree-RSS] ❓Other_5|524KB/s|R002-260618 01'
-  - "[V2rayclashfree-RSS] 🇸🇬SG_42|735KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇸🇬SG_90|1017KB/s|A004-260618 01"
-  - "[免费节点2] 🇸🇬[www.v2nodes.com] trojan-SG-..."
-  - '[免费节点1] 电报群：t.me/vvkj11'
-  - "[免费节点8] 🇺🇸US-66.163.112.13-0178"
-  - "[免费节点1] 🇸🇬_新加坡 (5)"
-  - '[Pawdroid-SS-APK] United+States-123'
-  - "[V2rayclashfree-RSS] 🇨🇦CA_52|348KB/s|R002-260618 01"
-  - "[免费节点2] 🇸🇬[www.v2nodes.com] vless-SG-1..."
-  - "[V2rayclashfree-RSS] 🇮🇩ID_9|634KB/s|R002-260618 01"
-  - "[免费节点8] 🇺🇸US-66.163.112.121-0196"
-  - "[免费节点2] 🇳🇱[www.v2nodes.com] ss-NL-1614..."
-  - "[免费节点1] 🇺🇸_美国 (3)"
-  - "[免费节点1] 🇺🇸_美国 (5)"
   - "[免费节点8] 🇺🇸US-66.163.114.166-0162"
-  - "[FreeV2-Base64] 🇸🇬 SG-LN"
-  - '[大FQ运动] end-gfw-sg89-HY2'
-  - "[免费节点8] 🇩🇪DE-185.176.204.18-0092 | 106.927MB"
-  - '[大FQ运动] end-gfw-sg89-VLESS'
-  - "[免费节点2] 🇬🇧[www.v2nodes.com] ss-GB-1602..."
-  - '[免费节点10] sg|9317|puddincat07@Telegram'
-  - '[1VPN-CRX] free-singapore-https-1'
-  - "[免费节点8] 🇳🇱NL-109.201.152.181-0157 | 87.522MB"
-  - "[NekoWarp] 🇳🇱 NL-CF-WARP-1"
-  - "[免费节点1] 🇩🇪_德国 (13)"
-  - '[1VPN-CRX] free-singapore-https-3'
-  - '[1VPN-CRX] free-singapore-https-2'
-  - "[免费节点8] 🇬🇧GB-141.98.101.181-0220 | 0.107MB"
-  - "[免费节点8] 🇳🇱NL-193.29.139.147-0135 | 70.643MB"
-  - "[免费节点1] 🇸🇬_新加坡 (2)"
-  - "[免费节点8] 🇬🇧GB-104.239.12.81-0228 | 0.037MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.207-0123 | 91.14MB"
-  - "[免费节点1] 🇸🇬_新加坡 (3)"
-  - '[Pawdroid] 新加坡+V2CROSS.COM'
-  - "[免费节点8] 🇬🇧GB-82.38.31.62-0192 | 21.623MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.170-0215 | 13.888MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.179-0136 | 75.015MB"
-  - "[免费节点1] 🇺🇸_美国"
-  - '[1VPN-CRX] free-singapore-https-4'
-  - '[ChromeGO-ShiteThings] zoneabc.net'
-  - "[免费节点3] 🇺🇸 美国 | USA 7"
-  - "[免费节点8] 🇬🇧GB-82.38.31.162-0185 | 22.706MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.34-0173 | 28.272MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.187-0139 | 98.258MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.218-0219 | 9.097MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.217-0117 | 105.61MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.159-0177 | 21.827MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.171-0214 | 10.762MB"
-  - "[免费节点8] 🇬🇧GB-82.38.31.35-0186 | 26.022MB"
-  - "[V2rayclashfree-RSS] 🇺🇸US_390|923KB/s|S001-260618 01"
-  - "[免费节点2] 🧿99@oneclickvpnkeys"
-  - "[免费节点8] 🇬🇧GB-82.38.31.66-0175 | 27.392MB"
-  - "[免费节点1] 🇺🇸_美国 (30)"
-  - '[免费节点6] 美国 1179'
-  - '[ChromeGO-Merge] WARP'
+  - "[免费节点1] 🇺🇸_美国 (25)"
+  - "[免费节点8] 🇨🇦CA-149.22.95.183-0149"
+  - "[免费节点2] 🇺🇸US_6|1.4MB/s"
+  - "[NekoWarp] 🇳🇱 NL-CF-WARP-9"
+  - "[免费节点1] 🇺🇸_美国 (22)"
+  - "[免费节点1] 🇺🇸_美国 (13)"
+  - "[V2rayclashfree-RSS] 🇨🇦CA_51|451KB/s|R002-260618 01"
+  - "[免费节点8] 🇺🇸US-216.152.156.65-0098"
+  - '[免费节点6] 美国 835'
+  - "[免费节点8] 🇸🇬SG-68.183.227.4-0182"
+  - "[免费节点1] 🇸🇬_新加坡 (4)"
+  - '[ChromeGO-ShiteThings] www.visa.com'
+  - '[ChromeGO-ShiteThings] www.shopify.com'
+  - "[免费节点1] 🇺🇸_美国 (7)"
+  - "[免费节点1] 🇺🇸_美国 (9)"
+  - "[免费节点1] 🇺🇸_美国 (32)"
+  - "[免费节点1] 🇺🇸_美国 (3)"
+  - "[免费节点1] 🇺🇸_美国 (41)"
+  - "[免费节点2] 🧿98@oneclickvpnkeys"
+  - "[免费节点8] 🇺🇸US-66.163.112.121-0196"
+  - "[免费节点8] 🇺🇸US-169.197.140.218-0084"
+  - "[免费节点1] 🇺🇸_美国 (35)"
+  - "[免费节点1] 🇺🇸_美国 (58)"
   - "[免费节点1] 🇺🇸_美国 (48)"
-  - '[Pawdroid] 新西兰+V2CROSS.COM-2'
-  - "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com-2"
-  - "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com"
-  - "[免费节点2] 🧿95@oneclickvpnkeys"
-  - "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com"
-  - "[免费节点2] 🇦🇹[www.v2nodes.com] ss-AT-1614..."
-  - "[免费节点2] 🧿100@oneclickvpnkeys"
-  - '[Yoyapai-RSS] ❓未知丨yoyapai.com-5'
-  - '[Yoyapai-RSS] ❓未知丨yoyapai.com-4'
-  - "[免费节点1] 🇺🇸_美国 (46)"
-  - "[免费节点1] 🇺🇸_美国 (16)"
-  - "[Yoyapai-RSS] 🇮🇹IT意大利丨yoyapai.com-3"
-  - "[免费节点2] 🇵🇱[www.v2nodes.com] ss-PL-1273..."
-  - "[免费节点2] 🇵🇱[www.v2nodes.com] ss-PL-1273... #1"
-  - "[免费节点2] 🧿96@oneclickvpnkeys"
-  - "[免费节点2] 🧿97@oneclickvpnkeys"
-  - "[Freesocks] 🌐 via CDN 2-2"
+  - "[免费节点2] 🧿94@oneclickvpnkeys"
+  - "[免费节点1] 🇺🇸_美国 (40)"
+  - '[ChromeGO-ShiteThings] visa.com'
+  - "[免费节点10] 🇸🇬 SG 27 → tg@nicevpn123"
+  - "[免费节点2] 🇸🇬[www.v2nodes.com] trojan-SG-..."
   - "[免费节点1] 🇺🇸_美国 (34)"
-  - "[免费节点2] 🇦🇹[www.v2nodes.com] ss-AT-1595..."
-  - "[免费节点1] 🇺🇸_美国 (37)"
-  - "[免费节点1] 🇺🇸_美国 (17)"
-  - "[V2rayclashfree-RSS] 🇵🇱PL_21|818KB/s|A004-260618 01"
-  - "[免费节点1] 🇺🇸_美国 (57)"
-  - '[Pawdroid-SS-APK] France-11'
-  - "[免费节点1] 🇬🇧_英国"
-  - '[Yoyapai-RSS] ❓未知丨yoyapai.com-3'
-  - "[免费节点2] 🇫🇷[www.v2nodes.com] vless-FR-1... #2"
-  - '[免费节点2] ⏳1@oneclickvpnkeys'
-  - '[免费节点6] 德国 036'
-  - "[免费节点1] 🇺🇸_美国 (4)"
-  - "[V2rayclashfree-RSS] 🇵🇱PL_2|2.7MB/s|A004-260618 01"
-  - "[免费节点1] 🇩🇪_德国 (6)"
-  - "[免费节点1] 🇳🇱_荷兰"
-  - "[免费节点1] 🇳🇱_荷兰 (5)"
-  - "[免费节点1] 🇩🇪_德国 (11)"
-  - "[免费节点1] 🇩🇪_德国 (9)"
-  - "[免费节点1] 🇺🇸_美国 (24)"
-  - "[免费节点1] 🇳🇱_荷兰 (12)"
-  - "[免费节点2] 🇺🇸US_3|4.1MB/s"
-  - "[免费节点2] 🇩🇪[www.v2nodes.com] trojan-DE-... #1"
-  - "[免费节点2] 🇮🇳[www.v2nodes.com] vless-IN-1... #1"
-  - '[免费节点6] 荷兰 013'
-  - '[免费节点6] 欧洲 004'
-  - "[V2rayclashfree-RSS] 🇺🇸US_473|270KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_63|349KB/s|R002-260618 01"
-  - "[免费节点2] 🍪13@oneclickvpnkeys"
-  - "[免费节点10] 🇬🇧 GB 23 → tg@nicevpn123"
-  - "[Freesocks] 🌐 via CDN 1-2"
-  - '[免费节点2] @confiig_hub #1'
-  - '[免费节点6] 美国 349'
-  - "[V2rayclashfree-RSS] 🇺🇸US_34|351KB/s|R002-260618 01"
-  - '[免费节点6] 德国 010'
-  - "[免费节点2] 🇬🇧[www.v2nodes.com] vless-GB-1... #3"
-  - '[免费节点2] IE_speednode_0013'
-  - "[V2rayclashfree-RSS] 🇮🇹IT_2|2.6MB/s|A004-260618 01"
+  - "[V2rayclashfree-RSS] 🇸🇬SG_42|735KB/s|R002-260618 01"
+  - '[Mibei77-RSS] SG新加坡(mibei77.com 米贝节点分享)-3'
+  - '[Mibei77-RSS] SG新加坡(mibei77.com 米贝节点分享)-2'
+  - '[大FQ运动] end-gfw-sg89-SS'
   - "[免费节点2] 🇺🇸 美国 | USA 2"
-  - '[免费节点6] 比利时 003'
-  - "[免费节点2] 🇵🇱[www.v2nodes.com] trojan-PL-..."
-  - "[V2rayclashfree-RSS] 🇺🇸US_549|229KB/s|R002-260618 01"
-  - "[Freesocks] 🌐 via CDN 2"
-  - "[V2rayclashfree-RSS] 🇺🇸US_529|354KB/s|R002-260618 01"
-  - "[免费节点10] 🇳🇱 NL 9 → tg@nicevpn123"
-  - "[V2rayclashfree-RSS] 🇬🇧GB_19|1.2MB/s|R002-260618 01"
-  - "[免费节点11] 🇫🇷 法国 05"
-  - "[Freesocks] 🌐 via CDN 1"
-  - "[V2rayclashfree-RSS] 🇩🇪DE_39|532KB/s|P002-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_512|135KB/s|R002-260618 01"
-  - "[免费节点10] 🇺🇸_US_美国->🇵🇱_PL_波兰_IPV4"
-  - "[V2rayclashfree-RSS] 🇬🇧GB_32|495KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇳🇱NL_133|560KB/s|P002-260618 01"
-  - '[免费节点6] 法国 017'
-  - "[V2rayclashfree-RSS] 🇫🇷FR_2017|844KB/s|R002-260618 01"
-  - '[免费节点6] 瑞士 008'
-  - "[V2rayclashfree-RSS] 🇱🇺LU_1|730KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇸🇪SE_1|1.3MB/s|R002-260618 01"
-  - '[1VPN-CRX] free-los-angeles-https-5'
-  - '[1VPN-CRX] free-los-angeles-https-4'
-  - '[免费节点6] 美国 308'
-  - "[Yoyapai-RSS] 🇺🇸US美国丨yoyapai.com"
-  - "[V2rayclashfree-RSS] 🇫🇷FR_998|106KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇫🇷FR_1552|97KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇨🇭CH_3|1.4MB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_275|287KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇪🇸ES_4|531KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇭🇷HR_2|390KB/s|R002-260618 01"
-  - '[免费节点6] 英国 004'
-  - "[V2rayclashfree-RSS] 🇧🇦BA_1|1.2MB/s|R002-260618 01"
-  - '[1VPN-CRX] free-los-angeles-https-3'
-  - '[Pawdroid-SS-APK] United+Kingdom-3'
-  - "[V2rayclashfree-RSS] 🇬🇷GR_1|305KB/s|R002-260618 01"
-  - "[免费节点11] 🇷🇺 俄罗斯 丹麦 01"
-  - '[免费节点10] us|81b9|puddincat07@Telegram'
-  - "[Yoyapai-RSS] 🇱🇻LV拉脱维亚丨yoyapai.com"
-  - "[V2rayclashfree-RSS] 🇬🇪GE_2|500KB/s|R002-260618 01"
-  - "[FreeV2-Base64] 🇺🇸 US-LN"
-  - "[V2rayclashfree-RSS] 🇫🇷FR_2015|969KB/s|R002-260618 01"
-  - '[ChromeGO-ShiteThings] youxuan.cf.090227.xyz'
-  - '[1VPN-CRX] free-los-angeles-https-1'
-  - '[Pawdroid] 美国+Xerox'
-  - "[V2rayclashfree-RSS] 🇫🇷FR_978|3.8MB/s|V003-260618 01"
-  - '[免费节点6] 乌克兰 004'
-  - "[Clashfree] 🇺🇸 US VLESS-25 | free-nodes"
-  - "[V2rayclashfree-RSS] 🇫🇮FI_2|348KB/s|M002-260618 01"
-  - '[免费节点6] 美国 1002'
+  - "[免费节点1] 🇺🇸_美国 (20)"
+  - "[V2rayclashfree-RSS] 🇸🇬SG_90|1017KB/s|A004-260618 01"
+  - "[免费节点2] 🧿95@oneclickvpnkeys"
+  - '[免费节点6] 美国 1179'
+  - '[ChromeGO-ShiteThings] store.ubi.com'
+  - "[NekoWarp] 🇺🇸 US-CF-WARP-7"
+  - "[免费节点1] 🇺🇸_美国"
+  - "[免费节点1] 🇺🇸_美国 (37)"
+  - "[免费节点1] 🇨🇦_加拿大 (4)"
+  - "[V2rayclashfree-RSS] 🇮🇩ID_9|634KB/s|R002-260618 01"
+  - "[免费节点8] 🇺🇸US-66.163.112.13-0178"
+  - "[免费节点1] 🇺🇸_美国 (38)"
+  - '[Pawdroid-SS-APK] United+States-122'
+  - "[免费节点7] 🇺🇸 美国 | USA 4"
+  - '[1VPN-CRX] free-singapore-https-1'
+  - '[大FQ运动] end-gfw-sg89-HY2'
+  - '[免费节点10] sg|9317|puddincat07@Telegram'
+  - "[免费节点1] 🇺🇸_美国 (46)"
+  - '[大FQ运动] end-gfw-sg89-VLESS'
+  - "[免费节点2] 🇺🇸206889 | ⚡️Telegram = t.me/L..."
+  - "[免费节点1] 🇸🇬_新加坡 (5)"
+  - '[1VPN-CRX] free-singapore-https-2'
+  - '[Pawdroid] 新加坡+V2CROSS.COM'
+  - "[V2rayclashfree-RSS] 🇨🇦CA_49|429KB/s|R002-260618 01"
+  - '[免费节点6] 美国 313'
+  - "[免费节点2] 🧿99@oneclickvpnkeys"
+  - "[免费节点7] 🇺🇸 美国 | USA"
+  - "[NekoWarp] 🇺🇸 US-CF-WARP-4"
+  - "[免费节点1] 🇺🇸_美国 (17)"
+  - "[免费节点2] 🧿96@oneclickvpnkeys"
+  - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1546... #1"
   - "[NekoWarp] 🇳🇱 NL-CF-WARP-2"
-  - '[免费节点6] 美国 1194'
+  - "[免费节点8] 🇺🇸US-216.106.186.32-0150"
   - "[NekoWarp] 🇺🇸 US-CF-WARP-3"
-  - '[ChromeGO-Toolkit] Alvin9999-newpac'
-  - '[1VPN-CRX] free-los-angeles-https-2'
-  - '[1VPN-CRX] free-los-angeles-https-6'
+  - "[免费节点2] 🇸🇬[www.v2nodes.com] vless-SG-1..."
+  - "[免费节点3] 🇺🇸 美国 | USA 7"
+  - "[NekoWarp] 🇳🇱 NL-CF-WARP-5"
+  - '[1VPN-CRX] free-singapore-https-3'
+  - '[免费节点6] 以色列 002'
+  - "[免费节点1] 🇸🇬_新加坡 (3)"
+  - '[1VPN-CRX] free-singapore-https-4'
+  - "[免费节点2] 🇳🇱[www.v2nodes.com] ss-NL-1614..."
+  - "[免费节点2] 🇺🇸US_3|4.1MB/s"
+  - "[NekoWarp] 🇳🇱 NL-CF-WARP-1"
+  - "[免费节点2] 🏳[www.v2nodes.com] ss- #5"
+  - '[ChromeGO-Merge] WARP'
+  - "[V2rayclashfree-RSS] 🇺🇸US_472|692KB/s|R002-260618 01"
+  - "[NekoWarp] 🇺🇸 US-CF-WARP-6"
+  - "[免费节点2] 🇨🇦CA_1|1.5MB/s"
+  - "[免费节点1] 🇺🇸_美国 (21)"
+  - "[免费节点11] 🇺🇸 美国 11"
+  - "[V2rayclashfree-RSS] 🇨🇦CA_52|348KB/s|R002-260618 01"
+  - "[Freesocks] 🌐 via CDN 1-2"
+  - "[免费节点8] 🇬🇧GB-82.38.31.171-0214"
+  - "[免费节点8] 🇬🇧GB-82.38.31.192-0120"
+  - "[免费节点1] 🇩🇪_德国 (3)"
+  - "[免费节点8] 🇬🇧GB-104.239.12.81-0228"
+  - "[免费节点8] 🇬🇧GB-82.38.31.205-0125"
+  - "[免费节点8] 🇬🇧GB-82.38.31.202-0094"
+  - "[免费节点8] 🇬🇧GB-82.38.31.47-0180"
+  - "[免费节点8] 🇬🇧GB-82.38.31.155-0181"
+  - "[免费节点8] 🇬🇧GB-82.38.31.46-0189"
+  - "[免费节点8] 🇬🇧GB-82.38.31.162-0185"
+  - "[免费节点8] 🇬🇧GB-178.83.185.156-0172"
+  - "[免费节点1] 🇺🇸_美国 (47)"
+  - "[免费节点8] 🇬🇧GB-82.38.31.66-0175"
+  - "[免费节点8] 🇬🇧GB-82.38.31.203-0132"
+  - "[免费节点8] 🇬🇧GB-82.38.31.34-0173"
+  - "[免费节点8] 🇬🇧GB-82.38.31.48-0188"
+  - "[免费节点8] 🇬🇧GB-82.38.31.42-0191"
+  - "[免费节点8] 🇬🇧GB-82.38.31.61-0176"
+  - "[免费节点8] 🇬🇧GB-82.38.31.206-0119"
+  - "[免费节点2] 🇬🇧[www.v2nodes.com] ss-GB-1602..."
+  - '[免费节点2] US_speednode_0039'
+  - '[免费节点6] 德国 036'
+  - "[免费节点7] 🇺🇸 美国 | USA 10"
+  - "[Freesocks] 🌐 via CDN 2"
+  - '[Pawdroid-SS-APK] United+Kingdom-3'
+  - "[免费节点2] 🇮🇹[www.v2nodes.com] ss-IT-1597..."
+  - "[V2rayclashfree-RSS] 🇺🇸US_34|351KB/s|R002-260618 01"
+  - "[免费节点1] 🇺🇸_美国 (8)"
+  - "[免费节点1] 🇺🇸_美国 (10)"
+  - "[免费节点2] 🇵🇱[www.v2nodes.com] ss-PL-1273..."
+  - '[1VPN-CRX] free-los-angeles-https-4'
+  - "[免费节点2] 🇵🇱[www.v2nodes.com] ss-PL-1273... #1"
+  - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1545... #1"
+  - "[免费节点2] 🇦🇹[www.v2nodes.com] ss-AT-1595..."
+  - "[免费节点2] 🇦🇹[www.v2nodes.com] ss-AT-1614..."
+  - "[免费节点1] 🇩🇪_德国 (5)"
+  - "[免费节点1] 🇩🇪_德国 (13)"
+  - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1545..."
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-9'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-11'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-13'
+  - "[V2rayclashfree-RSS] 🇵🇱PL_21|818KB/s|A004-260618 01"
+  - '[1VPN-CRX] free-los-angeles-https-3'
+  - '[Pawdroid] 新西兰+V2CROSS.COM-2'
+  - "[V2rayclashfree-RSS] 🇺🇸US_473|270KB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇵🇱PL_2|2.7MB/s|A004-260618 01"
+  - "[免费节点2] 🇮🇳[www.v2nodes.com] vless-IN-1... #1"
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-15'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-14'
+  - "[V2rayclashfree-RSS] 🇺🇸US_63|349KB/s|R002-260618 01"
+  - "[免费节点1] 🇳🇱_荷兰 (5)"
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-12'
+  - "[免费节点1] 🇩🇪_德国 (9)"
+  - '[免费节点2] ⏳1@oneclickvpnkeys'
+  - "[免费节点1] 🇳🇱_荷兰"
+  - "[免费节点2] 🇩🇪[www.v2nodes.com] trojan-DE-... #1"
+  - "[Freesocks] 🌐 via CDN 1"
+  - "[免费节点1] 🇩🇪_德国 (16)"
+  - "[免费节点1] 🇩🇪_德国 (12)"
+  - "[免费节点1] 🇳🇱_荷兰 (9)"
+  - "[免费节点1] 🇩🇪_德国 (6)"
+  - "[V2rayclashfree-RSS] 🇮🇹IT_2|2.6MB/s|A004-260618 01"
+  - "[Freesocks] 🌐 via CDN 2-2"
+  - '[Pawdroid-SS-APK] United+States-201'
+  - '[1VPN-CRX] free-los-angeles-https-1'
+  - '[免费节点6] 法国 006'
+  - '[免费节点6] 比利时 030'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-10'
+  - '[1VPN-CRX] free-los-angeles-https-5'
+  - '[免费节点6] 法国 017'
+  - '[免费节点6] 荷兰 013'
+  - "[免费节点10] 🇬🇧 GB 23 → tg@nicevpn123"
+  - '[免费节点6] 欧洲 004'
+  - '[免费节点6] 德国 010'
+  - "[V2rayclashfree-RSS] 🇺🇸US_275|287KB/s|R002-260618 01"
+  - "[免费节点7] 🇸🇪 瑞典 | SWE"
+  - "[免费节点7] 🇮🇳 印度 | IND"
+  - '[免费节点11] 未知92 436.1KB/s'
+  - "[V2rayclashfree-RSS] 🇬🇧GB_19|1.2MB/s|R002-260618 01"
+  - "[免费节点10] 🇳🇱 NL 9 → tg@nicevpn123"
+  - '[ChromeGO-ShiteThings] zoneabc.net'
+  - "[Yoyapai-RSS] 🇩🇪DE德国丨yoyapai.com-21"
+  - '[免费节点6] 乌克兰 004'
+  - "[V2rayclashfree-RSS] 🇺🇸US_390|923KB/s|S001-260618 01"
+  - "[免费节点11] 🇫🇷 法国 05"
+  - "[Yoyapai-RSS] 🇺🇸US美国丨yoyapai.com"
+  - "[V2rayclashfree-RSS] 🇬🇧GB_32|495KB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇩🇪DE_39|532KB/s|P002-260618 01"
+  - '[免费节点6] 瑞士 008'
+  - '[免费节点6] 美国 349'
+  - "[V2rayclashfree-RSS] 🇸🇪SE_1|1.3MB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇫🇷FR_2017|844KB/s|R002-260618 01"
+  - "[免费节点7] 🇩🇪 德国 | DEU 3"
+  - "[V2rayclashfree-RSS] 🇱🇺LU_1|730KB/s|R002-260618 01"
+  - "[免费节点7] 🇩🇪 德国 | DEU 8"
+  - "[免费节点7] 🇩🇪 德国 | DEU 9"
+  - "[免费节点7] 🇫🇷 法国 | FRA"
+  - "[免费节点7] 🇩🇪 德国 | DEU 10"
+  - "[V2rayclashfree-RSS] 🇨🇭CH_3|1.4MB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇫🇷FR_998|106KB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇭🇷HR_2|390KB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇧🇦BA_1|1.2MB/s|R002-260618 01"
+  - "[FreeV2-Base64] 🇺🇸 US-LN"
+  - "[V2rayclashfree-RSS] 🇪🇸ES_4|531KB/s|R002-260618 01"
+  - "[免费节点7] 🇳🇱 荷兰 | NLD 2"
+  - "[V2rayclashfree-RSS] 🇬🇪GE_2|500KB/s|R002-260618 01"
+  - '[免费节点6] 美国 025'
+  - "[V2rayclashfree-RSS] 🇫🇷FR_978|3.8MB/s|V003-260618 01"
+  - '[Mibei77-RSS] CA加拿大(mibei77.com 米贝节点分享)-2'
+  - "[V2rayclashfree-RSS] 🇬🇷GR_1|305KB/s|R002-260618 01"
+  - "[Yoyapai-RSS] 🇱🇻LV拉脱维亚丨yoyapai.com"
+  - '[ChromeGO-ShiteThings] youxuan.cf.090227.xyz'
+  - "[免费节点10] 🇺🇸_US_美国->🇵🇱_PL_波兰_IPV4"
+  - "[V2rayclashfree-RSS] 🇫🇷FR_2015|969KB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇳🇱NL_133|560KB/s|P002-260618 01"
   - '[Pawdroid] 美国+CloudFlare节点'
-  - "[V2rayclashfree-RSS] 🇻🇪VE_1|581KB/s|R002-260618 01"
-  - '[免费节点6] 美国 039'
-  - '[免费节点6] 美国 042'
-  - '[免费节点6] 美国 981'
-  - "[Clashfree] 🇷🇺 RU VLESS-29 | free-nodes"
-  - '[Mibei77-RSS] RU俄罗斯(mibei77.com 米贝节点分享)_3'
-  - "[Clashfree] 🇷🇺 RU VLESS-27 | free-nodes"
+  - '[ChromeGO-Toolkit] Alvin9999-newpac'
+  - '[Pawdroid] 美国+V2CROSS.COM'
+  - '[免费节点11] 未知41 433.8KB/s'
+  - "[免费节点11] 🇷🇺 俄罗斯 丹麦 01"
 - name: HK-POOL
   type: url-test
   proxies:
+  - "[Yoyapai-RSS] 🇭🇰HK香港-6"
   - "[免费节点2] Channel id: @ConfigV2RayNG 🇭🇰"
   - "[免费节点2] 🇭🇰HK_1|1.7MB/s"
-  - "[免费节点2] 🇭🇰 香港 | HKG #3"
+  - "[免费节点2] 🇭🇰 香港 | HKG #1"
+  - "[免费节点2] 🇭🇰 香港 | HKG #2"
   - '[免费节点6]  035'
-  - "[免费节点8] 🇭🇰HK-156.245.232.239-0257"
+  - "[免费节点7] 🇭🇰 香港 | HKG 3"
+  - "[免费节点8] 🇭🇰HK-156.245.232.239-0236"
   - "[免费节点10] 🇭🇰 HK 10 → tg@nicevpn123"
   - "[免费节点10] 🇭🇰 HK 9 → tg@nicevpn123"
   - '[Pawdroid-SR-APK] 香港 阿里云'
@@ -4904,9 +4951,9 @@ proxy-groups:
   - '[Pawdroid-SR-APK] 香港+特别行政区'
   - '[Pawdroid-SR-APK] 香港+特别行政区-2'
   - '[Pawdroid-SR-APK] 香港+特别行政区-3'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司'
-  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-2'
   - '[Pawdroid-SR-APK] 香港+特别行政区-4'
+  - '[Pawdroid-SR-APK] 香港+特别行政区-5'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-3'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-4'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-5'
@@ -4920,7 +4967,8 @@ proxy-groups:
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-13'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-14'
   - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-15'
-  - '[Pawdroid-SR-APK] 伊朗+V2CROSS.COM-6'
+  - '[Pawdroid-SR-APK] 伊朗+V2CROSS.COM-5'
+  - '[Pawdroid-SR-APK] 香港+电讯盈科有限公司-16'
   - "[Free-clash-v2ray] 🇭🇰HK_31|90KB/s|R002-260618 [132af03e1e90]"
   - "[Free-clash-v2ray] 🇭🇰HK_10|138KB/s|R002-260618 [4a009c7715e5]"
   - "[Free-clash-v2ray] 🇭🇰HK_44|181KB/s|P002-260618 [a3de63191023]"
@@ -4930,8 +4978,9 @@ proxy-groups:
 - name: JP-POOL
   type: url-test
   proxies:
-  - '[Pawdroid] 美国+V2CROSS.COM'
+  - '[Pawdroid] 美国+V2CROSS.COM-2'
   - "[免费节点2] 🇯🇵[www.v2nodes.com] vless-JP-1... #2"
+  - "[免费节点2] 🇯🇵[www.v2nodes.com] vless-JP-1... #4"
   - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-1544..."
   - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-5141..."
   - "[免费节点2] 🇯🇵[www.v2nodes.com] ss-JP-1291..."
@@ -4939,35 +4988,35 @@ proxy-groups:
   - "[免费节点2] 🇯🇵 日本 | JPN #2"
   - '[免费节点6] 日本 056'
   - '[免费节点6] 日本 064'
-  - "[免费节点8] 🇯🇵JP-84.247.155.196-0225 | 0.176MB"
+  - "[免费节点8] 🇯🇵JP-84.247.155.196-0225"
   - '[Pawdroid-SR-APK] Premium-JP-CF-01⁣⁠⁣⁠⁣'
   - '[Pawdroid-SR-APK] Premium-JP-CF-02⁣⁠⁣⁠⁣'
   - '[Pawdroid-SR-APK] Premium-JP-CF-03⁣⁠⁣⁠⁣'
   - '[Pawdroid-SR-APK] Premium-JP-CF-04⁣⁠⁣⁠⁣'
   - '[Pawdroid-SR-APK] Premium-JP-CF-05⁣⁠⁣⁠⁣'
   - '[Pawdroid-SR-APK] 英国+V2CROSS.COM-18'
-  - '[Pawdroid-SR-APK] 日本+东京OneProvider'
-  - '[Pawdroid-SR-APK] 日本东京+Oracle+Cloud'
-  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM'
-  - '[Pawdroid-SR-APK] 亚太地区+V2CROSS.COM'
-  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM-2'
-  - '[Pawdroid-SR-APK] 日本+东京Choopa数据中心-2'
+  - '[Pawdroid-SR-APK] 日本+东京Amazon数据中心'
+  - '[Pawdroid-SR-APK] 日本+东京Amazon数据中心-2'
   - '[Pawdroid-SR-APK] +阿里云-2'
+  - '[Pawdroid-SR-APK] 日本+东京Choopa数据中心'
+  - '[Pawdroid-SR-APK] 亚太地区+V2CROSS.COM'
+  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM'
+  - '[Pawdroid-SR-APK] 日本+V2CROSS.COM-2'
+  - '[Pawdroid-SR-APK] 日本东京+Oracle+Cloud'
+  - '[Pawdroid-SR-APK] 日本+东京OneProvider'
   - "[Free-clash-v2ray] 🇯🇵JP_52|88KB/s|A004-260618 [0768fff72f1e]"
-  - "[Free-clash-v2ray] 🇯🇵JP_43|87KB/s|A004-260618 [2e127fbd6f20]"
   - "[Free-clash-v2ray] 🇯🇵JP_17|71KB/s|R002-260618 [3184e83a7534]"
   - "[Free-clash-v2ray] 🇯🇵JP_7|85KB/s|K001-260618 [4a732b04dd53]"
   - "[Free-clash-v2ray] 🇯🇵JP_50|169KB/s|A004-260618 [4b23552130a4]"
-  - "[Free-clash-v2ray] 🇯🇵JP_57|76KB/s|A004-260618 [57b373271529]"
   - "[Free-clash-v2ray] 🇯🇵JP_51|89KB/s|M002-260618 [5a1a563fbcc8]"
   - "[Free-clash-v2ray] 🇯🇵JP_45|285KB/s|P002-260618 [6c3b615333c9]"
   - '[Free-clash-v2ray] ❓Other_22|464KB/s|K001-260618 [6ed1613b7a47]'
-  - "[Free-clash-v2ray] 🇯🇵JP_53|88KB/s|A004-260618 [7accfd3a932f]"
   - "[Free-clash-v2ray] 🇯🇵JP_55|173KB/s|A004-260618 [888c5fcea3ed]"
   - "[Free-clash-v2ray] 🇯🇵JP_37|121KB/s|R002-260618 [b0517b7f1944]"
   - "[Free-clash-v2ray] 🇯🇵JP_54|585KB/s|A004-260618 [747c8e8097e3]"
   - "[Free-clash-v2ray] 🇯🇵JP_47|70KB/s|A004-260618 [89f91f96fa7a]"
   - "[Free-clash-v2ray] 🇯🇵JP_82|916KB/s|M002-260618 [b213961d39bd]"
+  - "[V2rayclashfree-RSS] 🇯🇵JP_81|72KB/s|A004-260618 01"
   - "[V2rayclashfree-RSS] 🇯🇵JP_82|68KB/s|A004-260618 01"
   url: 'http://www.gstatic.com/generate_204'
   interval: 120
@@ -4976,42 +5025,49 @@ proxy-groups:
   proxies:
   - '[Pawdroid] 美国+CloudFlare节点'
   - '[Pawdroid] 美国+V2CROSS.COM'
-  - '[Pawdroid] 美国+Xerox'
+  - '[Pawdroid] 美国+V2CROSS.COM-2'
   - "[FreeV2-Base64] 🇺🇸 US-LN"
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-9'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-10'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-11'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-12'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-13'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-14'
+  - '[Mibei77-RSS] US美国(mibei77.com 米贝节点分享)-15'
   - "[Yoyapai-RSS] 🇺🇸US美国丨yoyapai.com"
-  - "[免费节点1] 🇺🇸_美国 (57)"
+  - "[免费节点1] 🇺🇸_美国 (58)"
   - "[免费节点1] 🇺🇸_美国"
   - "[免费节点1] 🇺🇸_美国 (3)"
-  - "[免费节点1] 🇺🇸_美国 (4)"
   - "[免费节点1] 🇺🇸_美国 (5)"
   - "[免费节点1] 🇺🇸_美国 (6)"
   - "[免费节点1] 🇺🇸_美国 (7)"
+  - "[免费节点1] 🇺🇸_美国 (8)"
   - "[免费节点1] 🇺🇸_美国 (9)"
   - "[免费节点1] 🇺🇸_美国 (10)"
   - "[免费节点1] 🇺🇸_美国 (12)"
   - "[免费节点1] 🇺🇸_美国 (13)"
-  - "[免费节点1] 🇺🇸_美国 (15)"
-  - "[免费节点1] 🇺🇸_美国 (16)"
   - "[免费节点1] 🇺🇸_美国 (17)"
   - "[免费节点1] 🇺🇸_美国 (19)"
+  - "[免费节点1] 🇺🇸_美国 (20)"
+  - "[免费节点1] 🇺🇸_美国 (21)"
   - "[免费节点1] 🇺🇸_美国 (22)"
-  - "[免费节点1] 🇺🇸_美国 (24)"
   - "[免费节点1] 🇺🇸_美国 (25)"
   - "[免费节点1] 🇺🇸_美国 (27)"
-  - "[免费节点1] 🇺🇸_美国 (30)"
+  - "[免费节点1] 🇺🇸_美国 (31)"
   - "[免费节点1] 🇺🇸_美国 (32)"
   - "[免费节点1] 🇺🇸_美国 (33)"
   - "[免费节点1] 🇺🇸_美国 (34)"
   - "[免费节点1] 🇺🇸_美国 (35)"
-  - "[免费节点1] 🇺🇸_美国 (36)"
   - "[免费节点1] 🇺🇸_美国 (37)"
   - "[免费节点1] 🇺🇸_美国 (38)"
   - "[免费节点1] 🇺🇸_美国 (39)"
+  - "[免费节点1] 🇺🇸_美国 (40)"
   - "[免费节点1] 🇺🇸_美国 (41)"
   - "[免费节点1] 🇺🇸_美国 (42)"
   - "[免费节点1] 🇺🇸_美国 (46)"
+  - "[免费节点1] 🇺🇸_美国 (47)"
   - "[免费节点1] 🇺🇸_美国 (48)"
-  - "[免费节点1] 🇺🇸_美国 (49)"
+  - "[免费节点1] 🇺🇸_美国 (50)"
   - "[免费节点2] 🇺🇸206889 | ⚡️Telegram = t.me/L..."
   - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614..."
   - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614... #1"
@@ -5021,130 +5077,123 @@ proxy-groups:
   - "[免费节点2] 🇺🇸US_4|1.0MB/s"
   - "[免费节点2] 🇺🇸US_5|1.6MB/s"
   - "[免费节点2] 🇺🇸US_6|1.4MB/s"
+  - '[免费节点2] US_speednode_0039'
   - "[免费节点2] 🇺🇸 美国 | USA 2"
   - "[免费节点3] 🇺🇸 美国 | USA 7"
-  - '[免费节点6] 美国 039'
-  - '[免费节点6] 美国 042'
+  - '[免费节点6] 美国 025'
   - '[免费节点6] 美国 299'
   - '[免费节点6] 美国 308'
   - '[免费节点6] 美国 313'
   - '[免费节点6] 美国 349'
   - '[免费节点6] 美国 835'
-  - '[免费节点6] 美国 981'
-  - '[免费节点6] 美国 1002'
   - '[免费节点6] 美国 1179'
-  - '[免费节点6] 美国 1194'
+  - "[免费节点7] 🇺🇸 美国 | USA"
+  - "[免费节点7] 🇺🇸 美国 | USA 4"
+  - "[免费节点7] 🇺🇸 美国 | USA 5"
+  - "[免费节点7] 🇺🇸 美国 | USA 10"
+  - "[免费节点8] 🇺🇸US-193.151.160.9-0080"
+  - "[免费节点8] 🇺🇸US-193.151.163.18-0081"
+  - "[免费节点8] 🇺🇸US-193.151.160.18-0086"
+  - "[免费节点8] 🇺🇸US-37.19.198.243-0142"
   - "[免费节点8] 🇺🇸US-169.197.140.218-0084"
+  - "[免费节点8] 🇺🇸US-185.230.230.18-0091"
+  - "[免费节点8] 🇺🇸US-37.19.198.244-0137"
   - "[免费节点8] 🇺🇸US-66.163.112.13-0178"
+  - "[免费节点8] 🇺🇸US-216.106.186.32-0150"
   - "[免费节点8] 🇺🇸US-66.163.112.121-0196"
+  - "[免费节点8] 🇺🇸US-45.86.51.18-0079"
+  - "[免费节点8] 🇺🇸US-138.199.42.68-0240"
   - "[免费节点8] 🇺🇸US-170.101.101.53-0124"
   - "[免费节点8] 🇺🇸US-216.152.155.158-0121"
+  - "[免费节点8] 🇺🇸US-37.19.198.160-0134"
   - "[免费节点8] 🇺🇸US-216.152.156.65-0098"
+  - "[免费节点8] 🇺🇸US-173.244.56.6-0078"
+  - "[免费节点8] 🇺🇸US-95.215.201.18-0151"
   - "[免费节点8] 🇺🇸US-66.163.114.166-0162"
-  - "[免费节点8] 🇺🇸US-193.151.160.9-0080 | 237.19MB"
-  - "[免费节点8] 🇺🇸US-193.151.163.18-0081 | 234.547MB"
-  - "[免费节点8] 🇺🇸US-193.151.160.18-0086 | 188.362MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.243-0142 | 140.557MB"
-  - "[免费节点8] 🇺🇸US-185.230.230.18-0091 | 113.982MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.244-0137 | 106.386MB"
-  - "[免费节点8] 🇺🇸US-45.86.51.18-0079 | 89.797MB"
-  - "[免费节点8] 🇺🇸US-138.199.42.68-0240 | 89.797MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.160-0134 | 64.538MB"
-  - "[免费节点8] 🇺🇸US-173.244.56.6-0078 | 57.258MB"
-  - "[免费节点8] 🇺🇸US-173.244.56.9-0077 | 51.341MB"
-  - "[免费节点8] 🇺🇸US-95.215.201.18-0151 | 45.832MB"
-  - "[免费节点8] 🇺🇸US-15.204.247.206-5816 | 8.344MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.169-0147 | 4.484MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.168-0206 | 4.059MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.167-0207 | 3.963MB"
-  - "[免费节点8] 🇺🇸US-156.146.38.170-0168 | 3.861MB"
-  - "[免费节点8] 🇺🇸US-198.98.53.130-0229 | 0.06MB"
-  - '[免费节点10] us|81b9|puddincat07@Telegram'
+  - "[免费节点8] 🇺🇸US-15.204.247.206-5816"
+  - "[免费节点8] 🇺🇸US-156.146.38.169-0147"
+  - "[免费节点8] 🇺🇸US-156.146.38.168-0206"
+  - "[免费节点8] 🇺🇸US-156.146.38.167-0207"
+  - "[免费节点8] 🇺🇸US-156.146.38.170-0168"
+  - "[免费节点8] 🇺🇸US-198.98.53.130-0229"
+  - "[免费节点8] 🇺🇸US-216.105.168.18-5819"
   - "[免费节点10] 🇺🇸 US 1052 → tg@nicevpn123"
   - "[免费节点11] 🇺🇸 美国 11"
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-5'
-  - '[Pawdroid-SR-APK] 北美地区+V2CROSS.COM-3'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-7'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-9'
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-11'
-  - '[Pawdroid-SR-APK] 美国+3COM公司企业网'
+  - '[Pawdroid-SR-APK] 美国+惠普HP'
+  - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-22'
   - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-24'
-  - '[Pawdroid-SR-APK] 美国+V2CROSS.COM-34'
-  - '[Pawdroid-SS-APK] United+States-9'
-  - '[Pawdroid-SS-APK] United+States-123'
-  - '[Pawdroid-SS-APK] United+States-279'
+  - '[Pawdroid-SR-APK] 美国+3COM公司企业网'
+  - '[Pawdroid-SS-APK] United+States-122'
+  - '[Pawdroid-SS-APK] United+States-201'
   - '[1VPN-CRX] free-los-angeles-https-1'
-  - '[1VPN-CRX] free-los-angeles-https-2'
   - '[1VPN-CRX] free-los-angeles-https-3'
   - '[1VPN-CRX] free-los-angeles-https-4'
   - '[1VPN-CRX] free-los-angeles-https-5'
-  - '[1VPN-CRX] free-los-angeles-https-6'
-  - "[Clashfree] 🇺🇸 US VLESS-25 | free-nodes"
   - "[Free-clash-v2ray] 🇺🇸US_336|747KB/s|P002-260618 [023c91470b90]"
-  - "[Free-clash-v2ray] 🇺🇸US_207|938KB/s|R002-260618 [027035464f91]"
-  - "[Free-clash-v2ray] 🇺🇸US_616|826KB/s|K001-260618 [0c64150eb2bc]"
+  - "[Free-clash-v2ray] 🇺🇸US_248|1015KB/s|A004-260618 [0af5e841f1b9]"
   - "[Free-clash-v2ray] 🇺🇸US_217|847KB/s|A004-260618 [0e40b52615aa]"
   - "[Free-clash-v2ray] 🇺🇸US_560|1.5MB/s|M003-260806 [0f851a6a1744]"
+  - "[Free-clash-v2ray] 🇺🇸US_192|971KB/s|M003-260806 [112d3ee5d9f2]"
+  - "[Free-clash-v2ray] 🇺🇸US_214|511KB/s|R002-260618 [1c8a4d9b327b]"
   - "[Free-clash-v2ray] 🇺🇸US_357|1.7MB/s|A004-260618 [1feecb3b9b0d]"
+  - "[Free-clash-v2ray] 🇺🇸US_200|923KB/s|A004-260618 [26dae539cbdd]"
+  - "[Free-clash-v2ray] 🇺🇸US_240|968KB/s|M003-260806 [2d3c6b97d127]"
   - "[Free-clash-v2ray] 🇺🇸US_431|469KB/s|K001-260618 [3eeb791263e2]"
   - "[Free-clash-v2ray] 🇺🇸US_334|1.7MB/s|A001-260618 [3f49a6a19591]"
+  - "[Free-clash-v2ray] 🇺🇸US_193|940KB/s|M003-260806 [6364b2c615d5]"
   - "[Free-clash-v2ray] 🇺🇸US_443|536KB/s|R002-260618 [67460e97ccf1]"
   - "[Free-clash-v2ray] 🇺🇸US_324|719KB/s|R002-260618 [67c5487a691e]"
-  - "[Free-clash-v2ray] 🇺🇸US_644|857KB/s|K001-260618 [730a1034003e]"
+  - "[Free-clash-v2ray] 🇺🇸US_480|998KB/s|P002-260618 [69335dd6b551]"
+  - "[Free-clash-v2ray] 🇺🇸US_292|925KB/s|A004-260618 [836b9e2c1c7b]"
   - "[Free-clash-v2ray] 🇺🇸US_298|907KB/s|R002-260618 [91230e8f8348]"
-  - "[Free-clash-v2ray] 🇺🇸US_202|646KB/s|R002-260618 [ac35802c1c34]"
-  - "[Free-clash-v2ray] 🇺🇸US_600|871KB/s|P002-260618 [b1c3758ec6b5]"
-  - "[Free-clash-v2ray] 🇺🇸US_201|989KB/s|R002-260618 [c0c88000d4a2]"
-  - "[Free-clash-v2ray] 🇺🇸US_244|695KB/s|R002-260618 [d83e92341d3f]"
-  - "[Free-clash-v2ray] 🇺🇸US_408|571KB/s|R002-260618 [f1932fd78ef6]"
+  - "[Free-clash-v2ray] 🇺🇸US_356|895KB/s|A004-260618 [d92318afee09]"
+  - "[Free-clash-v2ray] 🇺🇸US_255|929KB/s|R002-260618 [f6ef7c53e70b]"
   - "[Free-clash-v2ray] 🇺🇸US_330|746KB/s|R002-260618 [fbfa57386da4]"
   - "[V2rayclashfree-RSS] 🇺🇸US_34|351KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_56|129KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_63|349KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_215|342KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_275|287KB/s|R002-260618 01"
+  - "[V2rayclashfree-RSS] 🇺🇸US_472|692KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_473|270KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_478|435KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_512|135KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_515|333KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_529|354KB/s|R002-260618 01"
-  - "[V2rayclashfree-RSS] 🇺🇸US_549|229KB/s|R002-260618 01"
   - "[V2rayclashfree-RSS] 🇺🇸US_390|923KB/s|S001-260618 01"
   url: 'http://www.gstatic.com/generate_204'
   interval: 120
 - name: FAST-POOL
   type: url-test
   proxies:
-  - "[免费节点8] 🇺🇸US-15.204.247.206-5816 | 8.344MB"
-  - "[免费节点8] 🇺🇸US-193.151.163.18-0081 | 234.547MB"
-  - "[免费节点1] 🇺🇸_美国 (12)"
-  - "[免费节点8] 🇺🇸US-37.19.198.244-0137 | 106.386MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.160-0134 | 64.538MB"
-  - "[V2rayclashfree-RSS] 🇺🇸US_56|129KB/s|R002-260618 01"
-  - "[免费节点8] 🇺🇸US-198.98.53.130-0229 | 0.06MB"
-  - "[免费节点8] 🇺🇸US-37.19.198.243-0142 | 140.557MB"
-  - "[Free-clash-v2ray] 🇫🇷FR_27|6.8MB/s|R002-260618 [39873ef4d996]"
-  - '[Pawdroid-SS-APK] United+States-9'
-  - "[免费节点8] 🇺🇸US-185.230.230.18-0091 | 113.982MB"
-  - "[免费节点8] 🇺🇸US-45.86.51.18-0079 | 89.797MB"
-  - "[Free-clash-v2ray] 🇺🇸US_616|826KB/s|K001-260618 [0c64150eb2bc]"
-  - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614..."
-  - "[Free-clash-v2ray] 🇺🇸US_357|1.7MB/s|A004-260618 [1feecb3b9b0d]"
+  - "[免费节点8] 🇺🇸US-138.199.42.68-0240"
+  - "[免费节点8] 🇺🇸US-156.146.38.170-0168"
+  - "[免费节点8] 🇺🇸US-156.146.38.169-0147"
+  - "[免费节点8] 🇺🇸US-156.146.38.167-0207"
+  - "[免费节点10] 🇺🇸 US 1052 → tg@nicevpn123"
+  - '[Pawdroid-SR-APK] 瑞典+V2CROSS.COM'
+  - "[免费节点8] 🇺🇸US-156.146.38.168-0206"
+  - '[Pawdroid-SR-APK] 瑞典+V2CROSS.COM-4'
+  - '[Pawdroid-SR-APK] 加拿大+V2CROSS.COM'
+  - '[Pawdroid-SR-APK] 美国+惠普HP'
+  - "[免费节点1] 🇺🇸_美国 (39)"
+  - "[免费节点1] 🇺🇸_美国 (27)"
+  - "[Free-clash-v2ray] 🇨🇦CA_2|1.3MB/s|A004-260618 [1a7592edd210]"
+  - "[免费节点8] 🇨🇦CA-137.184.174.93-0156"
+  - "[免费节点8] 🇺🇸US-37.19.198.244-0137"
+  - "[免费节点2] 🇺🇸US_4|1.0MB/s"
+  - "[V2rayclashfree-RSS] 🇺🇸US_515|333KB/s|R002-260618 01"
+  - "[免费节点8] 🇺🇸US-37.19.198.243-0142"
   - "[Free-clash-v2ray] 🇺🇸US_334|1.7MB/s|A001-260618 [3f49a6a19591]"
-  - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1557..."
-  - "[Free-clash-v2ray] 🇺🇸US_431|469KB/s|K001-260618 [3eeb791263e2]"
-  - "[免费节点2] 🇨🇦[www.v2nodes.com] ss-CA-1558..."
-  - "[NekoWarp] 🇺🇸 US-CF-WARP-7"
-  - '[Pawdroid-SR-APK] 美国+华盛顿Cogent通信公司-7'
-  - "[NekoWarp] 🇺🇸 US-CF-WARP-10"
-  - "[免费节点8] 🇺🇸US-138.199.42.68-0240 | 89.797MB"
-  - "[Free-clash-v2ray] 🇫🇷FR_29|4.4MB/s|R002-260618 [a676be7daa09]"
-  - "[Free-clash-v2ray] 🇺🇸US_244|695KB/s|R002-260618 [d83e92341d3f]"
-  - "[NekoWarp] 🇺🇸 US-CF-WARP-4"
-  - '[Pawdroid-SR-APK] 乌克兰+V2CROSS.COM-8'
-  - "[V2rayclashfree-RSS] 🇺🇸US_215|342KB/s|R002-260618 01"
-  - "[免费节点2] 🇺🇸US_6|1.4MB/s"
-  - "[Free-clash-v2ray] 🇺🇸US_330|746KB/s|R002-260618 [fbfa57386da4]"
+  - "[免费节点2] 🇺🇸US_2|2.4MB/s"
+  - "[免费节点8] 🇺🇸US-15.204.247.206-5816"
+  - "[Free-clash-v2ray] 🇺🇸US_255|929KB/s|R002-260618 [f6ef7c53e70b]"
+  - "[免费节点2] 🇺🇸US_5|1.6MB/s"
+  - "[Free-clash-v2ray] 🇺🇸US_357|1.7MB/s|A004-260618 [1feecb3b9b0d]"
+  - "[Free-clash-v2ray] 🇺🇸US_480|998KB/s|P002-260618 [69335dd6b551]"
+  - "[免费节点8] 🇺🇸US-216.152.155.158-0121"
+  - "[免费节点8] 🇺🇸US-37.19.198.160-0134"
+  - "[免费节点1] 🇨🇦_加拿大 (5)"
+  - "[免费节点2] 🇺🇸[www.v2nodes.com] ss-US-1614..."
+  - "[免费节点8] 🇺🇸US-193.151.160.18-0086"
   url: 'http://www.gstatic.com/generate_204'
   interval: 120
 rules:
