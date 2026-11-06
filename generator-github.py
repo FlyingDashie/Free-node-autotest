@@ -6076,7 +6076,7 @@ def write_raw_backup(proxies: list[dict[str, Any]]) -> None:
     _RAW_WARM_META = (raw_hist.name, history_file_stamp(raw_hist.name))
     global _RAW_WRITE_LOG
     _RAW_WRITE_LOG = (
-        f"[WRITTEN] file=raw | path={RAW_PATH} | history={raw_hist.name} | proxies={len(nodes)}"
+        f"[WRITTEN] file=raw | path={RAW_PATH} | file=history/{raw_hist.name} | proxies={len(nodes)}"
     )
 
 
@@ -6657,7 +6657,7 @@ def load_previous_source_proxies(
     found = _RAW_WARM.get(prefix) or []
     if found:
         name, stamp = _RAW_WARM_META
-        return [dict(item) for item in found], name, stamp
+        return [dict(item) for item in found], f"history/{name}", stamp
     # latest raw may lack this source after a failed run; walk back
     ranked: list[tuple[str, Path]] = []
     if RAW_PATH.is_file():
@@ -6674,7 +6674,7 @@ def load_previous_source_proxies(
         index = _load_raw_index(path)
         found = [dict(item) for item in index.get(prefix, [])]
         if found:
-            return found, path.name, stamp
+            return found, f"history/{path.name}", stamp
     # history miss: try vendor backups in name order
     vendor = Path(__file__).resolve().parent / "vendor"
     if vendor.is_dir():
@@ -6683,7 +6683,7 @@ def load_previous_source_proxies(
             found = [dict(item) for item in index.get(prefix, [])]
             if found:
                 stamp = history_file_stamp(path.name) or ""
-                return found, path.name, stamp
+                return found, f"vendor/{path.name}", stamp
     return [], "", ""
 
 
@@ -7632,7 +7632,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            print(f"[WARN] clash backup unreadable | reason={format_reason(exc)} | file={path.name}")
+            print(f"[WARN] clash backup unreadable | reason={format_reason(exc)} | file=history/{path.name}")
             continue
         items = data.get("proxies") if isinstance(data, dict) else None
         if not isinstance(items, list) or not items:
@@ -7646,7 +7646,7 @@ def load_existing_metrics() -> list[ProxyMetric]:
         if metrics:
             print(
                 f"[REUSE] clash | proxies={len(metrics)} "
-                f"file={path.name} stamp={stamp}"
+                f"| file=history/{path.name} | stamp={stamp}"
             )
             return metrics
     print("[WARN] clash backups have no proxies, skip reuse")
@@ -7756,7 +7756,7 @@ def write_config(config: dict[str, Any]) -> None:
     _record_yaml_debug("clash", OUTPUT_PATH, text, len(config.get("proxies") or []))
     global _CLASH_WRITE_LOG
     _CLASH_WRITE_LOG = (
-        f"[WRITTEN] file=clash | path={OUTPUT_PATH} | history={clash_hist.name} "
+        f"[WRITTEN] file=clash | path={OUTPUT_PATH} | file=history/{clash_hist.name} "
         f"| proxies={len(config.get('proxies') or [])}"
     )
 
