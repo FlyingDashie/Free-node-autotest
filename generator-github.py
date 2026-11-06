@@ -6658,14 +6658,23 @@ def load_previous_source_proxies(
     if found:
         name, stamp = _RAW_WARM_META
         return [dict(item) for item in found], name, stamp
-    latest = _latest_raw_path()
-    if not latest:
-        return [], "", ""
-    stamp, path = latest
-    index = _load_raw_index(path)
-    found = [dict(item) for item in index.get(prefix, [])]
-    if found:
-        return found, path.name, stamp
+    # latest raw may lack this source after a failed run; walk back
+    ranked: list[tuple[str, Path]] = []
+    if RAW_PATH.is_file():
+        ranked.append((history_file_stamp(RAW_PATH.name) or "0", RAW_PATH))
+    if HISTORY_DIR.is_dir():
+        for path in HISTORY_DIR.glob("*raw*.yaml"):
+            if "rawsrc" in path.name:
+                continue
+            stamp = history_file_stamp(path.name)
+            if stamp:
+                ranked.append((stamp, path))
+    ranked.sort(reverse=True)
+    for stamp, path in ranked[:12]:
+        index = _load_raw_index(path)
+        found = [dict(item) for item in index.get(prefix, [])]
+        if found:
+            return found, path.name, stamp
     return [], "", ""
 
 
