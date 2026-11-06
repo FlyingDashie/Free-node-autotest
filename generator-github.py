@@ -6675,6 +6675,15 @@ def load_previous_source_proxies(
         found = [dict(item) for item in index.get(prefix, [])]
         if found:
             return found, path.name, stamp
+    # history miss: try vendor backups in name order
+    vendor = Path(__file__).resolve().parent / "vendor"
+    if vendor.is_dir():
+        for path in sorted(vendor.glob("*raw*.yaml")):
+            index = _load_raw_index(path)
+            found = [dict(item) for item in index.get(prefix, [])]
+            if found:
+                stamp = history_file_stamp(path.name) or ""
+                return found, path.name, stamp
     return [], "", ""
 
 
